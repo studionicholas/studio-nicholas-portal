@@ -3521,6 +3521,26 @@ export default function App() {
     });
   }, []);
 
+  // Pull the latest data from the server and apply it, unless we've just made a
+  // local edit (don't clobber an in-flight save). Shared by realtime, polling,
+  // and refocus so new messages/updates appear without a manual refresh.
+  const refetchRemote = useCallback(async () => {
+    if (!loadedRef.current || Date.now() - localEditAt.current < 4000) return;
+    try {
+      const [raw, status] = await Promise.all([api.fetchProjects(), api.fetchSettings()]);
+      if (Date.now() - localEditAt.current < 4000) return;
+      applyingRemote.current = true;
+      applyingStatus.current = true;
+      setStudioStatus(status.text);
+      setStudioStatusColor(status.color);
+      setLoginImage(status.loginImage);
+      setLoginMessage(status.loginMessage);
+      setProjects(migrate(raw));
+    } catch (e) {
+      console.error("refetch failed", e);
+    }
+  }, []);
+
   // When signed in, load role + data and subscribe to live changes.
   useEffect(() => {
     if (session === undefined) return;
@@ -3560,51 +3580,30 @@ export default function App() {
       }
     })();
 
-    const channel = api.subscribeProjects(async () => {
-      // Don't let a live-sync refresh overwrite an edit we just made locally
-      // (its own save may still be in flight). Skip while a local edit is fresh.
-      if (Date.now() - localEditAt.current < 4000) return;
-      try {
-        const [raw, status] = await Promise.all([api.fetchProjects(), api.fetchSettings()]);
-        if (Date.now() - localEditAt.current < 4000) return;
-        applyingRemote.current = true;
-        applyingStatus.current = true;
-        setStudioStatus(status.text);
-        setStudioStatusColor(status.color);
-        setLoginImage(status.loginImage);
-        setLoginMessage(status.loginMessage);
-        setProjects(migrate(raw));
-      } catch (e) {
-        console.error(e);
-      }
-    });
+    const channel = api.subscribeProjects(() => refetchRemote());
     return () => {
       cancelled = true;
       channel?.unsubscribe?.();
     };
-  }, [session]);
+  }, [session, refetchRemote]);
 
-  // Poll periodically so new messages/updates appear without a manual refresh.
+  // Poll frequently as a fallback so new messages/updates appear live even if the
+  // realtime socket drops, plus an immediate refresh whenever the app regains focus.
   useEffect(() => {
     if (!session) return;
-    const id = setInterval(async () => {
-      if (!loadedRef.current || Date.now() - localEditAt.current < 4000) return;
-      try {
-        const [raw, status] = await Promise.all([api.fetchProjects(), api.fetchSettings()]);
-        if (Date.now() - localEditAt.current < 4000) return;
-        applyingRemote.current = true;
-        applyingStatus.current = true;
-        setStudioStatus(status.text);
-        setStudioStatusColor(status.color);
-        setLoginImage(status.loginImage);
-        setLoginMessage(status.loginMessage);
-        setProjects(migrate(raw));
-      } catch (e) {
-        console.error(e);
-      }
-    }, 10000);
-    return () => clearInterval(id);
-  }, [session]);
+    const id = setInterval(refetchRemote, 4000);
+    const onFocus = () => refetchRemote();
+    const onVisible = () => {
+      if (document.visibilityState === "visible") refetchRemote();
+    };
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      clearInterval(id);
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [session, refetchRemote]);
 
   // Persist project changes (debounced); skip echoes of data we just loaded.
   useEffect(() => {

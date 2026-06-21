@@ -3352,6 +3352,7 @@ function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioSt
       ...p,
       lastReadStudio: new Date().toISOString(),
       messages: [...p.messages, { id: uid(), from: "studio", text, photos: photos || [], date: new Date().toISOString(), replyTo: replyTo || null, reactions: [], pinned: false }],
+      notifications: withNotif(p, "message", text && text.trim() ? `New message: ${truncate(text, 50)}` : "New message: a photo"),
     }));
     const proj = projects[code];
     const emails = (proj?.clients || []).map((c) => (c.email || "").trim().toLowerCase()).filter(Boolean);

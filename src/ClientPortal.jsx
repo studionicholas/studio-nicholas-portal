@@ -1791,6 +1791,43 @@ function AboutTab({ project }) {
 
 /* ---------------- Client Dashboard ---------------- */
 
+// Slim prompt to switch on push notifications. Hides itself if already
+// granted/denied, or if the device/browser can't do web push (e.g. iPhone
+// before the app is added to the home screen).
+function EnablePushBanner({ email }) {
+  const [perm, setPerm] = useState(() => api.pushPermission());
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  if (perm !== "default") return null;
+  return (
+    <div className="mt-3 flex items-center gap-3 bg-white border border-stone-200 rounded-lg px-3.5 py-2.5">
+      <Bell className="w-4 h-4 text-[#B7453C] shrink-0" />
+      <div className="min-w-0 flex-1">
+        <p className="text-[13px] text-stone-800">Turn on notifications</p>
+        <p className="text-[11px] text-stone-400">Get a pop-up when there's a new message or update.</p>
+        {err && <p className="text-[11px] text-red-600">{err}</p>}
+      </div>
+      <button
+        disabled={busy}
+        onClick={async () => {
+          setBusy(true);
+          setErr("");
+          try {
+            await api.enablePush(email);
+          } catch (e) {
+            setErr(e?.message || "Couldn't enable");
+          }
+          setPerm(api.pushPermission());
+          setBusy(false);
+        }}
+        className="shrink-0 bg-stone-900 text-white text-[12px] rounded-lg px-3 py-1.5 hover:bg-stone-800 disabled:opacity-50"
+      >
+        {busy ? "…" : "Turn on"}
+      </button>
+    </div>
+  );
+}
+
 function ClientDashboard({ project, viewerEmail, studioStatus, studioStatusColor, onLogout, onSendMessage, onReactMessage, onPinMessage, onMarkRead, onMarkNotifs, onDismissNotif, onUploadSigned, onRespondMeeting }) {
   const [tab, setTab] = useState("about");
   const [lightbox, setLightbox] = useState(null);
@@ -1875,6 +1912,7 @@ function ClientDashboard({ project, viewerEmail, studioStatus, studioStatusColor
       </div>
 
       <div className="max-w-3xl mx-auto px-4 sm:px-6">
+        <EnablePushBanner email={viewerEmail} />
         {features.programa !== false && programaUrl && (
           <div className="py-3.5 border-b border-stone-200">
             <a
@@ -2789,7 +2827,7 @@ function StudioSettingsPanel({ studioStatus, studioStatusColor, onChangeStatus, 
   );
 }
 
-function AdminPanel({ projects, setProjects, studioStatus, studioStatusColor, onChangeStatus, onChangeStatusColor, loginImage, loginMessage, onSaveLogin, onLogout }) {
+function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioStatusColor, onChangeStatus, onChangeStatusColor, loginImage, loginMessage, onSaveLogin, onLogout }) {
   const [selectedCode, setSelectedCode] = useState(Object.keys(projects)[0] || null);
   const [showNewProject, setShowNewProject] = useState(false);
   const [showNewUpdate, setShowNewUpdate] = useState(false);
@@ -2874,6 +2912,9 @@ function AdminPanel({ projects, setProjects, studioStatus, studioStatusColor, on
       updates: [...p.updates, { id: uid(), date: today(), title: data.title, note: data.note, photos: data.photos || [] }],
       notifications: withNotif(p, "update", `New update: ${data.title}`),
     }));
+    const proj = projects[code];
+    const emails = (proj?.clients || []).map((c) => (c.email || "").trim().toLowerCase()).filter(Boolean);
+    if (emails.length) api.notifyPush({ toEmails: emails, title: `${proj.name || "Your project"} — new update`, body: data.title, url: "/" });
     setShowNewUpdate(false);
   }
   function deleteUpdate(code, id) {
@@ -2987,6 +3028,9 @@ function AdminPanel({ projects, setProjects, studioStatus, studioStatusColor, on
       lastReadStudio: new Date().toISOString(),
       messages: [...p.messages, { id: uid(), from: "studio", text, photos: photos || [], date: new Date().toISOString(), replyTo: replyTo || null, reactions: [], pinned: false }],
     }));
+    const proj = projects[code];
+    const emails = (proj?.clients || []).map((c) => (c.email || "").trim().toLowerCase()).filter(Boolean);
+    if (emails.length) api.notifyPush({ toEmails: emails, title: `${proj.name || "Your project"} — new message`, body: text && text.trim() ? text : "Sent a photo", url: "/" });
   }
   function reactMessage(code, id, emoji) {
     updateProject(code, (p) => ({ ...p, messages: toggleReaction(p.messages, id, emoji, "studio") }));
@@ -3060,6 +3104,7 @@ function AdminPanel({ projects, setProjects, studioStatus, studioStatusColor, on
           >
             <Settings className="w-3.5 h-3.5" /> Settings
           </button>
+          <EnablePushBanner email={viewerEmail} />
           <button onClick={onLogout} className="w-full text-center text-[12px] text-stone-400 hover:text-stone-600 mt-3">
             Log out
           </button>
@@ -3627,6 +3672,7 @@ export default function App() {
           messages: [...prev[activeCode].messages, { id: uid(), from: "client", text, photos: photos || [], date: new Date().toISOString(), replyTo, reactions: [], pinned: false }],
         },
       }));
+      api.notifyPush({ toStudio: true, title: "New message from a client", body: text && text.trim() ? text : "Sent a photo", url: "/" });
     },
     [activeCode]
   );
@@ -3692,6 +3738,7 @@ export default function App() {
       <AdminPanel
         projects={projects}
         setProjects={setProjects}
+        viewerEmail={session?.user?.email || ""}
         studioStatus={studioStatus}
         studioStatusColor={studioStatusColor}
         onChangeStatus={setStudioStatus}

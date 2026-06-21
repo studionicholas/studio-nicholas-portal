@@ -137,3 +137,57 @@ export function subscribeProjects(callback) {
     .subscribe();
   return channel;
 }
+
+/* ---------- Push notifications ---------- */
+
+// Public half of the VAPID keypair (safe to ship). The private half lives only
+// in the Supabase "notify" Edge Function secret.
+const VAPID_PUBLIC_KEY = "BGA3zFN-rN2qAyZbiG2h8BYG5_e-xj4WAdqx_YdukKMF4GHcGAnzUutUhrUpVU_V-QWsQWCARzczKVekTgR-vbg";
+
+function urlBase64ToUint8Array(base64String) {
+  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const raw = atob(base64);
+  const arr = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) arr[i] = raw.charCodeAt(i);
+  return arr;
+}
+
+export function pushSupported() {
+  return typeof navigator !== "undefined" && "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
+}
+
+export function pushPermission() {
+  return pushSupported() ? Notification.permission : "unsupported";
+}
+
+// Ask permission + subscribe THIS device, storing the subscription against the
+// signed-in user's email. Returns true if notifications are now on.
+export async function enablePush(email) {
+  if (!pushSupported()) throw new Error("This device doesn't support notifications.");
+  const perm = await Notification.requestPermission();
+  if (perm !== "granted") return false;
+  const reg = await navigator.serviceWorker.ready;
+  let sub = await reg.pushManager.getSubscription();
+  if (!sub) {
+    sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY) });
+  }
+  const { error } = await supabase
+    .from("push_subscriptions")
+    .upsert({ email: (email || "").trim().toLowerCase(), endpoint: sub.endpoint, subscription: sub.toJSON() }, { onConflict: "endpoint" });
+  if (error) {
+    console.error("save push subscription failed", error);
+    throw error;
+  }
+  return true;
+}
+
+// Best-effort push to the recipients (the studio, or specific client emails).
+// Never throws to the UI — if the function isn't deployed yet it just logs.
+export async function notifyPush({ toEmails, toStudio, title, body, url }) {
+  try {
+    await supabase.functions.invoke("notify", { body: { toEmails: toEmails || [], toStudio: !!toStudio, title, body, url: url || "/" } });
+  } catch (e) {
+    console.error("notify failed", e);
+  }
+}

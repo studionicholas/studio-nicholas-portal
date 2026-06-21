@@ -2107,7 +2107,7 @@ function ClientDashboard({ project, viewerEmail, studioStatus, studioStatusColor
           </div>
         )}
 
-        <div className="flex gap-1 sm:gap-1.5 py-3.5 border-b border-stone-200">
+        <div className="flex justify-between sm:justify-start gap-0.5 sm:gap-1.5 py-3.5 border-b border-stone-200">
           {tabs.map((t) => {
             const Icon = t.icon;
             const active = activeTab === t.id;
@@ -2115,12 +2115,12 @@ function ClientDashboard({ project, viewerEmail, studioStatus, studioStatusColor
               <button
                 key={t.id}
                 onClick={() => setTab(t.id)}
-                className={`relative flex-1 sm:flex-none min-w-0 justify-center whitespace-nowrap flex items-center gap-1 sm:gap-1.5 px-1.5 sm:px-4 py-1.5 sm:py-2 rounded-full text-[11px] sm:text-[13px] transition-colors ${
+                className={`relative whitespace-nowrap flex items-center gap-1 sm:gap-1.5 px-1.5 sm:px-4 py-1.5 sm:py-2 rounded-full text-[10px] sm:text-[13px] transition-colors ${
                   active ? "bg-stone-900 text-white" : "text-stone-500 hover:bg-stone-100"
                 }`}
               >
                 <Icon className="w-3.5 h-3.5 hidden sm:block" />
-                <span className="truncate">{t.label}</span>
+                {t.label}
                 {t.badge > 0 && (
                   <span
                     className={`ml-0.5 inline-flex items-center justify-center min-w-[16px] h-[16px] px-1 rounded-full text-[10px] leading-none ${

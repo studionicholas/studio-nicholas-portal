@@ -79,6 +79,12 @@ function applyStudioInfo(info) {
   }
 }
 
+// The studio's first name (from the editable contact name) — used wherever we
+// refer to the studio by name in the UI.
+function studioFirstName() {
+  return (STUDIO_INFO.contactName || "Nicholas").trim().split(/\s+/)[0] || "Nicholas";
+}
+
 const LOGIN_HERO = "/login.jpg";
 
 const REACTIONS = ["👍", "❤️", "🙏", "🎉", "👀"];
@@ -172,7 +178,7 @@ const SEED_PROJECTS = {
       {
         id: "m2",
         from: "client",
-        text: "Perfect, thank you Nick. The bronze detailing is looking beautiful.",
+        text: "Perfect, thank you Nicholas. The bronze detailing is looking beautiful.",
         date: "2026-06-12T10:15:00",
         replyTo: "m1",
         reactions: [{ emoji: "❤️", by: "studio" }],
@@ -942,9 +948,24 @@ function Toggle({ on, onChange }) {
   );
 }
 
-function MessagesPanel({ messages, meRole, onSend, onReact, onPin, onLabel, onTagPhoto, onEdit, onDelete, seenSince, showReceipts, showStatus, onToggleStatus, customStatus, onSetCustomStatus, studioStatus, studioStatusColor, prefill, onPrefillUsed, draftKey }) {
+function MessagesPanel({ messages, meRole, onSend, onReact, onPin, onLabel, onTagPhoto, onEdit, onDelete, seenSince, showReceipts, showStatus, onToggleStatus, customStatus, onSetCustomStatus, studioStatus, studioStatusColor, prefill, onPrefillUsed, draftKey, clients, myEmail, fallbackClientName }) {
   const barColor = studioStatusColor || "#D5A933";
   const resolvedStatus = customStatus || (showStatus ? studioStatus : "");
+  // Resolve a friendly sender name for a message.
+  function senderName(m) {
+    if (m.from === "studio") return studioFirstName();
+    const email = (m.fromEmail || "").toLowerCase();
+    const c = (clients || []).find((x) => (x.email || "").toLowerCase() === email);
+    if (c && c.name) return c.name;
+    if (m.fromEmail) return m.fromEmail.split("@")[0];
+    return fallbackClientName || "Client";
+  }
+  function senderLabel(m) {
+    // "You" for the viewer's own messages; otherwise the person's name.
+    if (m.from === "studio") return meRole === "studio" ? "You" : studioFirstName();
+    const mine = meRole === "client" && (!m.fromEmail || (m.fromEmail || "").toLowerCase() === (myEmail || "").toLowerCase());
+    return mine ? "You" : senderName(m);
+  }
   const storeKey = draftKey ? `sn_draft_${draftKey}` : null;
   const [draft, setDraft] = useState(() => {
     try {
@@ -1150,7 +1171,7 @@ function MessagesPanel({ messages, meRole, onSend, onReact, onPin, onLabel, onTa
             {pinned.map((m) => (
               <div key={m.id} className="flex items-start justify-between gap-2">
                 <p className="text-[13px] text-stone-600 leading-snug">
-                  <span className="text-stone-400">{m.from === "studio" ? "Nick" : "Client"}: </span>
+                  <span className="text-stone-400">{senderName(m)}: </span>
                   {truncate(m.text, 90)}
                 </p>
                 <button onClick={() => onPin(m.id)} className="text-stone-300 hover:text-stone-700 shrink-0" aria-label="Unpin">
@@ -1221,7 +1242,7 @@ function MessagesPanel({ messages, meRole, onSend, onReact, onPin, onLabel, onTa
                   </>
                 )}
                 <p className={`text-[11px] mt-1 ${mine ? "text-white/50" : "text-stone-400"}`}>
-                  {m.from === "client" ? (meRole === "client" ? "You" : "Client") : meRole === "studio" ? "You" : "Nick"} · {formatDate(m.date)} · {formatTime(m.date)}
+                  {senderLabel(m)} · {formatDate(m.date)} · {formatTime(m.date)}
                   {m.edited && " · edited"}
                   {showReceipts && m.from === "studio" && (seen ? " · Seen" : " · Sent")}
                 </p>
@@ -1405,7 +1426,7 @@ function MessagesPanel({ messages, meRole, onSend, onReact, onPin, onLabel, onTa
         <input
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
-          placeholder={meRole === "client" ? "Send a message to Nick…" : "Reply to client…"}
+          placeholder={meRole === "client" ? `Send a message to ${studioFirstName()}…` : "Reply to client…"}
           className="flex-1 min-w-0 px-4 py-3 rounded-lg border border-stone-300 bg-white text-[14px] focus:outline-none focus:ring-2 focus:ring-[#B7453C] focus:border-transparent"
         />
         <button type="submit" className="shrink-0 bg-stone-900 text-white rounded-lg px-4 hover:bg-stone-800 transition-colors">
@@ -2001,7 +2022,7 @@ function ClientDashboard({ project, viewerEmail, studioStatus, studioStatusColor
     { id: "updates", label: "Updates", icon: ImageIcon, badge: 0 },
     { id: "timeline", label: "Timeline", icon: Flag, badge: 0 },
     { id: "meetings", label: "Meetings", icon: Calendar, badge: pendingInvites },
-    { id: "fee", label: "Fee proposal", icon: FileText, badge: 0 },
+    { id: "fee", label: "Fee", icon: FileText, badge: 0 },
     { id: "messages", label: "Messages", icon: MessageSquare, badge: unreadForClient(project) },
   ];
   const tabs = allTabs.filter((t) => features[t.id] !== false);
@@ -2086,7 +2107,7 @@ function ClientDashboard({ project, viewerEmail, studioStatus, studioStatusColor
           </div>
         )}
 
-        <div className="flex flex-nowrap gap-1.5 py-3.5 border-b border-stone-200 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div className="flex gap-1 sm:gap-1.5 py-3.5 border-b border-stone-200">
           {tabs.map((t) => {
             const Icon = t.icon;
             const active = activeTab === t.id;
@@ -2094,12 +2115,12 @@ function ClientDashboard({ project, viewerEmail, studioStatus, studioStatusColor
               <button
                 key={t.id}
                 onClick={() => setTab(t.id)}
-                className={`relative shrink-0 whitespace-nowrap flex items-center gap-1.5 px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-[12px] sm:text-[13px] transition-colors ${
+                className={`relative flex-1 sm:flex-none min-w-0 justify-center whitespace-nowrap flex items-center gap-1 sm:gap-1.5 px-1.5 sm:px-4 py-1.5 sm:py-2 rounded-full text-[11px] sm:text-[13px] transition-colors ${
                   active ? "bg-stone-900 text-white" : "text-stone-500 hover:bg-stone-100"
                 }`}
               >
                 <Icon className="w-3.5 h-3.5 hidden sm:block" />
-                {t.label}
+                <span className="truncate">{t.label}</span>
                 {t.badge > 0 && (
                   <span
                     className={`ml-0.5 inline-flex items-center justify-center min-w-[16px] h-[16px] px-1 rounded-full text-[10px] leading-none ${
@@ -2153,7 +2174,7 @@ function ClientDashboard({ project, viewerEmail, studioStatus, studioStatusColor
 
           {activeTab === "meetings" && (
             <div className="space-y-8">
-              {project.meetings.length === 0 && <EmptyState text="No meetings scheduled yet. Nick will add them here." />}
+              {project.meetings.length === 0 && <EmptyState text={`No meetings scheduled yet. ${studioFirstName()} will add them here.`} />}
               {upcoming.length > 0 && (
                 <div>
                   <h3 className="text-[13px] text-stone-400 uppercase tracking-wide mb-3">Upcoming</h3>
@@ -2184,7 +2205,7 @@ function ClientDashboard({ project, viewerEmail, studioStatus, studioStatusColor
                 dateLabel="Issued"
                 file={project.feeProposal}
                 note={project.feeProposal?.note}
-                emptyText="Your fee proposal will appear here once Nick has shared it."
+                emptyText={`Your fee proposal will appear here once ${studioFirstName()} has shared it.`}
               />
               <ClientSignedCard signed={project.feeProposalSigned} onUpload={onUploadSigned} />
             </div>
@@ -2197,6 +2218,9 @@ function ClientDashboard({ project, viewerEmail, studioStatus, studioStatusColor
               messages={project.messages}
               meRole="client"
               draftKey={`client_${project.code}`}
+              clients={project.clients}
+              myEmail={viewerEmail}
+              fallbackClientName={project.clientName}
               onSend={onSendMessage}
               onReact={onReactMessage}
               onPin={onPinMessage}
@@ -2231,7 +2255,7 @@ function ClientDashboard({ project, viewerEmail, studioStatus, studioStatusColor
               </h3>
             </div>
             <p className="text-[14px] text-stone-600 leading-relaxed mb-5">
-              Get a pop-up the moment Nick posts an update or sends you a message — so you never miss anything on your project.
+              Get a pop-up the moment {studioFirstName()} posts an update or sends you a message — so you never miss anything on your project.
             </p>
             <button
               disabled={notifBusy}
@@ -2834,6 +2858,7 @@ function AdminImageUpload({ project, onSet }) {
 
 function AdminClients({ project, onChange }) {
   const clients = project.clients && project.clients.length ? project.clients : [];
+  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [programaUrl, setProgramaUrl] = useState("");
 
@@ -2842,7 +2867,8 @@ function AdminClients({ project, onChange }) {
   function add(e) {
     e.preventDefault();
     if (!email.trim()) return;
-    onChange([...clients, { email: email.trim(), programaUrl: programaUrl.trim() }]);
+    onChange([...clients, { name: name.trim(), email: email.trim(), programaUrl: programaUrl.trim() }]);
+    setName("");
     setEmail("");
     setProgramaUrl("");
   }
@@ -2854,15 +2880,21 @@ function AdminClients({ project, onChange }) {
         <div key={i} className="border border-stone-200 rounded-lg p-3.5 bg-white space-y-2">
           <div className="flex items-center gap-2">
             <input
-              value={c.email}
-              onChange={(e) => update(i, "email", e.target.value)}
-              placeholder="client@email.com"
+              value={c.name || ""}
+              onChange={(e) => update(i, "name", e.target.value)}
+              placeholder="Name (e.g. Sarah Maddox)"
               className="flex-1 px-3 py-2 rounded-lg border border-stone-300 text-[14px] focus:outline-none focus:ring-2 focus:ring-[#B7453C]"
             />
             <button onClick={() => remove(i)} className="text-stone-300 hover:text-red-600 shrink-0" aria-label="Remove client">
               <Trash2 className="w-4 h-4" />
             </button>
           </div>
+          <input
+            value={c.email}
+            onChange={(e) => update(i, "email", e.target.value)}
+            placeholder="client@email.com"
+            className="w-full px-3 py-2 rounded-lg border border-stone-300 text-[14px] focus:outline-none focus:ring-2 focus:ring-[#B7453C]"
+          />
           <input
             value={c.programaUrl || ""}
             onChange={(e) => update(i, "programaUrl", e.target.value)}
@@ -2873,6 +2905,7 @@ function AdminClients({ project, onChange }) {
       ))}
 
       <form onSubmit={add} className="border border-dashed border-stone-300 rounded-lg p-3.5 space-y-2">
+        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Client name…" className="w-full px-3 py-2 rounded-lg border border-stone-300 text-[14px] focus:outline-none focus:ring-2 focus:ring-[#B7453C]" />
         <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Add a client email…" className="w-full px-3 py-2 rounded-lg border border-stone-300 text-[14px] focus:outline-none focus:ring-2 focus:ring-[#B7453C]" />
         <input value={programaUrl} onChange={(e) => setProgramaUrl(e.target.value)} placeholder="Their Programa link (optional)" className="w-full px-3 py-2 rounded-lg border border-stone-300 text-[14px] focus:outline-none focus:ring-2 focus:ring-[#B7453C]" />
         <button type="submit" className="bg-stone-900 text-white rounded-lg px-4 py-2 text-[13px] hover:bg-stone-800 transition-colors">
@@ -3703,6 +3736,8 @@ function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioSt
                 messages={project.messages}
                 meRole="studio"
                 draftKey={`studio_${project.code}`}
+                clients={project.clients}
+                fallbackClientName={project.clientName}
                 onSend={(text, replyTo, photos) => replyMessage(project.code, text, replyTo, photos)}
                 onReact={(id, emoji) => reactMessage(project.code, id, emoji)}
                 onPin={(id) => pinMessage(project.code, id)}
@@ -4079,12 +4114,12 @@ export default function App() {
         [activeCode]: {
           ...prev[activeCode],
           lastReadClient: new Date().toISOString(),
-          messages: [...prev[activeCode].messages, { id: uid(), from: "client", text, photos: photos || [], date: new Date().toISOString(), replyTo, reactions: [], pinned: false }],
+          messages: [...prev[activeCode].messages, { id: uid(), from: "client", fromEmail: session?.user?.email || "", text, photos: photos || [], date: new Date().toISOString(), replyTo, reactions: [], pinned: false }],
         },
       }));
       api.notifyPush({ toStudio: true, title: "New message from a client", body: text && text.trim() ? text : "Sent a photo", url: "/" });
     },
-    [activeCode]
+    [activeCode, session]
   );
 
   const handleReactMessage = useCallback(

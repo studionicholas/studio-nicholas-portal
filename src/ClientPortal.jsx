@@ -960,13 +960,6 @@ function MessagesPanel({ messages, meRole, onSend, onReact, onPin, onLabel, onTa
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [prefill]);
 
-  // Keep the thread pinned to the newest message (jump to bottom on open and when
-  // a new message arrives) — unless the user has scrolled up to read older ones.
-  useEffect(() => {
-    const el = listRef.current;
-    if (el && stickRef.current) el.scrollTop = el.scrollHeight;
-  }, [filtered.length, view]);
-
   const byId = {};
   messages.forEach((m) => (byId[m.id] = m));
   const pinned = messages.filter((m) => m.pinned);
@@ -982,6 +975,13 @@ function MessagesPanel({ messages, meRole, onSend, onReact, onPin, onLabel, onTa
     }
     return true;
   });
+
+  // Keep the thread pinned to the newest message (jump to bottom on open and when
+  // a new message arrives) — unless the user has scrolled up to read older ones.
+  useEffect(() => {
+    const el = listRef.current;
+    if (el && stickRef.current) el.scrollTop = el.scrollHeight;
+  }, [filtered.length, view]);
 
   function submit(e) {
     e.preventDefault();

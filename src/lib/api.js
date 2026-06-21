@@ -186,7 +186,7 @@ export async function enablePush(email) {
 // Never throws to the UI — if the function isn't deployed yet it just logs.
 export async function notifyPush({ toEmails, toStudio, title, body, url }) {
   try {
-    await supabase.functions.invoke("notify", { body: { toEmails: toEmails || [], toStudio: !!toStudio, title, body, url: url || "/" } });
+    await supabase.functions.invoke("Notify", { body: { toEmails: toEmails || [], toStudio: !!toStudio, title, body, url: url || "/" } });
   } catch (e) {
     console.error("notify failed", e);
   }

@@ -41,6 +41,8 @@ import {
   CalendarPlus,
   Search,
   Tag,
+  Images,
+  Camera,
 } from "lucide-react";
 
 /* ----------------------------------------------------------------
@@ -320,6 +322,38 @@ function readFileAsDataURL(file) {
     const reader = new FileReader();
     reader.onload = () => resolve(reader.result);
     reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+// Downscale an image file to a reasonable size and return a JPEG data URL.
+// Keeps photos light enough to store inline and sync quickly.
+function resizeImageToDataURL(file, maxDim = 1400, quality = 0.82) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = reject;
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = reject;
+      img.onload = () => {
+        let { width, height } = img;
+        if (width > maxDim || height > maxDim) {
+          const scale = maxDim / Math.max(width, height);
+          width = Math.round(width * scale);
+          height = Math.round(height * scale);
+        }
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0, width, height);
+        try {
+          resolve(canvas.toDataURL("image/jpeg", quality));
+        } catch (e) {
+          resolve(reader.result); // fall back to original if canvas is tainted
+        }
+      };
+      img.src = reader.result;
+    };
     reader.readAsDataURL(file);
   });
 }
@@ -665,22 +699,15 @@ function ClientLogin({ onEnter, loginImage, loginMessage }) {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const heroSrc = loginImage || LOGIN_HERO;
-  const message = loginMessage || `${STUDIO_INFO.tagline} — your project, in one place.`;
 
   return (
     <div className="min-h-screen bg-[#F7F0EC] flex flex-col md:flex-row">
       {/* Brand panel — top banner on mobile, left half on desktop */}
-      <div className="relative h-52 md:h-auto md:w-1/2 flex items-end p-6 md:p-10 overflow-hidden" style={{ backgroundColor: "#1C1A17" }}>
+      <div className="relative h-56 md:h-auto md:w-1/2 overflow-hidden" style={{ backgroundColor: "#1C1A17" }}>
         <img src={heroSrc} alt="" className="absolute inset-0 w-full h-full object-cover opacity-95 md:opacity-90" />
-        <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(28,26,23,0.55), rgba(28,26,23,0))" }} />
-        {/* Mobile: logo at the top of the image */}
-        <div className="md:hidden absolute top-5 left-0 right-0 flex justify-center">
-          <Logo light />
-        </div>
-        <div className="relative">
-          <p className="text-white text-[16px] md:text-[20px] max-w-xs leading-relaxed" style={{ fontFamily: "Selva, Georgia, serif", fontStyle: "italic", textShadow: "0 1px 6px rgba(0,0,0,0.5)" }}>
-            {message}
-          </p>
+        {/* Mobile: logo centered on the image */}
+        <div className="md:hidden absolute inset-0 flex items-center justify-center" style={{ filter: "drop-shadow(0 2px 10px rgba(0,0,0,0.45))" }}>
+          <Logo light large />
         </div>
       </div>
 
@@ -841,6 +868,10 @@ function MessagesPanel({ messages, meRole, onSend, onReact, onPin, onLabel, onEd
   const resolvedStatus = customStatus || (showStatus ? studioStatus : "");
   const [draft, setDraft] = useState("");
   const [replyTo, setReplyTo] = useState(null);
+  const [photos, setPhotos] = useState([]); // pending photo data URLs to send
+  const [uploading, setUploading] = useState(false);
+  const [lb, setLb] = useState(null); // {photos, index} for the in-message lightbox
+  const fileRef = useRef(null);
   const [pickerFor, setPickerFor] = useState(null);
   const [labelingFor, setLabelingFor] = useState(null);
   const [editingFor, setEditingFor] = useState(null);
@@ -867,10 +898,25 @@ function MessagesPanel({ messages, meRole, onSend, onReact, onPin, onLabel, onEd
 
   function submit(e) {
     e.preventDefault();
-    if (!draft.trim()) return;
-    onSend(draft.trim(), replyTo ? replyTo.id : null);
+    if (!draft.trim() && photos.length === 0) return;
+    onSend(draft.trim(), replyTo ? replyTo.id : null, photos);
     setDraft("");
     setReplyTo(null);
+    setPhotos([]);
+  }
+
+  async function addPhotos(fileList) {
+    const files = Array.from(fileList || []).filter((f) => f.type.startsWith("image/"));
+    if (files.length === 0) return;
+    setUploading(true);
+    try {
+      const urls = [];
+      for (const f of files) urls.push(await resizeImageToDataURL(f));
+      setPhotos((p) => [...p, ...urls].slice(0, 10));
+    } finally {
+      setUploading(false);
+      if (fileRef.current) fileRef.current.value = "";
+    }
   }
 
   return (
@@ -998,7 +1044,22 @@ function MessagesPanel({ messages, meRole, onSend, onReact, onPin, onLabel, onEd
                     </div>
                   </div>
                 ) : (
-                  <p className="leading-relaxed break-words whitespace-pre-wrap">{m.text}</p>
+                  <>
+                    {m.text && <p className="leading-relaxed break-words whitespace-pre-wrap">{m.text}</p>}
+                    {m.photos?.length > 0 && (
+                      <div className={`grid gap-1.5 ${m.photos.length === 1 ? "grid-cols-1" : "grid-cols-2"} ${m.text ? "mt-2" : ""}`}>
+                        {m.photos.map((p, i) => (
+                          <button
+                            key={i}
+                            onClick={() => setLb({ photos: m.photos, index: i })}
+                            className={`overflow-hidden rounded-lg bg-stone-100 ${m.photos.length === 1 ? "max-w-[220px]" : "aspect-square"}`}
+                          >
+                            <img src={p} alt="" className="w-full h-full object-cover hover:opacity-90 transition-opacity" />
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </>
                 )}
                 <p className={`text-[11px] mt-1 ${mine ? "text-white/50" : "text-stone-400"}`}>
                   {m.from === "client" ? (meRole === "client" ? "You" : "Client") : meRole === "studio" ? "You" : "Nick"} · {formatDate(m.date)} · {formatTime(m.date)}
@@ -1146,17 +1207,61 @@ function MessagesPanel({ messages, meRole, onSend, onReact, onPin, onLabel, onEd
         </div>
       )}
 
+      {(photos.length > 0 || uploading) && (
+        <div className="flex flex-wrap gap-2 mb-2">
+          {photos.map((p, i) => (
+            <div key={i} className="relative w-16 h-16 rounded-lg overflow-hidden border border-stone-200">
+              <img src={p} alt="" className="w-full h-full object-cover" />
+              <button
+                type="button"
+                onClick={() => setPhotos((arr) => arr.filter((_, j) => j !== i))}
+                className="absolute top-0.5 right-0.5 bg-black/60 text-white rounded-full p-0.5"
+                aria-label="Remove photo"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </div>
+          ))}
+          {uploading && <div className="w-16 h-16 rounded-lg border border-dashed border-stone-300 flex items-center justify-center text-[11px] text-stone-400">…</div>}
+        </div>
+      )}
+
       <form onSubmit={submit} className="flex gap-2">
+        <input
+          ref={fileRef}
+          type="file"
+          accept="image/*"
+          multiple
+          className="hidden"
+          onChange={(e) => addPhotos(e.target.files)}
+        />
+        <button
+          type="button"
+          onClick={() => fileRef.current?.click()}
+          className="shrink-0 px-3 rounded-lg border border-stone-300 bg-white text-stone-500 hover:text-stone-800 hover:border-stone-400 transition-colors"
+          aria-label="Add photos"
+        >
+          <Camera className="w-4 h-4" />
+        </button>
         <input
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           placeholder={meRole === "client" ? "Send a message to Nick…" : "Reply to client…"}
-          className="flex-1 px-4 py-3 rounded-lg border border-stone-300 bg-white text-[14px] focus:outline-none focus:ring-2 focus:ring-[#B7453C] focus:border-transparent"
+          className="flex-1 min-w-0 px-4 py-3 rounded-lg border border-stone-300 bg-white text-[14px] focus:outline-none focus:ring-2 focus:ring-[#B7453C] focus:border-transparent"
         />
-        <button type="submit" className="bg-stone-900 text-white rounded-lg px-4 hover:bg-stone-800 transition-colors">
+        <button type="submit" className="shrink-0 bg-stone-900 text-white rounded-lg px-4 hover:bg-stone-800 transition-colors">
           <Send className="w-4 h-4" />
         </button>
       </form>
+
+      {lb && (
+        <Lightbox
+          photos={lb.photos}
+          index={lb.index}
+          onClose={() => setLb(null)}
+          onIndex={(i) => setLb((l) => ({ ...l, index: i }))}
+        />
+      )}
     </div>
   );
 }
@@ -1625,6 +1730,7 @@ function ClientDashboard({ project, viewerEmail, studioStatus, studioStatusColor
   const allTabs = [
     { id: "about", label: "About", icon: Info, badge: 0 },
     { id: "updates", label: "Project updates", icon: ImageIcon, badge: 0 },
+    { id: "gallery", label: "Gallery", icon: Images, badge: 0 },
     { id: "timeline", label: "Timeline", icon: Flag, badge: 0 },
     { id: "meetings", label: "Meetings", icon: Calendar, badge: pendingInvites },
     { id: "fee", label: "Fee proposal", icon: FileText, badge: 0 },
@@ -1752,6 +1858,27 @@ function ClientDashboard({ project, viewerEmail, studioStatus, studioStatusColor
               ))}
             </div>
           )}
+
+          {activeTab === "gallery" && (() => {
+            const galleryPhotos = [
+              ...[...project.updates].reverse().flatMap((u) => u.photos || []),
+              ...project.messages.flatMap((m) => m.photos || []),
+            ];
+            if (galleryPhotos.length === 0) return <EmptyState text="Photos shared in updates and messages will collect here." />;
+            return (
+              <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                {galleryPhotos.map((p, i) => (
+                  <button
+                    key={i}
+                    onClick={() => setLightbox({ photos: galleryPhotos, index: i })}
+                    className="aspect-square overflow-hidden rounded-lg bg-stone-100"
+                  >
+                    <img src={p} alt="" className="w-full h-full object-cover hover:opacity-90 transition-opacity" />
+                  </button>
+                ))}
+              </div>
+            );
+          })()}
 
           {activeTab === "timeline" && <Timeline milestones={project.milestones} />}
 
@@ -2783,11 +2910,11 @@ function AdminPanel({ projects, setProjects, studioStatus, studioStatusColor, on
     updateProject(code, (p) => ({ ...p, feeProposalSigned: null }));
   }
 
-  function replyMessage(code, text, replyTo) {
+  function replyMessage(code, text, replyTo, photos) {
     updateProject(code, (p) => ({
       ...p,
       lastReadStudio: new Date().toISOString(),
-      messages: [...p.messages, { id: uid(), from: "studio", text, date: new Date().toISOString(), replyTo: replyTo || null, reactions: [], pinned: false }],
+      messages: [...p.messages, { id: uid(), from: "studio", text, photos: photos || [], date: new Date().toISOString(), replyTo: replyTo || null, reactions: [], pinned: false }],
     }));
   }
   function reactMessage(code, id, emoji) {
@@ -3095,7 +3222,7 @@ function AdminPanel({ projects, setProjects, studioStatus, studioStatusColor, on
               <MessagesPanel
                 messages={project.messages}
                 meRole="studio"
-                onSend={(text, replyTo) => replyMessage(project.code, text, replyTo)}
+                onSend={(text, replyTo, photos) => replyMessage(project.code, text, replyTo, photos)}
                 onReact={(id, emoji) => reactMessage(project.code, id, emoji)}
                 onPin={(id) => pinMessage(project.code, id)}
                 onLabel={(id, label) => labelMessage(project.code, id, label)}
@@ -3408,13 +3535,13 @@ export default function App() {
   }, []);
 
   const handleSendMessage = useCallback(
-    (text, replyTo = null) => {
+    (text, replyTo = null, photos = []) => {
       setProjects((prev) => ({
         ...prev,
         [activeCode]: {
           ...prev[activeCode],
           lastReadClient: new Date().toISOString(),
-          messages: [...prev[activeCode].messages, { id: uid(), from: "client", text, date: new Date().toISOString(), replyTo, reactions: [], pinned: false }],
+          messages: [...prev[activeCode].messages, { id: uid(), from: "client", text, photos: photos || [], date: new Date().toISOString(), replyTo, reactions: [], pinned: false }],
         },
       }));
     },

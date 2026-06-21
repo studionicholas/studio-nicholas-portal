@@ -3066,6 +3066,57 @@ function NewProjectModal({ onClose, onSubmit }) {
 
 /* ---------------- Root ---------------- */
 
+function SetPassword({ onDone }) {
+  const [pw, setPw] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  async function submit(e) {
+    e.preventDefault();
+    if (pw.length < 6) {
+      setError("Use at least 6 characters.");
+      return;
+    }
+    setBusy(true);
+    const { error } = await api.setPassword(pw);
+    setBusy(false);
+    if (error) setError(error.message || "Couldn't set your password. Try again.");
+    else onDone();
+  }
+  return (
+    <div className="min-h-screen bg-[#F7F0EC] flex items-center justify-center px-6">
+      <div className="w-full max-w-sm">
+        <div className="mb-8">
+          <Logo large />
+        </div>
+        <h1 className="text-[27px] text-stone-900 mb-1.5" style={{ fontFamily: "Georgia, serif", fontStyle: "italic" }}>
+          Set your password
+        </h1>
+        <p className="text-stone-500 text-[14px] mb-7">Choose a password to finish setting up your portal access.</p>
+        <form onSubmit={submit} className="space-y-3">
+          <div className="relative">
+            <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400" />
+            <input
+              type="password"
+              value={pw}
+              onChange={(e) => {
+                setPw(e.target.value);
+                setError("");
+              }}
+              placeholder="New password"
+              autoFocus
+              className="w-full pl-11 pr-4 py-3.5 rounded-lg border border-stone-300 bg-white text-stone-900 placeholder-stone-400 text-[15px] focus:outline-none focus:ring-2 focus:ring-[#B7453C] focus:border-transparent"
+            />
+          </div>
+          {error && <p className="text-[13px] text-red-600">{error}</p>}
+          <button type="submit" disabled={busy} className="w-full bg-stone-900 text-white rounded-lg py-3.5 text-[14px] hover:bg-stone-800 transition-colors">
+            {busy ? "Saving…" : "Save & continue"}
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 function Loading() {
   return <div className="min-h-screen bg-[#F7F0EC] flex items-center justify-center text-stone-400 text-[14px]">Loading…</div>;
 }
@@ -3097,6 +3148,7 @@ export default function App() {
   const [loginMessage, setLoginMessage] = useState("");
   const [activeCode, setActiveCode] = useState(null);
   const [saveError, setSaveError] = useState("");
+  const [passwordDone, setPasswordDone] = useState(false);
 
   const applyingRemote = useRef(false); // guards the projects save effect
   const applyingStatus = useRef(false); // guards the status save effect
@@ -3329,6 +3381,7 @@ export default function App() {
   let content = null;
   if (session === undefined) content = <Loading />;
   else if (!session) content = <ClientLogin onEnter={handleSignIn} loginImage={loginImage} loginMessage={loginMessage} />;
+  else if (api.needsPasswordSetup && !passwordDone) content = <SetPassword onDone={() => setPasswordDone(true)} />;
   else if (!projects || role === null) content = <Loading />;
   else if (role === "admin") {
     content = (

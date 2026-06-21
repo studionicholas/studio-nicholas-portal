@@ -1,4 +1,11 @@
-import { supabase } from "./supabase";
+import { supabase, inviteType } from "./supabase";
+
+// True when the user arrived via an invite or password-reset link and must set a password.
+export const needsPasswordSetup = inviteType === "invite" || inviteType === "recovery";
+
+export async function setPassword(password) {
+  return supabase.auth.updateUser({ password });
+}
 
 /* ----------------------------------------------------------------
    Data + auth layer.

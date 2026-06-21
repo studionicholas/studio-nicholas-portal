@@ -69,6 +69,16 @@ const STUDIO_INFO = {
   ],
 };
 
+// Overlay studio-editable contact details (saved in studio_settings) onto the
+// defaults above, so the studio can fix their name/role/email/phone/website.
+function applyStudioInfo(info) {
+  if (info && typeof info === "object") {
+    ["contactName", "role", "email", "phone", "website"].forEach((k) => {
+      if (typeof info[k] === "string" && info[k].trim()) STUDIO_INFO[k] = info[k].trim();
+    });
+  }
+}
+
 const LOGIN_HERO = "/login.jpg";
 
 const REACTIONS = ["👍", "❤️", "🙏", "🎉", "👀"];
@@ -2902,12 +2912,30 @@ function AdminFeatures({ project, onToggle }) {
   );
 }
 
-function StudioSettingsPanel({ studioStatus, studioStatusColor, onChangeStatus, onChangeStatusColor, loginImage, loginMessage, onSave }) {
+function StudioSettingsPanel({ studioStatus, studioStatusColor, onChangeStatus, onChangeStatusColor, loginImage, loginMessage, studioInfo, onSaveInfo, onSave }) {
   const [img, setImg] = useState(loginImage || "");
   const [msg, setMsg] = useState(loginMessage || "");
   const [url, setUrl] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [info, setInfo] = useState(() => ({
+    contactName: STUDIO_INFO.contactName || "",
+    role: STUDIO_INFO.role || "",
+    email: STUDIO_INFO.email || "",
+    phone: STUDIO_INFO.phone || "",
+    website: STUDIO_INFO.website || "",
+  }));
+  const [infoSaved, setInfoSaved] = useState(false);
+  function setInfoField(k, v) {
+    setInfo((p) => ({ ...p, [k]: v }));
+    setInfoSaved(false);
+  }
+  function saveInfo() {
+    const clean = {};
+    Object.keys(info).forEach((k) => (clean[k] = (info[k] || "").trim()));
+    onSaveInfo(clean);
+    setInfoSaved(true);
+  }
   useEffect(() => setImg(loginImage || ""), [loginImage]);
   useEffect(() => setMsg(loginMessage || ""), [loginMessage]);
 
@@ -2936,7 +2964,37 @@ function StudioSettingsPanel({ studioStatus, studioStatusColor, onChangeStatus, 
       <h1 className="text-[26px] text-stone-900 mb-1" style={{ fontFamily: "Selva, Georgia, serif", fontStyle: "italic" }}>
         Studio settings
       </h1>
-      <p className="text-stone-500 text-[13px] mb-8">Studio-wide settings: your status note and the login page.</p>
+      <p className="text-stone-500 text-[13px] mb-8">Studio-wide settings: your details, status note and the login page.</p>
+
+      <AdminSection title="Your details">
+        <p className="text-[12px] text-stone-400 mb-3">Shown to clients — contact info, the About tab and the login help link.</p>
+        <div className="space-y-2.5">
+          {[
+            { k: "contactName", label: "Name", type: "text", placeholder: "e.g. Nicholas Day" },
+            { k: "role", label: "Job title", type: "text", placeholder: "e.g. Principal & lead designer" },
+            { k: "email", label: "Email", type: "email", placeholder: "studio@…" },
+            { k: "phone", label: "Phone", type: "tel", placeholder: "+61 …" },
+            { k: "website", label: "Website", type: "url", placeholder: "https://…" },
+          ].map((f) => (
+            <label key={f.k} className="block">
+              <span className="text-[11px] text-stone-400">{f.label}</span>
+              <input
+                type={f.type}
+                value={info[f.k]}
+                onChange={(e) => setInfoField(f.k, e.target.value)}
+                placeholder={f.placeholder}
+                className="mt-1 w-full px-3 py-2 rounded-lg border border-stone-300 text-[14px] focus:outline-none focus:ring-2 focus:ring-[#B7453C]"
+              />
+            </label>
+          ))}
+          <div className="flex items-center gap-3 pt-1">
+            <button onClick={saveInfo} className="bg-stone-900 text-white rounded-lg px-4 py-2 text-[13px] hover:bg-stone-800 transition-colors">
+              Save details
+            </button>
+            {infoSaved && <span className="text-[12px] text-[#576B45]">Saved ✓</span>}
+          </div>
+        </div>
+      </AdminSection>
 
       <AdminSection title="Status note for messages">
         <StudioStatusEditor value={studioStatus} onChange={onChangeStatus} color={studioStatusColor} onColor={onChangeStatusColor} />
@@ -3001,7 +3059,53 @@ function StudioSettingsPanel({ studioStatus, studioStatusColor, onChangeStatus, 
   );
 }
 
-function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioStatusColor, onChangeStatus, onChangeStatusColor, loginImage, loginMessage, onSaveLogin, onLogout }) {
+// Studio notification bell — shows projects with new (unread) client messages.
+function AdminBell({ projects, onOpen }) {
+  const [open, setOpen] = useState(false);
+  const items = Object.values(projects)
+    .map((p) => ({ p, n: unreadForStudio(p) }))
+    .filter((x) => x.n > 0);
+  const total = items.reduce((s, x) => s + x.n, 0);
+  return (
+    <div className="relative">
+      <button onClick={() => setOpen((o) => !o)} className="relative text-stone-500 hover:text-stone-800 p-1.5" aria-label="New client messages">
+        <Bell className="w-5 h-5" />
+        {total > 0 && (
+          <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-[16px] px-1 rounded-full bg-[#B7453C] text-white text-[10px] leading-[16px] text-center">{total}</span>
+        )}
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-20" onClick={() => setOpen(false)} />
+          <div className="absolute right-0 mt-2 w-64 bg-white border border-stone-200 rounded-lg shadow-lg z-30 overflow-hidden">
+            <p className="px-3 py-2 text-[11px] text-stone-400 uppercase tracking-wide border-b border-stone-100">New messages</p>
+            {items.length === 0 ? (
+              <p className="px-3 py-3 text-[13px] text-stone-400">No new messages from clients.</p>
+            ) : (
+              items.map(({ p, n }) => (
+                <button
+                  key={p.code}
+                  onClick={() => {
+                    onOpen(p.code);
+                    setOpen(false);
+                  }}
+                  className="w-full text-left px-3 py-2.5 flex items-center justify-between gap-2 hover:bg-stone-50"
+                >
+                  <span className="text-[13px] text-stone-800 truncate">{p.name}</span>
+                  <span className="shrink-0 inline-flex items-center gap-1 bg-[#B7453C] text-white text-[10px] rounded-full pl-1.5 pr-2 py-0.5">
+                    <MessageSquare className="w-3 h-3" /> {n}
+                  </span>
+                </button>
+              ))
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioStatusColor, onChangeStatus, onChangeStatusColor, loginImage, loginMessage, studioInfo, onSaveInfo, onSaveLogin, onLogout }) {
   const [selectedCode, setSelectedCode] = useState(Object.keys(projects)[0] || null);
   const [showNewProject, setShowNewProject] = useState(false);
   const [showNewUpdate, setShowNewUpdate] = useState(false);
@@ -3012,6 +3116,12 @@ function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioSt
   const [optimizeMsg, setOptimizeMsg] = useState("");
 
   const project = selectedCode ? projects[selectedCode] : null;
+
+  function openProjectMessages(code) {
+    setSelectedCode(code);
+    setShowSettings(false);
+    setAdminTab("messages");
+  }
 
   // One-time cleanup: move any photos/PDFs still embedded as base64 into storage,
   // replacing them with small URLs. Shrinks the records so saves/loads are fast.
@@ -3346,12 +3456,8 @@ function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioSt
       <div className="md:hidden sticky top-0 z-10 bg-[#F7F0EC]/95 backdrop-blur border-b border-stone-200">
         <div className="px-4 py-3 flex items-center gap-3">
           <Logo />
-          {totalUnread > 0 && (
-            <span className="inline-flex items-center gap-1 bg-[#B7453C] text-white text-[11px] rounded-full pl-1.5 pr-2 py-0.5" title="New messages from clients">
-              <MessageSquare className="w-3 h-3" /> {totalUnread}
-            </span>
-          )}
           <div className="ml-auto flex items-center gap-2">
+            <AdminBell projects={projects} onOpen={openProjectMessages} />
             <button onClick={() => setShowSettings(true)} className="text-stone-500 hover:text-stone-800 p-1.5" aria-label="Login page settings">
               <Settings className="w-4 h-4" />
             </button>
@@ -3384,6 +3490,9 @@ function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioSt
       </div>
 
       <div className="flex-1 md:overflow-y-auto">
+        <div className="hidden md:flex justify-end items-center px-6 py-2.5 border-b border-stone-200 sticky top-0 bg-[#F7F0EC]/95 backdrop-blur z-10">
+          <AdminBell projects={projects} onOpen={openProjectMessages} />
+        </div>
         {showSettings ? (
           <StudioSettingsPanel
             studioStatus={studioStatus}
@@ -3392,6 +3501,8 @@ function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioSt
             onChangeStatusColor={onChangeStatusColor}
             loginImage={loginImage}
             loginMessage={loginMessage}
+            studioInfo={studioInfo}
+            onSaveInfo={onSaveInfo}
             onSave={onSaveLogin}
           />
         ) : project ? (
@@ -3738,6 +3849,7 @@ export default function App() {
   const [studioStatusColor, setStudioStatusColor] = useState("");
   const [loginImage, setLoginImage] = useState("");
   const [loginMessage, setLoginMessage] = useState("");
+  const [studioInfo, setStudioInfo] = useState(null);
   const [activeCode, setActiveCode] = useState(null);
   const [saveError, setSaveError] = useState("");
   const [passwordDone, setPasswordDone] = useState(false);
@@ -3761,6 +3873,8 @@ export default function App() {
     api.fetchSettings().then((s) => {
       setLoginImage(s.loginImage);
       setLoginMessage(s.loginMessage);
+      setStudioInfo(s.studioInfo);
+      applyStudioInfo(s.studioInfo);
     });
   }, []);
 
@@ -3778,6 +3892,8 @@ export default function App() {
       setStudioStatusColor(status.color);
       setLoginImage(status.loginImage);
       setLoginMessage(status.loginMessage);
+      setStudioInfo(status.studioInfo);
+      applyStudioInfo(status.studioInfo);
       setProjects(migrate(raw));
     } catch (e) {
       console.error("refetch failed", e);
@@ -3810,6 +3926,8 @@ export default function App() {
         setStudioStatusColor(status.color);
         setLoginImage(status.loginImage);
         setLoginMessage(status.loginMessage);
+        setStudioInfo(status.studioInfo);
+        applyStudioInfo(status.studioInfo);
         setProjects(shaped);
         if (!admin) {
           const mine = Object.values(shaped)[0];
@@ -3924,6 +4042,16 @@ export default function App() {
     }
   }, []);
 
+  const handleSaveInfo = useCallback(async (info) => {
+    applyStudioInfo(info);
+    setStudioInfo(info);
+    try {
+      await api.saveStudioInfo(info);
+    } catch (e) {
+      setSaveError(e?.message || String(e));
+    }
+  }, []);
+
   const handleSendMessage = useCallback(
     (text, replyTo = null, photos = []) => {
       setProjects((prev) => ({
@@ -4014,6 +4142,8 @@ export default function App() {
         onChangeStatusColor={setStudioStatusColor}
         loginImage={loginImage}
         loginMessage={loginMessage}
+        studioInfo={studioInfo}
+        onSaveInfo={handleSaveInfo}
         onSaveLogin={handleSaveLogin}
         onLogout={handleSignOut}
       />

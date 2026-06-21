@@ -920,6 +920,12 @@ function MessagesPanel({ messages, meRole, onSend, onReact, onPin, onLabel, onTa
   const [uploading, setUploading] = useState(false);
   const [lb, setLb] = useState(null); // {photos, index} for the in-message lightbox
   const fileRef = useRef(null);
+  const listRef = useRef(null);
+  const stickRef = useRef(true); // keep pinned to the newest message unless the user scrolls up
+  function onListScroll() {
+    const el = listRef.current;
+    if (el) stickRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 60;
+  }
   const [pickerFor, setPickerFor] = useState(null);
   const [labelingFor, setLabelingFor] = useState(null);
   const [editingFor, setEditingFor] = useState(null);
@@ -953,6 +959,13 @@ function MessagesPanel({ messages, meRole, onSend, onReact, onPin, onLabel, onTa
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [prefill]);
+
+  // Keep the thread pinned to the newest message (jump to bottom on open and when
+  // a new message arrives) — unless the user has scrolled up to read older ones.
+  useEffect(() => {
+    const el = listRef.current;
+    if (el && stickRef.current) el.scrollTop = el.scrollHeight;
+  }, [filtered.length, view]);
 
   const byId = {};
   messages.forEach((m) => (byId[m.id] = m));
@@ -1096,7 +1109,7 @@ function MessagesPanel({ messages, meRole, onSend, onReact, onPin, onLabel, onTa
         </div>
       )}
 
-      <div className="space-y-2 mb-4 max-h-[420px] overflow-y-auto overflow-x-hidden">
+      <div ref={listRef} onScroll={onListScroll} className="space-y-2 mb-4 max-h-[420px] overflow-y-auto overflow-x-hidden">
         {messages.length === 0 && <EmptyState text="No messages yet." />}
         {messages.length > 0 && filtered.length === 0 && <EmptyState text="No messages match your search." />}
         {filtered.map((m) => {
@@ -1915,6 +1928,30 @@ function ClientDashboard({ project, viewerEmail, studioStatus, studioStatusColor
   function dismissInstall() {
     setShowInstall(false);
   }
+
+  // Notifications prompt — appears after the add-to-home-screen popup. If they
+  // close it, the inline banner stays on the page until notifications are on.
+  const [notifPerm, setNotifPerm] = useState(() => (api.pushSupported() ? api.pushPermission() : "unsupported"));
+  const [showNotifPrompt, setShowNotifPrompt] = useState(false);
+  const [notifBusy, setNotifBusy] = useState(false);
+  async function turnOnNotifs() {
+    setNotifBusy(true);
+    try {
+      await api.enablePush(viewerEmail);
+    } catch (e) {
+      console.error(e);
+    }
+    setNotifPerm(api.pushPermission());
+    setNotifBusy(false);
+    setShowNotifPrompt(false);
+  }
+  useEffect(() => {
+    // Once the install popup is out of the way, prompt for notifications if the
+    // device supports them and the user hasn't decided yet.
+    if (!showInstall && api.pushSupported() && api.pushPermission() === "default") {
+      setShowNotifPrompt(true);
+    }
+  }, [showInstall]);
   const features = project.features || {};
   const programaUrl = programaForViewer(project, viewerEmail);
 
@@ -1982,7 +2019,22 @@ function ClientDashboard({ project, viewerEmail, studioStatus, studioStatusColor
       </div>
 
       <div className="max-w-3xl mx-auto px-4 sm:px-6">
-        <EnablePushBanner email={viewerEmail} />
+        {notifPerm === "default" && (
+          <div className="mt-3 flex items-center gap-3 bg-white border border-stone-200 rounded-lg px-3.5 py-2.5">
+            <Bell className="w-4 h-4 text-[#B7453C] shrink-0" />
+            <div className="min-w-0 flex-1">
+              <p className="text-[13px] text-stone-800">Turn on notifications</p>
+              <p className="text-[11px] text-stone-400">Get a pop-up when there's a new message or update.</p>
+            </div>
+            <button
+              disabled={notifBusy}
+              onClick={turnOnNotifs}
+              className="shrink-0 bg-stone-900 text-white text-[12px] rounded-lg px-3 py-1.5 hover:bg-stone-800 disabled:opacity-50"
+            >
+              {notifBusy ? "…" : "Turn on"}
+            </button>
+          </div>
+        )}
         {features.programa !== false && programaUrl && (
           <div className="py-3.5 border-b border-stone-200">
             <a
@@ -2154,6 +2206,34 @@ function ClientDashboard({ project, viewerEmail, studioStatus, studioStatusColor
             </div>
             <button onClick={dismissInstall} className="w-full bg-stone-900 text-white rounded-lg py-3 text-[14px] hover:bg-stone-800 transition-colors">
               Got it
+            </button>
+          </div>
+        </div>
+      )}
+
+      {showNotifPrompt && notifPerm === "default" && !showInstall && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center px-4 pb-6 sm:pb-0">
+          <div className="bg-white rounded-2xl max-w-sm w-full p-6">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-11 h-11 rounded-lg bg-[#F3E7E2] flex items-center justify-center shrink-0">
+                <Bell className="w-5 h-5 text-[#B7453C]" />
+              </div>
+              <h3 className="text-[18px] text-stone-900" style={{ fontFamily: "Selva, Georgia, serif", fontStyle: "italic" }}>
+                Turn on notifications
+              </h3>
+            </div>
+            <p className="text-[14px] text-stone-600 leading-relaxed mb-5">
+              Get a pop-up the moment Nick posts an update or sends you a message — so you never miss anything on your project.
+            </p>
+            <button
+              disabled={notifBusy}
+              onClick={turnOnNotifs}
+              className="w-full bg-stone-900 text-white rounded-lg py-3 text-[14px] hover:bg-stone-800 transition-colors disabled:opacity-50"
+            >
+              {notifBusy ? "Turning on…" : "Turn on notifications"}
+            </button>
+            <button onClick={() => setShowNotifPrompt(false)} className="w-full text-stone-400 hover:text-stone-700 text-[13px] py-2.5 mt-1">
+              Not now
             </button>
           </div>
         </div>

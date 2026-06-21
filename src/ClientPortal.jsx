@@ -357,6 +357,54 @@ function resizeImageToDataURL(file, maxDim = 1200, quality = 0.72) {
     reader.readAsDataURL(file);
   });
 }
+// Resize an image File to a JPEG Blob (for uploading to storage).
+function resizeImageToBlob(file, maxDim = 1200, quality = 0.72) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = reject;
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = reject;
+      img.onload = () => {
+        let { width, height } = img;
+        if (width > maxDim || height > maxDim) {
+          const scale = maxDim / Math.max(width, height);
+          width = Math.round(width * scale);
+          height = Math.round(height * scale);
+        }
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        canvas.getContext("2d").drawImage(img, 0, 0, width, height);
+        canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("toBlob failed"))), "image/jpeg", quality);
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+// Upload an image to storage and return its URL; if that fails (e.g. bucket not
+// set up yet), fall back to an inline data URL so nothing breaks.
+async function uploadImageOrData(file) {
+  try {
+    const blob = await resizeImageToBlob(file);
+    return await api.uploadMedia(blob, "jpg");
+  } catch (e) {
+    console.error("media upload failed, embedding instead", e);
+    return await resizeImageToDataURL(file);
+  }
+}
+
+function dataUrlToBlob(dataUrl) {
+  const [head, b64] = dataUrl.split(",");
+  const mime = (head.match(/data:([^;]+)/) || [])[1] || "application/octet-stream";
+  const bin = atob(b64);
+  const arr = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+  return new Blob([arr], { type: mime });
+}
+
 function downloadFile(f) {
   if (!f || !f.dataUrl) return;
   const a = document.createElement("a");
@@ -937,7 +985,7 @@ function MessagesPanel({ messages, meRole, onSend, onReact, onPin, onLabel, onTa
     setUploading(true);
     try {
       const urls = [];
-      for (const f of files) urls.push(await resizeImageToDataURL(f));
+      for (const f of files) urls.push(await uploadImageOrData(f));
       setPhotos((p) => [...p, ...urls].slice(0, 10));
     } finally {
       setUploading(false);
@@ -2213,7 +2261,7 @@ function NewUpdateForm({ onSubmit, initial, submitLabel = "Post update", onCance
         continue;
       }
       try {
-        added.push(file.type.startsWith("image/") ? await resizeImageToDataURL(file) : await readFileAsDataURL(file));
+        added.push(file.type.startsWith("image/") ? await uploadImageOrData(file) : await readFileAsDataURL(file));
       } catch (err) {
         setError(`Couldn't read "${file.name}".`);
       }
@@ -2874,8 +2922,49 @@ function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioSt
   const [adminTab, setAdminTab] = useState("details");
   const [showSettings, setShowSettings] = useState(false);
   const [editingUpdate, setEditingUpdate] = useState(null);
+  const [optimizing, setOptimizing] = useState(false);
+  const [optimizeMsg, setOptimizeMsg] = useState("");
 
   const project = selectedCode ? projects[selectedCode] : null;
+
+  // One-time cleanup: move any photos/PDFs still embedded as base64 into storage,
+  // replacing them with small URLs. Shrinks the records so saves/loads are fast.
+  async function migrateStr(s) {
+    if (typeof s === "string" && s.startsWith("data:")) {
+      const blob = dataUrlToBlob(s);
+      const ext = blob.type === "application/pdf" ? "pdf" : blob.type === "image/png" ? "png" : "jpg";
+      return await api.uploadMedia(blob, ext);
+    }
+    return s;
+  }
+  async function optimizeStorage() {
+    if (!window.confirm("Move existing photos & files into fast storage? This can take a minute — keep this tab open.")) return;
+    setOptimizing(true);
+    setOptimizeMsg("Starting…");
+    try {
+      const codes = Object.keys(projects);
+      for (let i = 0; i < codes.length; i++) {
+        const p = projects[codes[i]];
+        const np = { ...p };
+        if (np.heroPhoto) np.heroPhoto = await migrateStr(np.heroPhoto);
+        if (Array.isArray(np.updates)) np.updates = await Promise.all(np.updates.map(async (u) => ({ ...u, photos: u.photos ? await Promise.all(u.photos.map(migrateStr)) : u.photos })));
+        if (Array.isArray(np.messages)) np.messages = await Promise.all(np.messages.map(async (m) => ({ ...m, photos: m.photos ? await Promise.all(m.photos.map(migrateStr)) : m.photos })));
+        if (np.feeProposal?.dataUrl) np.feeProposal = { ...np.feeProposal, dataUrl: await migrateStr(np.feeProposal.dataUrl) };
+        if (np.feeProposalSigned?.dataUrl) np.feeProposalSigned = { ...np.feeProposalSigned, dataUrl: await migrateStr(np.feeProposalSigned.dataUrl) };
+        await api.saveProject(codes[i], np);
+        setOptimizeMsg(`Optimised ${i + 1} of ${codes.length} project${codes.length === 1 ? "" : "s"}…`);
+      }
+      if (loginImage && loginImage.startsWith("data:")) {
+        await api.saveLoginSettings(await migrateStr(loginImage), loginMessage);
+      }
+      setOptimizeMsg("Done! Reloading…");
+      setTimeout(() => window.location.reload(), 900);
+    } catch (e) {
+      console.error(e);
+      setOptimizeMsg("Error: " + (e?.message || String(e)) + " (make sure the storage bucket SQL was run)");
+      setOptimizing(false);
+    }
+  }
 
   function updateProject(code, updater) {
     setProjects((prev) => ({ ...prev, [code]: updater(prev[code]) }));
@@ -3145,6 +3234,14 @@ function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioSt
             <Settings className="w-3.5 h-3.5" /> Settings
           </button>
           <EnablePushBanner email={viewerEmail} />
+          <button
+            onClick={optimizeStorage}
+            disabled={optimizing}
+            className="w-full flex items-center justify-center gap-1.5 text-[12px] text-stone-500 border border-stone-200 rounded-lg py-2 mt-2 hover:bg-stone-100 disabled:opacity-50"
+          >
+            <Upload className="w-3.5 h-3.5" /> {optimizing ? "Optimising…" : "Speed up (optimise photos)"}
+          </button>
+          {optimizeMsg && <p className="text-[11px] text-stone-400 mt-1.5 text-center">{optimizeMsg}</p>}
           <button onClick={onLogout} className="w-full text-center text-[12px] text-stone-400 hover:text-stone-600 mt-3">
             Log out
           </button>

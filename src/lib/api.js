@@ -101,6 +101,19 @@ export async function createProject(code, project) {
   if (error) throw error;
 }
 
+/* ---------- Media storage ---------- */
+
+// Upload a Blob/File to the public "project-media" bucket and return its URL.
+// Storing URLs (instead of base64 inside the project record) keeps rows small.
+export async function uploadMedia(blob, ext = "jpg") {
+  const path = `media/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+  const { error } = await supabase.storage
+    .from("project-media")
+    .upload(path, blob, { contentType: blob.type || "application/octet-stream", upsert: false });
+  if (error) throw error;
+  return supabase.storage.from("project-media").getPublicUrl(path).data.publicUrl;
+}
+
 export async function deleteProject(code) {
   const { error } = await supabase.from("projects").delete().eq("code", code);
   if (error) throw error;

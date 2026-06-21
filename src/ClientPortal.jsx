@@ -11,6 +11,8 @@ import {
   Upload,
   ChevronRight,
   ChevronLeft,
+  ChevronUp,
+  ChevronDown,
   Pencil,
   Settings,
   X,
@@ -559,9 +561,9 @@ function Logo({ light, large }) {
   return (
     <div className="flex items-center" style={{ gap: large ? 12 : 10 }}>
       <div className="rounded-full flex items-center justify-center shrink-0" style={{ width: box, height: box, backgroundColor: ringBg }}>
-        <span style={{ fontFamily: "Georgia, serif", fontStyle: "italic", color: markColor, fontSize: monoSize }}>N</span>
+        <span style={{ fontFamily: "Selva, Georgia, serif", fontStyle: "italic", color: markColor, fontSize: monoSize }}>N</span>
       </div>
-      <span style={{ fontFamily: "Georgia, serif", fontStyle: "italic", color: wordColor, fontSize: wordSize }}>Studio Nicholas</span>
+      <span style={{ fontFamily: "Selva, Georgia, serif", fontStyle: "italic", color: wordColor, fontSize: wordSize }}>Studio Nicholas</span>
     </div>
   );
 }
@@ -669,10 +671,14 @@ function ClientLogin({ onEnter, loginImage, loginMessage }) {
     <div className="min-h-screen bg-[#F7F0EC] flex flex-col md:flex-row">
       {/* Brand panel — top banner on mobile, left half on desktop */}
       <div className="relative h-52 md:h-auto md:w-1/2 flex items-end p-6 md:p-10 overflow-hidden" style={{ backgroundColor: "#1C1A17" }}>
-        <img src={heroSrc} alt="" className="absolute inset-0 w-full h-full object-cover opacity-80 md:opacity-70" />
-        <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(28,26,23,0.9), rgba(28,26,23,0.15))" }} />
+        <img src={heroSrc} alt="" className="absolute inset-0 w-full h-full object-cover opacity-95 md:opacity-90" />
+        <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(28,26,23,0.55), rgba(28,26,23,0))" }} />
+        {/* Mobile: logo at the top of the image */}
+        <div className="md:hidden absolute top-5 left-0 right-0 flex justify-center">
+          <Logo light />
+        </div>
         <div className="relative">
-          <p className="text-white text-[16px] md:text-[20px] max-w-xs leading-relaxed" style={{ fontFamily: "Georgia, serif", fontStyle: "italic" }}>
+          <p className="text-white text-[16px] md:text-[20px] max-w-xs leading-relaxed" style={{ fontFamily: "Selva, Georgia, serif", fontStyle: "italic", textShadow: "0 1px 6px rgba(0,0,0,0.5)" }}>
             {message}
           </p>
         </div>
@@ -682,10 +688,10 @@ function ClientLogin({ onEnter, loginImage, loginMessage }) {
       <div className="flex-1 flex flex-col">
         <div className="flex-1 flex items-center justify-center px-6 py-12">
           <div className="w-full max-w-sm">
-            <div className="mb-8">
+            <div className="mb-8 hidden md:block">
               <Logo large />
             </div>
-            <h1 className="text-[27px] text-stone-900 mb-1.5" style={{ fontFamily: "Georgia, serif", fontStyle: "italic" }}>
+            <h1 className="text-[27px] text-stone-900 mb-1.5" style={{ fontFamily: "Selva, Georgia, serif", fontStyle: "italic" }}>
               Welcome back
             </h1>
             <p className="text-stone-500 text-[14px] mb-7">Sign in to view your project updates, files, and messages.</p>
@@ -1203,7 +1209,7 @@ function MeetingCard({ meeting, onRespond, isPast }) {
   return (
     <div className="border border-stone-200 rounded-xl bg-white p-5">
       <div className="flex items-center justify-between gap-3 mb-3">
-        <h4 className="text-[16px] text-stone-900" style={{ fontFamily: "Georgia, serif", fontStyle: "italic" }}>
+        <h4 className="text-[16px] text-stone-900" style={{ fontFamily: "Selva, Georgia, serif", fontStyle: "italic" }}>
           {meeting.title}
         </h4>
         <span
@@ -1315,7 +1321,7 @@ function MeetingCard({ meeting, onRespond, isPast }) {
 /* ---------------- Timeline ---------------- */
 
 function Timeline({ milestones }) {
-  const sorted = [...milestones].sort((a, b) => new Date(a.date) - new Date(b.date));
+  const sorted = milestones;
   if (sorted.length === 0) return <EmptyState text="The project timeline will appear here once milestones are set." />;
   const total = sorted.length;
   const completed = sorted.filter((m) => m.status === "done").length;
@@ -1327,7 +1333,7 @@ function Timeline({ milestones }) {
         <div className="flex items-end justify-between mb-2.5">
           <div>
             <p className="text-[12px] text-stone-400 uppercase tracking-wide">Project progress</p>
-            <p className="text-[22px] text-stone-900" style={{ fontFamily: "Georgia, serif", fontStyle: "italic" }}>
+            <p className="text-[22px] text-stone-900" style={{ fontFamily: "Selva, Georgia, serif", fontStyle: "italic" }}>
               {completed} of {total} phases complete
             </p>
           </div>
@@ -1370,7 +1376,7 @@ function Timeline({ milestones }) {
                     {s.label}
                   </span>
                 </div>
-                <h4 className="text-[17px] text-stone-900" style={{ fontFamily: "Georgia, serif", fontStyle: "italic" }}>
+                <h4 className="text-[17px] text-stone-900" style={{ fontFamily: "Selva, Georgia, serif", fontStyle: "italic" }}>
                   {m.title}
                 </h4>
                 {m.note && <p className="text-[13px] text-stone-500 leading-relaxed mt-1">{m.note}</p>}
@@ -1393,7 +1399,7 @@ function FeeDocCard({ label, dateLabel, file, note, emptyText }) {
           <FileText className="w-5 h-5 text-stone-500" />
         </div>
         <div className="min-w-0 flex-1">
-          <h3 className="text-[16px] text-stone-900" style={{ fontFamily: "Georgia, serif", fontStyle: "italic" }}>
+          <h3 className="text-[16px] text-stone-900" style={{ fontFamily: "Selva, Georgia, serif", fontStyle: "italic" }}>
             {label}
           </h3>
           {file ? (
@@ -1464,7 +1470,7 @@ function ClientSignedCard({ signed, onUpload }) {
           <FileText className="w-5 h-5 text-stone-500" />
         </div>
         <div className="min-w-0 flex-1">
-          <h3 className="text-[16px] text-stone-900" style={{ fontFamily: "Georgia, serif", fontStyle: "italic" }}>
+          <h3 className="text-[16px] text-stone-900" style={{ fontFamily: "Selva, Georgia, serif", fontStyle: "italic" }}>
             Signed copy
           </h3>
           {signed ? (
@@ -1564,7 +1570,7 @@ function AboutTab({ project }) {
   return (
     <div className="space-y-8">
       {project.description && (
-        <p className="text-[15px] text-stone-600 leading-relaxed" style={{ fontFamily: "Georgia, serif" }}>
+        <p className="text-[15px] text-stone-600 leading-relaxed" style={{ fontFamily: "Selva, Georgia, serif" }}>
           {project.description}
         </p>
       )}
@@ -1590,6 +1596,20 @@ function AboutTab({ project }) {
 function ClientDashboard({ project, viewerEmail, studioStatus, studioStatusColor, onLogout, onSendMessage, onReactMessage, onPinMessage, onMarkRead, onMarkNotifs, onDismissNotif, onUploadSigned, onRespondMeeting }) {
   const [tab, setTab] = useState("about");
   const [lightbox, setLightbox] = useState(null);
+  const [showInstall, setShowInstall] = useState(() => {
+    try {
+      const standalone = window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone;
+      return !standalone && !localStorage.getItem("sn_install_seen");
+    } catch (e) {
+      return false;
+    }
+  });
+  function dismissInstall() {
+    try {
+      localStorage.setItem("sn_install_seen", "1");
+    } catch (e) {}
+    setShowInstall(false);
+  }
   const features = project.features || {};
   const programaUrl = programaForViewer(project, viewerEmail);
 
@@ -1638,7 +1658,6 @@ function ClientDashboard({ project, viewerEmail, studioStatus, studioStatusColor
 
       <div className="relative h-48 sm:h-72 overflow-hidden">
         <img src={project.heroPhoto} alt="" className="w-full h-full object-cover" />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/10 to-black/25" />
         {/* Top overlays: status (left), account email (right) */}
         <div className="absolute top-0 left-0 right-0">
           <div className="max-w-3xl mx-auto px-4 sm:px-6 pt-3 sm:pt-4 flex items-start justify-between gap-2">
@@ -1651,7 +1670,7 @@ function ClientDashboard({ project, viewerEmail, studioStatus, studioStatusColor
         </div>
         {/* Bottom: full address */}
         <div className="absolute bottom-0 left-0 right-0 px-4 sm:px-6 py-3.5 max-w-3xl mx-auto w-full">
-          <p className="text-white text-[12px] sm:text-[13px] leading-snug" style={{ fontFamily: "Georgia, serif", fontStyle: "italic" }}>
+          <p className="text-white text-[12px] sm:text-[13px] leading-snug" style={{ fontFamily: "Selva, Georgia, serif", fontStyle: "italic", textShadow: "0 1px 6px rgba(0,0,0,0.6)" }}>
             {project.address || project.location}
           </p>
         </div>
@@ -1712,7 +1731,7 @@ function ClientDashboard({ project, viewerEmail, studioStatus, studioStatusColor
               {[...project.updates].reverse().map((u) => (
                 <div key={u.id}>
                   <p className="text-[12px] text-stone-400 mb-1">{formatDate(u.date)}</p>
-                  <h3 className="text-[19px] text-stone-900 mb-2" style={{ fontFamily: "Georgia, serif", fontStyle: "italic" }}>
+                  <h3 className="text-[19px] text-stone-900 mb-2" style={{ fontFamily: "Selva, Georgia, serif", fontStyle: "italic" }}>
                     {u.title}
                   </h3>
                   <p className="text-[14px] text-stone-600 leading-relaxed mb-4">{u.note}</p>
@@ -1801,6 +1820,30 @@ function ClientDashboard({ project, viewerEmail, studioStatus, studioStatusColor
           onIndex={(i) => setLightbox((l) => ({ ...l, index: i }))}
         />
       )}
+      {showInstall && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center px-4 pb-6 sm:pb-0">
+          <div className="bg-white rounded-2xl max-w-sm w-full p-6">
+            <div className="flex items-center gap-3 mb-3">
+              <img src="/icon-192.png" className="w-11 h-11 rounded-lg" alt="" />
+              <h3 className="text-[18px] text-stone-900" style={{ fontFamily: "Selva, Georgia, serif", fontStyle: "italic" }}>
+                Add to your home screen
+              </h3>
+            </div>
+            <p className="text-[14px] text-stone-600 leading-relaxed mb-4">Keep your project one tap away — it works just like an app, no app store needed.</p>
+            <div className="text-[13px] text-stone-600 space-y-2 mb-5">
+              <p>
+                <strong className="text-stone-900">iPhone (Safari):</strong> tap <strong>Share</strong> → <strong>Add to Home Screen</strong>
+              </p>
+              <p>
+                <strong className="text-stone-900">Android (Chrome):</strong> tap the <strong>⋮</strong> menu → <strong>Install app</strong>
+              </p>
+            </div>
+            <button onClick={dismissInstall} className="w-full bg-stone-900 text-white rounded-lg py-3 text-[14px] hover:bg-stone-800 transition-colors">
+              Got it
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1816,7 +1859,7 @@ function AdminLogin({ onEnter, onBack }) {
         <button onClick={onBack} className="text-stone-400 hover:text-stone-700 text-[13px] flex items-center gap-1 mb-8">
           <ArrowLeft className="w-3.5 h-3.5" /> Back
         </button>
-        <h1 className="text-[22px] text-stone-900 mb-6" style={{ fontFamily: "Georgia, serif", fontStyle: "italic" }}>
+        <h1 className="text-[22px] text-stone-900 mb-6" style={{ fontFamily: "Selva, Georgia, serif", fontStyle: "italic" }}>
           Studio admin
         </h1>
         <form
@@ -2009,22 +2052,47 @@ function NewUpdateForm({ onSubmit, initial, submitLabel = "Post update", onCance
   );
 }
 
-function AdminMilestones({ project, onAdd, onSetStatus, onDelete }) {
+function AdminMilestones({ project, onAdd, onEdit, onSetStatus, onMove, onDelete }) {
   const [title, setTitle] = useState("");
   const [date, setDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [status, setStatus] = useState("upcoming");
   const [note, setNote] = useState("");
+  const [editingId, setEditingId] = useState(null);
 
-  const sorted = [...project.milestones].sort((a, b) => new Date(a.date) - new Date(b.date));
+  const list = project.milestones;
+  const resetForm = () => {
+    setTitle("");
+    setDate("");
+    setEndDate("");
+    setStatus("upcoming");
+    setNote("");
+    setEditingId(null);
+  };
+  const startEdit = (m) => {
+    setTitle(m.title);
+    setDate(m.date);
+    setEndDate(m.endDate || "");
+    setStatus(m.status);
+    setNote(m.note || "");
+    setEditingId(m.id);
+  };
 
   return (
     <div className="space-y-3">
-      {sorted.length === 0 && <p className="text-[13px] text-stone-400">No milestones yet.</p>}
-      {sorted.map((m) => {
+      {list.length === 0 && <p className="text-[13px] text-stone-400">No phases yet.</p>}
+      {list.map((m, i) => {
         const s = milestoneStatus(m.status);
         return (
-          <div key={m.id} className="border border-stone-200 rounded-lg p-3.5 bg-white flex items-center gap-3">
+          <div key={m.id} className="border border-stone-200 rounded-lg p-3 bg-white flex items-center gap-2">
+            <div className="flex flex-col shrink-0">
+              <button onClick={() => onMove(i, -1)} disabled={i === 0} className="text-stone-300 hover:text-stone-700 disabled:opacity-25" aria-label="Move up">
+                <ChevronUp className="w-4 h-4" />
+              </button>
+              <button onClick={() => onMove(i, 1)} disabled={i === list.length - 1} className="text-stone-300 hover:text-stone-700 disabled:opacity-25" aria-label="Move down">
+                <ChevronDown className="w-4 h-4" />
+              </button>
+            </div>
             <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: s.color }} />
             <div className="min-w-0 flex-1">
               <p className="text-[14px] text-stone-800 truncate">{m.title}</p>
@@ -2042,7 +2110,10 @@ function AdminMilestones({ project, onAdd, onSetStatus, onDelete }) {
               <option value="current">In progress</option>
               <option value="done">Complete</option>
             </select>
-            <button onClick={() => onDelete(m.id)} className="text-stone-300 hover:text-red-600 shrink-0" aria-label="Delete milestone">
+            <button onClick={() => startEdit(m)} className="text-stone-300 hover:text-stone-700 shrink-0" aria-label="Edit phase">
+              <Pencil className="w-4 h-4" />
+            </button>
+            <button onClick={() => onDelete(m.id)} className="text-stone-300 hover:text-red-600 shrink-0" aria-label="Delete phase">
               <Trash2 className="w-4 h-4" />
             </button>
           </div>
@@ -2053,15 +2124,14 @@ function AdminMilestones({ project, onAdd, onSetStatus, onDelete }) {
         onSubmit={(e) => {
           e.preventDefault();
           if (!title.trim() || !date) return;
-          onAdd({ title: title.trim(), date, endDate, status, note: note.trim() });
-          setTitle("");
-          setDate("");
-          setEndDate("");
-          setStatus("upcoming");
-          setNote("");
+          const data = { title: title.trim(), date, endDate, status, note: note.trim() };
+          if (editingId) onEdit(editingId, data);
+          else onAdd(data);
+          resetForm();
         }}
         className="border border-dashed border-stone-300 rounded-lg p-3.5 space-y-2.5"
       >
+        {editingId && <p className="text-[12px] text-stone-500">Editing phase</p>}
         <input
           value={title}
           onChange={(e) => setTitle(e.target.value)}
@@ -2089,9 +2159,16 @@ function AdminMilestones({ project, onAdd, onSetStatus, onDelete }) {
           placeholder="Short note (optional)"
           className="w-full px-3 py-2 rounded-lg border border-stone-300 text-[14px] focus:outline-none focus:ring-2 focus:ring-[#B7453C]"
         />
-        <button type="submit" className="bg-stone-900 text-white rounded-lg px-4 py-2 text-[13px] hover:bg-stone-800 transition-colors">
-          Add milestone
-        </button>
+        <div className="flex items-center gap-2">
+          <button type="submit" className="bg-stone-900 text-white rounded-lg px-4 py-2 text-[13px] hover:bg-stone-800 transition-colors">
+            {editingId ? "Save changes" : "Add phase"}
+          </button>
+          {editingId && (
+            <button type="button" onClick={resetForm} className="text-[13px] text-stone-500 hover:text-stone-800">
+              Cancel
+            </button>
+          )}
+        </div>
       </form>
     </div>
   );
@@ -2446,7 +2523,7 @@ function StudioSettingsPanel({ studioStatus, studioStatusColor, onChangeStatus, 
 
   return (
     <div className="max-w-2xl mx-auto px-5 sm:px-8 py-8 sm:py-10">
-      <h1 className="text-[26px] text-stone-900 mb-1" style={{ fontFamily: "Georgia, serif", fontStyle: "italic" }}>
+      <h1 className="text-[26px] text-stone-900 mb-1" style={{ fontFamily: "Selva, Georgia, serif", fontStyle: "italic" }}>
         Studio settings
       </h1>
       <p className="text-stone-500 text-[13px] mb-8">Studio-wide settings: your status note and the login page.</p>
@@ -2632,6 +2709,21 @@ function AdminPanel({ projects, setProjects, studioStatus, studioStatusColor, on
   function deleteMilestone(code, id) {
     updateProject(code, (p) => ({ ...p, milestones: p.milestones.filter((m) => m.id !== id) }));
   }
+  function editMilestone(code, id, data) {
+    updateProject(code, (p) => ({
+      ...p,
+      milestones: p.milestones.map((m) => (m.id === id ? { ...m, title: data.title, date: data.date, endDate: data.endDate || "", status: data.status, note: data.note || "" } : m)),
+    }));
+  }
+  function moveMilestone(code, index, dir) {
+    updateProject(code, (p) => {
+      const arr = [...p.milestones];
+      const j = index + dir;
+      if (j < 0 || j >= arr.length) return p;
+      [arr[index], arr[j]] = [arr[j], arr[index]];
+      return { ...p, milestones: arr };
+    });
+  }
 
   function addMeeting(code, data) {
     const instant = zonedToInstant(`${data.date}T${data.time}`, data.timezone);
@@ -2814,7 +2906,7 @@ function AdminPanel({ projects, setProjects, studioStatus, studioStatusColor, on
         ) : project ? (
           <div className="max-w-2xl mx-auto px-5 sm:px-8 py-8 sm:py-10">
             <div className="flex items-start justify-between gap-3 mb-1">
-              <h1 className="text-[26px] text-stone-900" style={{ fontFamily: "Georgia, serif", fontStyle: "italic" }}>
+              <h1 className="text-[26px] text-stone-900" style={{ fontFamily: "Selva, Georgia, serif", fontStyle: "italic" }}>
                 {project.name}
               </h1>
               <button onClick={() => deleteProject(project.code)} className="shrink-0 inline-flex items-center gap-1 text-[12px] text-stone-400 hover:text-red-600">
@@ -2961,7 +3053,9 @@ function AdminPanel({ projects, setProjects, studioStatus, studioStatusColor, on
               <AdminMilestones
                 project={project}
                 onAdd={(d) => addMilestone(project.code, d)}
+                onEdit={(id, d) => editMilestone(project.code, id, d)}
                 onSetStatus={(id, s) => setMilestoneStatus(project.code, id, s)}
+                onMove={(i, dir) => moveMilestone(project.code, i, dir)}
                 onDelete={(id) => deleteMilestone(project.code, id)}
               />
             </AdminSection>
@@ -3038,7 +3132,7 @@ function NewProjectModal({ onClose, onSubmit }) {
         <button onClick={onClose} className="absolute top-4 right-4 text-stone-400 hover:text-stone-700">
           <X className="w-4 h-4" />
         </button>
-        <h2 className="text-[18px] text-stone-900 mb-4" style={{ fontFamily: "Georgia, serif", fontStyle: "italic" }}>
+        <h2 className="text-[18px] text-stone-900 mb-4" style={{ fontFamily: "Selva, Georgia, serif", fontStyle: "italic" }}>
           New project
         </h2>
         <form
@@ -3088,7 +3182,7 @@ function SetPassword({ onDone }) {
         <div className="mb-8">
           <Logo large />
         </div>
-        <h1 className="text-[27px] text-stone-900 mb-1.5" style={{ fontFamily: "Georgia, serif", fontStyle: "italic" }}>
+        <h1 className="text-[27px] text-stone-900 mb-1.5" style={{ fontFamily: "Selva, Georgia, serif", fontStyle: "italic" }}>
           Set your password
         </h1>
         <p className="text-stone-500 text-[14px] mb-7">Choose a password to finish setting up your portal access.</p>
@@ -3125,7 +3219,7 @@ function NoProjectYet({ onLogout }) {
   return (
     <div className="min-h-screen bg-[#F7F0EC] flex items-center justify-center px-6">
       <div className="text-center max-w-sm">
-        <h1 className="text-[22px] text-stone-900 mb-2" style={{ fontFamily: "Georgia, serif", fontStyle: "italic" }}>
+        <h1 className="text-[22px] text-stone-900 mb-2" style={{ fontFamily: "Selva, Georgia, serif", fontStyle: "italic" }}>
           Almost there
         </h1>
         <p className="text-stone-500 text-[14px] mb-5">Your account is set up, but no project is linked to it yet. Studio Nicholas will have it ready shortly.</p>

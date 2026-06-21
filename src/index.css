@@ -1,3 +1,46 @@
+@font-face {
+  font-family: "Selva";
+  src: url("/fonts/selva-regular-pro.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Selva";
+  src: url("/fonts/selva-italic-pro.ttf") format("truetype");
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Selva";
+  src: url("/fonts/selva-medium-pro.ttf") format("truetype");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Selva";
+  src: url("/fonts/selva-medium-italic-pro.ttf") format("truetype");
+  font-weight: 500;
+  font-style: italic;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Selva";
+  src: url("/fonts/selva-bold-pro.ttf") format("truetype");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Selva";
+  src: url("/fonts/selva-bold-italic-pro.ttf") format("truetype");
+  font-weight: 700;
+  font-style: italic;
+  font-display: swap;
+}
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;

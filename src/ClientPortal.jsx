@@ -3627,11 +3627,31 @@ export default function App() {
     };
   }, [session, refetchRemote]);
 
-  // Poll frequently as a fallback so new messages/updates appear live even if the
-  // realtime socket drops, plus an immediate refresh whenever the app regains focus.
+  // Cheap polling: every 6s pull only the tiny code+timestamp list, and only
+  // download the full (heavy) data when something actually changed. Plus an
+  // immediate refresh whenever the app regains focus.
   useEffect(() => {
     if (!session) return;
-    const id = setInterval(refetchRemote, 4000);
+    let stamps = null;
+    let primed = false;
+    const tick = async () => {
+      if (!loadedRef.current || Date.now() - localEditAt.current < 4000) return;
+      try {
+        const next = await api.fetchProjectStamps();
+        if (!primed) {
+          stamps = next;
+          primed = true;
+          return;
+        }
+        if (JSON.stringify(next) !== JSON.stringify(stamps)) {
+          stamps = next;
+          await refetchRemote();
+        }
+      } catch (e) {
+        console.error("stamp poll failed", e);
+      }
+    };
+    const id = setInterval(tick, 6000);
     const onFocus = () => refetchRemote();
     const onVisible = () => {
       if (document.visibilityState === "visible") refetchRemote();

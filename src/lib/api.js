@@ -56,6 +56,18 @@ export async function fetchProjects() {
   return out;
 }
 
+// Lightweight "has anything changed?" check — pulls only codes + timestamps
+// (a few bytes) instead of the whole heavy record, so idle polling is cheap.
+export async function fetchProjectStamps() {
+  const { data, error } = await supabase.from("projects").select("code, updated_at");
+  if (error) throw error;
+  const out = {};
+  (data || []).forEach((r) => {
+    out[r.code] = r.updated_at || "";
+  });
+  return out;
+}
+
 // The list of client login emails on a project (lowercased) — used for access rules.
 function clientEmailsOf(project) {
   const list = (project.clients || []).map((c) => (c.email || "").trim().toLowerCase()).filter(Boolean);

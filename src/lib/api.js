@@ -166,6 +166,27 @@ export async function saveAutoReply(config) {
   if (error) throw error;
 }
 
+// Lightweight settings fetch (everything EXCEPT the big login image) so clients
+// can poll for status-note / auto-note changes cheaply.
+export async function fetchSettingsLite() {
+  const { data, error } = await supabase
+    .from("studio_settings")
+    .select("status, status_color, login_message, studio_info, autoreply")
+    .eq("id", 1)
+    .maybeSingle();
+  if (error) {
+    console.error("fetchSettingsLite failed", error);
+    return null;
+  }
+  return {
+    text: data?.status || "",
+    color: data?.status_color || "",
+    loginMessage: data?.login_message || "",
+    studioInfo: data?.studio_info || null,
+    autoReply: data?.autoreply || null,
+  };
+}
+
 export async function saveStudioInfo(info) {
   const { error } = await supabase.from("studio_settings").upsert({ id: 1, studio_info: info });
   if (error) throw error;

@@ -4197,6 +4197,7 @@ export default function App() {
     if (!session) return;
     let stamps = null;
     let primed = false;
+    let lastLite = null;
     const tick = async () => {
       if (!loadedRef.current || Date.now() - localEditAt.current < 4000) return;
       try {
@@ -4204,14 +4205,29 @@ export default function App() {
         if (!primed) {
           stamps = next;
           primed = true;
-          return;
-        }
-        if (JSON.stringify(next) !== JSON.stringify(stamps)) {
+        } else if (JSON.stringify(next) !== JSON.stringify(stamps)) {
           stamps = next;
           await refetchRemote();
         }
+        // Status notes / auto-notes live in studio_settings, which doesn't bump a
+        // project's timestamp — so clients poll them separately (cheaply).
+        if (role !== "admin") {
+          const lite = await api.fetchSettingsLite();
+          if (lite) {
+            const liteJson = JSON.stringify(lite);
+            if (liteJson !== lastLite) {
+              lastLite = liteJson;
+              setStudioStatus(lite.text);
+              setStudioStatusColor(lite.color);
+              setLoginMessage(lite.loginMessage);
+              setStudioInfo(lite.studioInfo);
+              applyStudioInfo(lite.studioInfo);
+              setAutoReply(lite.autoReply);
+            }
+          }
+        }
       } catch (e) {
-        console.error("stamp poll failed", e);
+        console.error("poll failed", e);
       }
     };
     const id = setInterval(tick, 6000);
@@ -4226,7 +4242,7 @@ export default function App() {
       window.removeEventListener("focus", onFocus);
       document.removeEventListener("visibilitychange", onVisible);
     };
-  }, [session, refetchRemote]);
+  }, [session, refetchRemote, role]);
 
   // Persist project changes (debounced); skip echoes of data we just loaded.
   useEffect(() => {

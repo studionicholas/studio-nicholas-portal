@@ -1544,19 +1544,23 @@ function MessagesPanel({ messages, meRole, onSend, onReact, onPin, onLabel, onTa
   );
 }
 
-function StudioStatusEditor({ value, onChange, color, onColor }) {
+function StudioStatusEditor({ value, color, onSave }) {
   const [v, setV] = useState(value || "");
+  const [c, setC] = useState(color || "#D5A933");
+  const [saved, setSaved] = useState(false);
   useEffect(() => setV(value || ""), [value]);
-  const current = color || "#D5A933";
+  useEffect(() => setC(color || "#D5A933"), [color]);
   return (
     <div className="mb-4 border border-stone-200 rounded-lg bg-white p-3">
       <p className="text-[12px] text-stone-400 mb-1.5 flex items-center gap-1.5">
-        <Info className="w-3.5 h-3.5" /> Status note — shown to all clients at the top of messages
+        <Info className="w-3.5 h-3.5" /> Status note — shows at the top of Messages on projects where it's switched on
       </p>
       <input
         value={v}
-        onChange={(e) => setV(e.target.value)}
-        onBlur={() => v !== (value || "") && onChange(v)}
+        onChange={(e) => {
+          setV(e.target.value);
+          setSaved(false);
+        }}
         placeholder="e.g. Out of office until Mon 23 Jun — replies may be slower than usual"
         className="w-full px-3 py-2 rounded-lg border border-stone-300 text-[14px] focus:outline-none focus:ring-2 focus:ring-[#B7453C]"
       />
@@ -1566,18 +1570,46 @@ function StudioStatusEditor({ value, onChange, color, onColor }) {
           <button
             key={sw.bg}
             type="button"
-            onClick={() => onColor(sw.bg)}
+            onClick={() => {
+              setC(sw.bg);
+              setSaved(false);
+            }}
             className="w-6 h-6 rounded-full border-2 transition-transform hover:scale-110"
-            style={{ backgroundColor: sw.bg, borderColor: current === sw.bg ? "#1c1917" : "transparent" }}
+            style={{ backgroundColor: sw.bg, borderColor: c === sw.bg ? "#1c1917" : "transparent" }}
             aria-label="Status bar colour"
           />
         ))}
       </div>
-      {value && (
-        <button onClick={() => onChange("")} className="text-[12px] text-stone-400 hover:text-red-600 mt-2">
-          Clear status
-        </button>
+      {v.trim() && (
+        <div className="flex items-center gap-2.5 text-[13px] rounded-lg px-3.5 py-2.5 mt-2.5" style={{ backgroundColor: c, color: textOn(c) }}>
+          <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: textOn(c) }} />
+          {v}
+        </div>
       )}
+      <div className="flex items-center gap-3 mt-3">
+        <button
+          onClick={() => {
+            onSave(v.trim(), c);
+            setSaved(true);
+          }}
+          className="bg-stone-900 text-white rounded-lg px-4 py-2 text-[13px] hover:bg-stone-800 transition-colors"
+        >
+          Save status
+        </button>
+        {saved && <span className="text-[12px] text-[#576B45]">Saved ✓</span>}
+        {value && (
+          <button
+            onClick={() => {
+              setV("");
+              onSave("", c);
+              setSaved(true);
+            }}
+            className="text-[12px] text-stone-400 hover:text-red-600"
+          >
+            Clear status
+          </button>
+        )}
+      </div>
     </div>
   );
 }
@@ -3038,7 +3070,7 @@ function AdminFeatures({ project, onToggle }) {
   );
 }
 
-function StudioSettingsPanel({ studioStatus, studioStatusColor, onChangeStatus, onChangeStatusColor, loginImage, loginMessage, studioInfo, onSaveInfo, autoReply, onSaveAutoReply, onSave }) {
+function StudioSettingsPanel({ studioStatus, studioStatusColor, onChangeStatus, onChangeStatusColor, onSaveStatus, loginImage, loginMessage, studioInfo, onSaveInfo, autoReply, onSaveAutoReply, onSave }) {
   const [img, setImg] = useState(loginImage || "");
   const [msg, setMsg] = useState(loginMessage || "");
   const [url, setUrl] = useState("");
@@ -3208,7 +3240,7 @@ function StudioSettingsPanel({ studioStatus, studioStatusColor, onChangeStatus, 
       </AdminSection>
 
       <AdminSection title="Status note for messages">
-        <StudioStatusEditor value={studioStatus} onChange={onChangeStatus} color={studioStatusColor} onColor={onChangeStatusColor} />
+        <StudioStatusEditor value={studioStatus} color={studioStatusColor} onSave={onSaveStatus} />
         <p className="text-[11px] text-stone-400 mt-2">Set it here once, then on each project's Messages tab toggle whether it shows for that client.</p>
       </AdminSection>
 
@@ -3316,7 +3348,7 @@ function AdminBell({ projects, onOpen }) {
   );
 }
 
-function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioStatusColor, onChangeStatus, onChangeStatusColor, loginImage, loginMessage, studioInfo, onSaveInfo, autoReply, onSaveAutoReply, onSaveLogin, onLogout }) {
+function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioStatusColor, onChangeStatus, onChangeStatusColor, onSaveStatus, loginImage, loginMessage, studioInfo, onSaveInfo, autoReply, onSaveAutoReply, onSaveLogin, onLogout }) {
   const [selectedCode, setSelectedCode] = useState(Object.keys(projects)[0] || null);
   const [showNewProject, setShowNewProject] = useState(false);
   const [showNewUpdate, setShowNewUpdate] = useState(false);
@@ -3711,6 +3743,7 @@ function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioSt
             studioStatusColor={studioStatusColor}
             onChangeStatus={onChangeStatus}
             onChangeStatusColor={onChangeStatusColor}
+            onSaveStatus={onSaveStatus}
             loginImage={loginImage}
             loginMessage={loginMessage}
             studioInfo={studioInfo}
@@ -4271,15 +4304,17 @@ export default function App() {
     return () => clearTimeout(saveTimer.current);
   }, [projects]);
 
-  // Persist the studio status note + colour (only the studio edits it).
-  useEffect(() => {
-    if (!loadedRef.current || role !== "admin") return;
-    if (applyingStatus.current) {
-      applyingStatus.current = false;
-      return;
+  // Save the studio status note + colour when the studio presses Save (explicit,
+  // so it reliably persists every time).
+  const handleSaveStatus = useCallback(async (text, color) => {
+    setStudioStatus(text);
+    setStudioStatusColor(color);
+    try {
+      await api.saveStudioStatus(text, color);
+    } catch (e) {
+      setSaveError(e?.message || String(e));
     }
-    api.saveStudioStatus(studioStatus, studioStatusColor);
-  }, [studioStatus, studioStatusColor, role]);
+  }, []);
 
   const handleSignIn = useCallback(async (email, password, setError) => {
     const { error } = await api.signIn(email, password);
@@ -4408,6 +4443,7 @@ export default function App() {
         studioStatusColor={studioStatusColor}
         onChangeStatus={setStudioStatus}
         onChangeStatusColor={setStudioStatusColor}
+        onSaveStatus={handleSaveStatus}
         loginImage={loginImage}
         loginMessage={loginMessage}
         studioInfo={studioInfo}

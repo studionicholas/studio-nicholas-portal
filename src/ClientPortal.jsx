@@ -327,7 +327,7 @@ function readFileAsDataURL(file) {
 }
 // Downscale an image file to a reasonable size and return a JPEG data URL.
 // Keeps photos light enough to store inline and sync quickly.
-function resizeImageToDataURL(file, maxDim = 1400, quality = 0.82) {
+function resizeImageToDataURL(file, maxDim = 1200, quality = 0.72) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onerror = reject;
@@ -863,7 +863,7 @@ function Toggle({ on, onChange }) {
   );
 }
 
-function MessagesPanel({ messages, meRole, onSend, onReact, onPin, onLabel, onTagPhoto, onEdit, onDelete, seenSince, showReceipts, showStatus, onToggleStatus, customStatus, onSetCustomStatus, studioStatus, studioStatusColor }) {
+function MessagesPanel({ messages, meRole, onSend, onReact, onPin, onLabel, onTagPhoto, onEdit, onDelete, seenSince, showReceipts, showStatus, onToggleStatus, customStatus, onSetCustomStatus, studioStatus, studioStatusColor, prefill, onPrefillUsed }) {
   const barColor = studioStatusColor || "#D5A933";
   const resolvedStatus = customStatus || (showStatus ? studioStatus : "");
   const [draft, setDraft] = useState("");
@@ -894,6 +894,17 @@ function MessagesPanel({ messages, meRole, onSend, onReact, onPin, onLabel, onTa
     const t = window.prompt("Tag this photo (e.g. Kitchen, Sample, Site):", item.tag || "");
     if (t !== null) onTagPhoto(item.msgId, item.idx, t.trim());
   }
+
+  // When the client taps "Ask a question" on an update, drop into the chat view
+  // with the message pre-filled so they can type their question.
+  useEffect(() => {
+    if (prefill) {
+      setView("chat");
+      setDraft(prefill);
+      onPrefillUsed && onPrefillUsed();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prefill]);
 
   const byId = {};
   messages.forEach((m) => (byId[m.id] = m));
@@ -1399,11 +1410,11 @@ function StudioStatusEditor({ value, onChange, color, onColor }) {
 
 /* ---------------- Meeting card ---------------- */
 
-function MeetingCard({ meeting, onRespond, isPast }) {
+function MeetingCard({ meeting, onRespond, isPast, myRsvp }) {
   const vz = viewerZone();
   const showLocal = meeting.timezone && vz !== meeting.timezone;
   const online = meeting.mode === "online";
-  const rsvp = meeting.rsvp || "pending";
+  const rsvp = myRsvp || meeting.rsvp || "pending";
   return (
     <div className="border border-stone-200 rounded-xl bg-white p-5">
       <div className="flex items-center justify-between gap-3 mb-3">
@@ -1831,6 +1842,11 @@ function EnablePushBanner({ email }) {
 function ClientDashboard({ project, viewerEmail, studioStatus, studioStatusColor, onLogout, onSendMessage, onReactMessage, onPinMessage, onMarkRead, onMarkNotifs, onDismissNotif, onUploadSigned, onRespondMeeting }) {
   const [tab, setTab] = useState("about");
   const [lightbox, setLightbox] = useState(null);
+  const [prefillMsg, setPrefillMsg] = useState("");
+  function askAboutUpdate(u) {
+    setPrefillMsg(`Re: "${u.title}" — `);
+    setTab("messages");
+  }
   const [showInstall, setShowInstall] = useState(() => {
     try {
       const standalone = window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone;
@@ -1855,7 +1871,7 @@ function ClientDashboard({ project, viewerEmail, studioStatus, studioStatusColor
   const past = project.meetings
     .filter((m) => new Date(m.instant).getTime() < now)
     .sort((a, b) => new Date(b.instant) - new Date(a.instant));
-  const pendingInvites = upcoming.filter((m) => (m.rsvp || "pending") === "pending").length;
+  const pendingInvites = upcoming.filter((m) => ((m.rsvps?.[(viewerEmail || "").toLowerCase()]) || "pending") === "pending").length;
 
   const allTabs = [
     { id: "about", label: "About", icon: Info, badge: 0 },
@@ -1984,6 +2000,12 @@ function ClientDashboard({ project, viewerEmail, studioStatus, studioStatusColor
                       ))}
                     </div>
                   )}
+                  <button
+                    onClick={() => askAboutUpdate(u)}
+                    className="mt-3 inline-flex items-center gap-1.5 text-[13px] text-stone-500 hover:text-stone-900 border border-stone-200 hover:border-stone-300 rounded-full px-3 py-1.5 transition-colors"
+                  >
+                    <Reply className="w-3.5 h-3.5" /> Ask a question about this
+                  </button>
                 </div>
               ))}
             </div>
@@ -1999,7 +2021,7 @@ function ClientDashboard({ project, viewerEmail, studioStatus, studioStatusColor
                   <h3 className="text-[13px] text-stone-400 uppercase tracking-wide mb-3">Upcoming</h3>
                   <div className="space-y-3">
                     {upcoming.map((m) => (
-                      <MeetingCard key={m.id} meeting={m} onRespond={(rsvp) => onRespondMeeting(m.id, rsvp)} />
+                      <MeetingCard key={m.id} meeting={m} myRsvp={m.rsvps?.[(viewerEmail || "").toLowerCase()]} onRespond={(rsvp) => onRespondMeeting(m.id, rsvp)} />
                     ))}
                   </div>
                 </div>
@@ -2044,6 +2066,8 @@ function ClientDashboard({ project, viewerEmail, studioStatus, studioStatusColor
               customStatus={project.customStatus}
               studioStatus={studioStatus}
               studioStatusColor={studioStatusColor}
+              prefill={prefillMsg}
+              onPrefillUsed={() => setPrefillMsg("")}
             />
           )}
         </div>
@@ -2189,7 +2213,7 @@ function NewUpdateForm({ onSubmit, initial, submitLabel = "Post update", onCance
         continue;
       }
       try {
-        added.push(await readFileAsDataURL(file));
+        added.push(file.type.startsWith("image/") ? await resizeImageToDataURL(file) : await readFileAsDataURL(file));
       } catch (err) {
         setError(`Couldn't read "${file.name}".`);
       }
@@ -2438,11 +2462,27 @@ function AdminMeetings({ project, onAdd, onEdit, onDelete }) {
             </p>
             {m.mode === "in-person" && m.location && <p className="text-[12px] text-stone-400 truncate">{m.location}</p>}
             {(() => {
-              const r = RSVP_META[m.rsvp || "pending"];
+              const clients = (project.clients || []).filter((c) => c.email);
+              if (clients.length === 0) {
+                const r = RSVP_META[m.rsvp || "pending"];
+                return (
+                  <span className="inline-flex items-center text-[11px] rounded-full px-2 py-0.5 mt-1.5" style={{ color: r.color, backgroundColor: r.tint }}>
+                    {r.label}
+                  </span>
+                );
+              }
               return (
-                <span className="inline-flex items-center text-[11px] rounded-full px-2 py-0.5 mt-1.5" style={{ color: r.color, backgroundColor: r.tint }}>
-                  {r.label}
-                </span>
+                <div className="flex flex-wrap gap-1.5 mt-1.5">
+                  {clients.map((c) => {
+                    const status = (m.rsvps && m.rsvps[(c.email || "").toLowerCase()]) || "pending";
+                    const r = RSVP_META[status];
+                    return (
+                      <span key={c.email} className="inline-flex items-center text-[11px] rounded-full px-2 py-0.5" style={{ color: r.color, backgroundColor: r.tint }}>
+                        {(c.name || c.email).split(" ")[0]}: {r.label}
+                      </span>
+                    );
+                  })}
+                </div>
               );
             })()}
           </div>
@@ -3719,12 +3759,19 @@ export default function App() {
   );
 
   const handleRespondMeeting = useCallback(
-    (meetingId, rsvp) =>
+    (meetingId, rsvp) => {
+      const me = (session?.user?.email || "").trim().toLowerCase();
       setProjects((prev) => ({
         ...prev,
-        [activeCode]: { ...prev[activeCode], meetings: prev[activeCode].meetings.map((m) => (m.id === meetingId ? { ...m, rsvp } : m)) },
-      })),
-    [activeCode]
+        [activeCode]: {
+          ...prev[activeCode],
+          meetings: prev[activeCode].meetings.map((m) =>
+            m.id === meetingId ? { ...m, rsvp, rsvps: { ...(m.rsvps || {}), [me]: rsvp } } : m
+          ),
+        },
+      }));
+    },
+    [activeCode, session]
   );
 
   let content = null;

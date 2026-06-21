@@ -414,6 +414,27 @@ function zonedToInstant(localStr, timeZone) {
     return new Date(localStr).toISOString();
   }
 }
+// Read an absolute instant back into wall-clock date/time strings for a zone (for editing).
+function instantToLocalParts(instant, timeZone) {
+  try {
+    const parts = new Intl.DateTimeFormat("en-CA", {
+      timeZone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    }).formatToParts(new Date(instant));
+    const get = (t) => (parts.find((p) => p.type === t) || {}).value || "";
+    let hour = get("hour");
+    if (hour === "24") hour = "00";
+    return { date: `${get("year")}-${get("month")}-${get("day")}`, time: `${hour}:${get("minute")}` };
+  } catch (e) {
+    return { date: "", time: "" };
+  }
+}
+
 function fmtInZone(instant, timeZone) {
   const d = new Date(instant);
   const date = d.toLocaleDateString("en-AU", { timeZone, weekday: "short", day: "numeric", month: "short" });
@@ -1341,7 +1362,10 @@ function Timeline({ milestones }) {
 
               <div className="border border-stone-200 rounded-xl bg-white p-4">
                 <div className="flex items-center justify-between gap-3 mb-1">
-                  <span className="text-[12px] text-stone-400">{formatDate(m.date)}</span>
+                  <span className="text-[12px] text-stone-400">
+                    {formatDate(m.date)}
+                    {m.endDate ? ` – ${formatDate(m.endDate)}` : ""}
+                  </span>
                   <span className="text-[11px] rounded-full px-2.5 py-0.5" style={{ color: s.color, backgroundColor: s.tint }}>
                     {s.label}
                   </span>
@@ -1988,6 +2012,7 @@ function NewUpdateForm({ onSubmit, initial, submitLabel = "Post update", onCance
 function AdminMilestones({ project, onAdd, onSetStatus, onDelete }) {
   const [title, setTitle] = useState("");
   const [date, setDate] = useState("");
+  const [endDate, setEndDate] = useState("");
   const [status, setStatus] = useState("upcoming");
   const [note, setNote] = useState("");
 
@@ -2003,7 +2028,10 @@ function AdminMilestones({ project, onAdd, onSetStatus, onDelete }) {
             <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: s.color }} />
             <div className="min-w-0 flex-1">
               <p className="text-[14px] text-stone-800 truncate">{m.title}</p>
-              <p className="text-[12px] text-stone-400">{formatDate(m.date)}</p>
+              <p className="text-[12px] text-stone-400">
+                {formatDate(m.date)}
+                {m.endDate ? ` – ${formatDate(m.endDate)}` : ""}
+              </p>
             </div>
             <select
               value={m.status}
@@ -2025,22 +2053,30 @@ function AdminMilestones({ project, onAdd, onSetStatus, onDelete }) {
         onSubmit={(e) => {
           e.preventDefault();
           if (!title.trim() || !date) return;
-          onAdd({ title: title.trim(), date, status, note: note.trim() });
+          onAdd({ title: title.trim(), date, endDate, status, note: note.trim() });
           setTitle("");
           setDate("");
+          setEndDate("");
           setStatus("upcoming");
           setNote("");
         }}
         className="border border-dashed border-stone-300 rounded-lg p-3.5 space-y-2.5"
       >
-        <div className="flex flex-wrap gap-2">
-          <input
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="Milestone (e.g. Documentation)"
-            className="flex-1 min-w-[160px] px-3 py-2 rounded-lg border border-stone-300 text-[14px] focus:outline-none focus:ring-2 focus:ring-[#B7453C]"
-          />
-          <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="px-3 py-2 rounded-lg border border-stone-300 text-[14px] focus:outline-none focus:ring-2 focus:ring-[#B7453C]" />
+        <input
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          placeholder="Phase (e.g. Documentation)"
+          className="w-full px-3 py-2 rounded-lg border border-stone-300 text-[14px] focus:outline-none focus:ring-2 focus:ring-[#B7453C]"
+        />
+        <div className="flex flex-wrap gap-2 items-end">
+          <label className="text-[11px] text-stone-400 flex flex-col">
+            Start date
+            <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="mt-1 px-3 py-2 rounded-lg border border-stone-300 text-[14px] focus:outline-none focus:ring-2 focus:ring-[#B7453C]" />
+          </label>
+          <label className="text-[11px] text-stone-400 flex flex-col">
+            End date (optional)
+            <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="mt-1 px-3 py-2 rounded-lg border border-stone-300 text-[14px] focus:outline-none focus:ring-2 focus:ring-[#B7453C]" />
+          </label>
           <select value={status} onChange={(e) => setStatus(e.target.value)} className="px-3 py-2 rounded-lg border border-stone-300 text-[14px] bg-white focus:outline-none focus:ring-2 focus:ring-[#B7453C]">
             <option value="upcoming">Upcoming</option>
             <option value="current">In progress</option>
@@ -2061,10 +2097,20 @@ function AdminMilestones({ project, onAdd, onSetStatus, onDelete }) {
   );
 }
 
-function AdminMeetings({ project, onAdd, onDelete }) {
+function AdminMeetings({ project, onAdd, onEdit, onDelete }) {
   const [form, setForm] = useState({ title: "", date: "", time: "", timezone: "Australia/Melbourne", mode: "online", link: "", location: "", message: "" });
+  const [editingId, setEditingId] = useState(null);
   const sorted = [...project.meetings].sort((a, b) => new Date(b.instant) - new Date(a.instant));
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
+  const resetForm = () => {
+    setForm({ title: "", date: "", time: "", timezone: form.timezone, mode: "online", link: "", location: "", message: "" });
+    setEditingId(null);
+  };
+  function startEdit(m) {
+    const { date, time } = instantToLocalParts(m.instant, m.timezone);
+    setForm({ title: m.title, date, time, timezone: m.timezone, mode: m.mode, link: m.link || "", location: m.location || "", message: m.message || "" });
+    setEditingId(m.id);
+  }
 
   return (
     <div className="space-y-3">
@@ -2087,9 +2133,14 @@ function AdminMeetings({ project, onAdd, onDelete }) {
               );
             })()}
           </div>
-          <button onClick={() => onDelete(m.id)} className="text-stone-300 hover:text-red-600 shrink-0" aria-label="Delete meeting">
-            <Trash2 className="w-4 h-4" />
-          </button>
+          <div className="flex items-center gap-3 shrink-0">
+            <button onClick={() => startEdit(m)} className="text-stone-300 hover:text-stone-700" aria-label="Edit meeting">
+              <Pencil className="w-4 h-4" />
+            </button>
+            <button onClick={() => onDelete(m.id)} className="text-stone-300 hover:text-red-600" aria-label="Delete meeting">
+              <Trash2 className="w-4 h-4" />
+            </button>
+          </div>
         </div>
       ))}
 
@@ -2097,11 +2148,14 @@ function AdminMeetings({ project, onAdd, onDelete }) {
         onSubmit={(e) => {
           e.preventDefault();
           if (!form.title.trim() || !form.date || !form.time) return;
-          onAdd({ ...form, title: form.title.trim() });
-          setForm({ title: "", date: "", time: "", timezone: form.timezone, mode: "online", link: "", location: "", message: "" });
+          const data = { ...form, title: form.title.trim() };
+          if (editingId) onEdit(editingId, data);
+          else onAdd(data);
+          resetForm();
         }}
         className="border border-dashed border-stone-300 rounded-lg p-3.5 space-y-2.5"
       >
+        {editingId && <p className="text-[12px] text-stone-500">Editing meeting</p>}
         <input
           value={form.title}
           onChange={(e) => set("title", e.target.value)}
@@ -2151,9 +2205,16 @@ function AdminMeetings({ project, onAdd, onDelete }) {
           placeholder="Message for the client (optional)"
           className="w-full px-3 py-2 rounded-lg border border-stone-300 text-[14px] focus:outline-none focus:ring-2 focus:ring-[#B7453C] resize-none"
         />
-        <button type="submit" className="bg-stone-900 text-white rounded-lg px-4 py-2 text-[13px] hover:bg-stone-800 transition-colors">
-          Add meeting
-        </button>
+        <div className="flex items-center gap-2">
+          <button type="submit" className="bg-stone-900 text-white rounded-lg px-4 py-2 text-[13px] hover:bg-stone-800 transition-colors">
+            {editingId ? "Save changes" : "Add meeting"}
+          </button>
+          {editingId && (
+            <button type="button" onClick={resetForm} className="text-[13px] text-stone-500 hover:text-stone-800">
+              Cancel
+            </button>
+          )}
+        </div>
       </form>
     </div>
   );
@@ -2553,7 +2614,7 @@ function AdminPanel({ projects, setProjects, studioStatus, studioStatusColor, on
   function addMilestone(code, data) {
     updateProject(code, (p) => ({
       ...p,
-      milestones: [...p.milestones, { id: uid(), title: data.title, date: data.date, status: data.status, note: data.note || "" }],
+      milestones: [...p.milestones, { id: uid(), title: data.title, date: data.date, endDate: data.endDate || "", status: data.status, note: data.note || "" }],
       notifications: withNotif(p, "milestone", `New milestone: ${data.title}`),
     }));
   }
@@ -2591,6 +2652,26 @@ function AdminPanel({ projects, setProjects, studioStatus, studioStatusColor, on
         },
       ],
       notifications: withNotif(p, "meeting", `Meeting invite: ${data.title} — open Meetings to respond`),
+    }));
+  }
+  function editMeeting(code, id, data) {
+    const instant = zonedToInstant(`${data.date}T${data.time}`, data.timezone);
+    updateProject(code, (p) => ({
+      ...p,
+      meetings: p.meetings.map((m) =>
+        m.id === id
+          ? {
+              ...m,
+              title: data.title,
+              mode: data.mode,
+              link: data.mode === "online" ? data.link : "",
+              location: data.mode === "in-person" ? data.location : "",
+              timezone: data.timezone,
+              instant,
+              message: data.message || "",
+            }
+          : m
+      ),
     }));
   }
   function deleteMeeting(code, id) {
@@ -2888,7 +2969,7 @@ function AdminPanel({ projects, setProjects, studioStatus, studioStatusColor, on
 
             {adminTab === "meetings" && (
             <AdminSection title="Meetings">
-              <AdminMeetings project={project} onAdd={(d) => addMeeting(project.code, d)} onDelete={(id) => deleteMeeting(project.code, id)} />
+              <AdminMeetings project={project} onAdd={(d) => addMeeting(project.code, d)} onEdit={(id, d) => editMeeting(project.code, id, d)} onDelete={(id) => deleteMeeting(project.code, id)} />
             </AdminSection>
             )}
 

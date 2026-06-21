@@ -2045,7 +2045,7 @@ function EnablePushBanner({ email }) {
   );
 }
 
-function ClientDashboard({ project, viewerEmail, studioStatus, studioStatusColor, autoStatus, onLogout, onSendMessage, onReactMessage, onPinMessage, onMarkRead, onMarkNotifs, onDismissNotif, onUploadSigned, onRespondMeeting, installOpen }) {
+function ClientDashboard({ project, viewerEmail, studioStatus, studioStatusColor, autoStatus, onLogout, onSetEmailNotify, onSendMessage, onReactMessage, onPinMessage, onMarkRead, onMarkNotifs, onDismissNotif, onUploadSigned, onRespondMeeting, installOpen }) {
   const [tab, setTab] = useState("about");
   const [lightbox, setLightbox] = useState(null);
   const [prefillMsg, setPrefillMsg] = useState("");
@@ -2058,6 +2058,7 @@ function ClientDashboard({ project, viewerEmail, studioStatus, studioStatusColor
   const [notifPerm, setNotifPerm] = useState(() => (api.pushSupported() ? api.pushPermission() : "unsupported"));
   const [showNotifPrompt, setShowNotifPrompt] = useState(false);
   const [notifBusy, setNotifBusy] = useState(false);
+  const [pushAsked, setPushAsked] = useState(false);
   async function turnOnNotifs() {
     setNotifBusy(true);
     try {
@@ -2068,19 +2069,38 @@ function ClientDashboard({ project, viewerEmail, studioStatus, studioStatusColor
     setNotifPerm(api.pushPermission());
     setNotifBusy(false);
     setShowNotifPrompt(false);
+    setPushAsked(true);
+  }
+  function closeNotifPrompt() {
+    setShowNotifPrompt(false);
+    setPushAsked(true);
   }
   useEffect(() => {
     // Once the install popup is out of the way, prompt for notifications if the
     // device supports them and the user hasn't decided yet.
-    if (!installOpen && api.pushSupported() && api.pushPermission() === "default") {
+    if (!installOpen && !pushAsked && api.pushSupported() && api.pushPermission() === "default") {
       setShowNotifPrompt(true);
     }
-  }, [installOpen]);
+  }, [installOpen, pushAsked]);
   // Per-client feature access: this client's own overrides on top of the
   // project-wide defaults (so each client can see a different set of tabs).
   const myClient = (project.clients || []).find((c) => (c.email || "").trim().toLowerCase() === (viewerEmail || "").trim().toLowerCase());
   const features = { ...(project.features || {}), ...((myClient && myClient.features) || {}) };
   const programaUrl = programaForViewer(project, viewerEmail);
+
+  // Email-updates opt-in — asked once after the push prompt is resolved.
+  const [showEmailPrompt, setShowEmailPrompt] = useState(false);
+  const emailUndecided = !!(myClient && typeof myClient.emailNotify === "undefined");
+  const pushResolved = pushAsked || !api.pushSupported();
+  useEffect(() => {
+    if (!installOpen && pushResolved && !showNotifPrompt && emailUndecided) {
+      setShowEmailPrompt(true);
+    }
+  }, [installOpen, pushResolved, showNotifPrompt, emailUndecided]);
+  function decideEmail(value) {
+    onSetEmailNotify(value);
+    setShowEmailPrompt(false);
+  }
 
   const now = Date.now();
   const myEmailLc = (viewerEmail || "").trim().toLowerCase();
@@ -2165,6 +2185,16 @@ function ClientDashboard({ project, viewerEmail, studioStatus, studioStatusColor
             >
               {notifBusy ? "…" : "Turn on"}
             </button>
+          </div>
+        )}
+        {myClient && typeof myClient.emailNotify !== "undefined" && (
+          <div className="mt-3 flex items-center gap-3 bg-white border border-stone-200 rounded-lg px-3.5 py-2.5">
+            <Mail className="w-4 h-4 text-stone-400 shrink-0" />
+            <div className="min-w-0 flex-1">
+              <p className="text-[13px] text-stone-800">Email updates</p>
+              <p className="text-[11px] text-stone-400">{myClient.emailNotify ? "On — we'll email you about new activity." : "Off"}</p>
+            </div>
+            <Toggle on={!!myClient.emailNotify} onChange={() => onSetEmailNotify(!myClient.emailNotify)} />
           </div>
         )}
         {features.programa !== false && programaUrl && (
@@ -2344,8 +2374,35 @@ function ClientDashboard({ project, viewerEmail, studioStatus, studioStatusColor
             >
               {notifBusy ? "Turning on…" : "Turn on notifications"}
             </button>
-            <button onClick={() => setShowNotifPrompt(false)} className="w-full text-stone-400 hover:text-stone-700 text-[13px] py-2.5 mt-1">
+            <button onClick={closeNotifPrompt} className="w-full text-stone-400 hover:text-stone-700 text-[13px] py-2.5 mt-1">
               Not now
+            </button>
+          </div>
+        </div>
+      )}
+
+      {showEmailPrompt && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center px-4 pb-6 sm:pb-0">
+          <div className="bg-white rounded-2xl max-w-sm w-full p-6">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-11 h-11 rounded-lg bg-[#F3E7E2] flex items-center justify-center shrink-0">
+                <Mail className="w-5 h-5 text-[#B7453C]" />
+              </div>
+              <h3 className="text-[18px] text-stone-900" style={{ fontFamily: "Selva, Georgia, serif", fontStyle: "italic" }}>
+                Updates by email?
+              </h3>
+            </div>
+            <p className="text-[14px] text-stone-600 leading-relaxed mb-5">
+              Want an email when {studioFirstName()} posts a new update or message on your project? You can change your mind any time.
+            </p>
+            <button
+              onClick={() => decideEmail(true)}
+              className="w-full bg-stone-900 text-white rounded-lg py-3 text-[14px] hover:bg-stone-800 transition-colors"
+            >
+              Yes, email me
+            </button>
+            <button onClick={() => decideEmail(false)} className="w-full text-stone-400 hover:text-stone-700 text-[13px] py-2.5 mt-1">
+              No thanks
             </button>
           </div>
         </div>
@@ -3414,6 +3471,10 @@ function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioSt
   function withNotif(p, type, text) {
     return [...(p.notifications || []), { id: uid(), type, text, date: new Date().toISOString(), read: false }];
   }
+  // Emails of clients on a project who opted in to email updates.
+  function optedInEmails(p) {
+    return (p?.clients || []).filter((c) => c.emailNotify === true).map((c) => (c.email || "").trim()).filter(Boolean);
+  }
 
   useEffect(() => {
     if (!selectedCode) return;
@@ -3483,6 +3544,8 @@ function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioSt
     const proj = projects[code];
     const emails = (proj?.clients || []).map((c) => (c.email || "").trim().toLowerCase()).filter(Boolean);
     if (emails.length) api.notifyPush({ toEmails: emails, title: `${proj.name || "Your project"} — new update`, body: data.title, url: "/" });
+    const em = optedInEmails(proj);
+    if (em.length) api.notifyEmail({ toEmails: em, subject: `${proj.name || "Your project"} — new update`, heading: data.title, body: data.note || "There's a new update on your project." });
     setShowNewUpdate(false);
   }
   function deleteUpdate(code, id) {
@@ -3600,6 +3663,8 @@ function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioSt
     const proj = projects[code];
     const emails = (proj?.clients || []).map((c) => (c.email || "").trim().toLowerCase()).filter(Boolean);
     if (emails.length) api.notifyPush({ toEmails: emails, title: `${proj.name || "Your project"} — new message`, body: text && text.trim() ? text : "Sent a photo", url: "/" });
+    const em = optedInEmails(proj);
+    if (em.length) api.notifyEmail({ toEmails: em, subject: `${proj.name || "Your project"} — new message`, heading: "You have a new message", body: text && text.trim() ? text : "There's a new message waiting in your portal." });
   }
   function reactMessage(code, id, emoji) {
     updateProject(code, (p) => ({ ...p, messages: toggleReaction(p.messages, id, emoji, "studio") }));
@@ -4370,6 +4435,19 @@ export default function App() {
     [activeCode, session]
   );
 
+  const handleSetEmailNotify = useCallback(
+    (value) => {
+      const me = (session?.user?.email || "").trim().toLowerCase();
+      setProjects((prev) => {
+        const p = prev[activeCode];
+        if (!p) return prev;
+        const clients = (p.clients || []).map((c) => ((c.email || "").trim().toLowerCase() === me ? { ...c, emailNotify: value } : c));
+        return { ...prev, [activeCode]: { ...p, clients } };
+      });
+    },
+    [activeCode, session]
+  );
+
   const handleReactMessage = useCallback(
     (id, emoji) => setProjects((prev) => ({ ...prev, [activeCode]: { ...prev[activeCode], messages: toggleReaction(prev[activeCode].messages, id, emoji, "client") } })),
     [activeCode]
@@ -4464,6 +4542,7 @@ export default function App() {
         studioStatusColor={studioStatusColor}
         autoStatus={autoReply}
         onLogout={handleSignOut}
+        onSetEmailNotify={handleSetEmailNotify}
         onSendMessage={handleSendMessage}
         onReactMessage={handleReactMessage}
         onPinMessage={handlePinMessage}

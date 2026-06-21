@@ -267,3 +267,13 @@ export async function notifyPush({ toEmails, toStudio, title, body, url }) {
     console.error("notify failed", e);
   }
 }
+
+// Best-effort email to clients who opted in to email updates.
+export async function notifyEmail({ toEmails, subject, heading, body }) {
+  if (!toEmails || toEmails.length === 0) return;
+  try {
+    await supabase.functions.invoke("notify-email", { body: { toEmails, subject, heading, body } });
+  } catch (e) {
+    console.error("notify-email failed", e);
+  }
+}

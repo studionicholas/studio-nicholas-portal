@@ -1,0 +1,15 @@
+{
+  "name": "Studio Nicholas",
+  "short_name": "Studio Nicholas",
+  "description": "Your Studio Nicholas project portal — updates, timeline, meetings and messages.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#F7F0EC",
+  "theme_color": "#1C1A17",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

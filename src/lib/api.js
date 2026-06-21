@@ -7,6 +7,16 @@ export async function setPassword(password) {
   return supabase.auth.updateUser({ password });
 }
 
+// Best-effort "your portal is ready" confirmation email (sent via the
+// welcome-email Edge Function + Resend). Never blocks the UI.
+export async function sendSetupEmail(email) {
+  try {
+    await supabase.functions.invoke("welcome-email", { body: { email } });
+  } catch (e) {
+    console.error("welcome email failed", e);
+  }
+}
+
 /* ----------------------------------------------------------------
    Data + auth layer.
    The UI works with a `projects` object keyed by project code, where
@@ -28,6 +38,14 @@ export function onAuthChange(callback) {
 
 export async function signIn(email, password) {
   return supabase.auth.signInWithPassword({ email: (email || "").trim(), password });
+}
+
+// Send a password-reset email. The link returns to the portal with
+// type=recovery, which routes to the "set a new password" screen.
+export async function resetPassword(email) {
+  return supabase.auth.resetPasswordForEmail((email || "").trim(), {
+    redirectTo: typeof window !== "undefined" ? window.location.origin : undefined,
+  });
 }
 
 export async function signOut() {

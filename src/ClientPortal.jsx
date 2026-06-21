@@ -612,7 +612,7 @@ function programaForViewer(project, email) {
 
 // Feature tabs the studio can switch on/off per client.
 const FEATURE_LIST = [
-  { key: "updates", label: "Project updates" },
+  { key: "updates", label: "Updates" },
   { key: "timeline", label: "Timeline" },
   { key: "meetings", label: "Meetings" },
   { key: "fee", label: "Fee proposal" },
@@ -756,7 +756,22 @@ function ClientLogin({ onEnter, loginImage, loginMessage }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [resetMsg, setResetMsg] = useState("");
+  const [resetBusy, setResetBusy] = useState(false);
   const heroSrc = loginImage || LOGIN_HERO;
+
+  async function handleReset() {
+    if (!email.trim()) {
+      setError("Enter your email above first, then tap reset.");
+      return;
+    }
+    setResetBusy(true);
+    setError("");
+    const { error: err } = await api.resetPassword(email);
+    setResetBusy(false);
+    if (err) setError(err.message || "Couldn't send the reset email. Try again.");
+    else setResetMsg(`We've emailed a password-reset link to ${email.trim()}. Check your inbox.`);
+  }
 
   return (
     <div className="min-h-screen bg-[#F7F0EC] flex flex-col md:flex-row">
@@ -816,9 +831,15 @@ function ClientLogin({ onEnter, loginImage, loginMessage }) {
                 />
               </div>
               {error && <p className="text-[13px] text-red-600">{error}</p>}
+              {resetMsg && <p className="text-[13px] text-[#576B45]">{resetMsg}</p>}
               <button type="submit" className="w-full bg-stone-900 text-white rounded-lg py-3.5 text-[14px] tracking-wide hover:bg-stone-800 transition-colors">
                 Sign in
               </button>
+              <div className="text-center">
+                <button type="button" onClick={handleReset} disabled={resetBusy} className="text-[13px] text-stone-500 hover:text-stone-800 underline disabled:opacity-50">
+                  {resetBusy ? "Sending…" : "Forgot your password?"}
+                </button>
+              </div>
             </form>
 
             <div className="mt-5 text-center">
@@ -921,10 +942,32 @@ function Toggle({ on, onChange }) {
   );
 }
 
-function MessagesPanel({ messages, meRole, onSend, onReact, onPin, onLabel, onTagPhoto, onEdit, onDelete, seenSince, showReceipts, showStatus, onToggleStatus, customStatus, onSetCustomStatus, studioStatus, studioStatusColor, prefill, onPrefillUsed }) {
+function MessagesPanel({ messages, meRole, onSend, onReact, onPin, onLabel, onTagPhoto, onEdit, onDelete, seenSince, showReceipts, showStatus, onToggleStatus, customStatus, onSetCustomStatus, studioStatus, studioStatusColor, prefill, onPrefillUsed, draftKey }) {
   const barColor = studioStatusColor || "#D5A933";
   const resolvedStatus = customStatus || (showStatus ? studioStatus : "");
-  const [draft, setDraft] = useState("");
+  const storeKey = draftKey ? `sn_draft_${draftKey}` : null;
+  const [draft, setDraft] = useState(() => {
+    try {
+      return storeKey ? localStorage.getItem(storeKey) || "" : "";
+    } catch (e) {
+      return "";
+    }
+  });
+  // Keep the unsent draft saved (per project) so it survives tab switches / closing.
+  useEffect(() => {
+    if (!storeKey) return;
+    try {
+      setDraft(localStorage.getItem(storeKey) || "");
+    } catch (e) {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storeKey]);
+  useEffect(() => {
+    if (!storeKey) return;
+    try {
+      if (draft) localStorage.setItem(storeKey, draft);
+      else localStorage.removeItem(storeKey);
+    } catch (e) {}
+  }, [draft, storeKey]);
   const [replyTo, setReplyTo] = useState(null);
   const [photos, setPhotos] = useState([]); // pending photo data URLs to send
   const [uploading, setUploading] = useState(false);
@@ -1955,7 +1998,7 @@ function ClientDashboard({ project, viewerEmail, studioStatus, studioStatusColor
 
   const allTabs = [
     { id: "about", label: "About", icon: Info, badge: 0 },
-    { id: "updates", label: "Project updates", icon: ImageIcon, badge: 0 },
+    { id: "updates", label: "Updates", icon: ImageIcon, badge: 0 },
     { id: "timeline", label: "Timeline", icon: Flag, badge: 0 },
     { id: "meetings", label: "Meetings", icon: Calendar, badge: pendingInvites },
     { id: "fee", label: "Fee proposal", icon: FileText, badge: 0 },
@@ -2043,7 +2086,7 @@ function ClientDashboard({ project, viewerEmail, studioStatus, studioStatusColor
           </div>
         )}
 
-        <div className="flex flex-wrap gap-1.5 py-3.5 border-b border-stone-200">
+        <div className="flex flex-nowrap gap-1.5 py-3.5 border-b border-stone-200 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {tabs.map((t) => {
             const Icon = t.icon;
             const active = activeTab === t.id;
@@ -2051,7 +2094,7 @@ function ClientDashboard({ project, viewerEmail, studioStatus, studioStatusColor
               <button
                 key={t.id}
                 onClick={() => setTab(t.id)}
-                className={`relative flex items-center gap-1.5 px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-[12px] sm:text-[13px] transition-colors ${
+                className={`relative shrink-0 whitespace-nowrap flex items-center gap-1.5 px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-[12px] sm:text-[13px] transition-colors ${
                   active ? "bg-stone-900 text-white" : "text-stone-500 hover:bg-stone-100"
                 }`}
               >
@@ -2153,6 +2196,7 @@ function ClientDashboard({ project, viewerEmail, studioStatus, studioStatusColor
             <MessagesPanel
               messages={project.messages}
               meRole="client"
+              draftKey={`client_${project.code}`}
               onSend={onSendMessage}
               onReact={onReactMessage}
               onPin={onPinMessage}
@@ -3478,14 +3522,14 @@ function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioSt
               {project.clientEmail && <CopyButton value={project.clientEmail} label="Copy email" />}
             </div>
 
-            <div className="flex flex-wrap gap-1 mb-8 border-b border-stone-200 pb-4">
+            <div className="flex flex-nowrap gap-1 mb-8 border-b border-stone-200 pb-4 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               {ADMIN_TABS.map((t) => {
                 const badge = t.id === "messages" ? unreadForStudio(project) : 0;
                 return (
                   <button
                     key={t.id}
                     onClick={() => setAdminTab(t.id)}
-                    className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-[13px] transition-colors ${adminTab === t.id ? "bg-stone-900 text-white" : "text-stone-500 hover:bg-stone-100"}`}
+                    className={`shrink-0 whitespace-nowrap flex items-center gap-1.5 px-4 py-2 rounded-full text-[13px] transition-colors ${adminTab === t.id ? "bg-stone-900 text-white" : "text-stone-500 hover:bg-stone-100"}`}
                   >
                     {t.label}
                     {badge > 0 && (
@@ -3658,6 +3702,7 @@ function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioSt
               <MessagesPanel
                 messages={project.messages}
                 meRole="studio"
+                draftKey={`studio_${project.code}`}
                 onSend={(text, replyTo, photos) => replyMessage(project.code, text, replyTo, photos)}
                 onReact={(id, emoji) => reactMessage(project.code, id, emoji)}
                 onPin={(id) => pinMessage(project.code, id)}
@@ -3735,10 +3780,14 @@ function SetPassword({ onDone }) {
       return;
     }
     setBusy(true);
-    const { error } = await api.setPassword(pw);
+    const { data, error } = await api.setPassword(pw);
     setBusy(false);
     if (error) setError(error.message || "Couldn't set your password. Try again.");
-    else onDone();
+    else {
+      const email = data?.user?.email;
+      if (email) api.sendSetupEmail(email); // best-effort confirmation email
+      onDone();
+    }
   }
   return (
     <div className="min-h-screen bg-[#F7F0EC] flex items-center justify-center px-6">

@@ -144,12 +144,12 @@ export async function deleteProject(code) {
 export async function fetchSettings() {
   const { data, error } = await supabase
     .from("studio_settings")
-    .select("status, status_color, login_image, login_message, studio_info")
+    .select("status, status_color, login_image, login_message, studio_info, autoreply")
     .eq("id", 1)
     .maybeSingle();
   if (error) {
     console.error("fetchSettings failed", error);
-    return { text: "", color: "", loginImage: "", loginMessage: "", studioInfo: null };
+    return { text: "", color: "", loginImage: "", loginMessage: "", studioInfo: null, autoReply: null };
   }
   return {
     text: data?.status || "",
@@ -157,7 +157,13 @@ export async function fetchSettings() {
     loginImage: data?.login_image || "",
     loginMessage: data?.login_message || "",
     studioInfo: data?.studio_info || null,
+    autoReply: data?.autoreply || null,
   };
+}
+
+export async function saveAutoReply(config) {
+  const { error } = await supabase.from("studio_settings").upsert({ id: 1, autoreply: config });
+  if (error) throw error;
 }
 
 export async function saveStudioInfo(info) {

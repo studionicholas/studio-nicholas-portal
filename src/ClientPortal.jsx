@@ -85,6 +85,34 @@ function studioFirstName() {
   return (STUDIO_INFO.contactName || "Nicholas").trim().split(/\s+/)[0] || "Nicholas";
 }
 
+/* ---------- Out-of-office auto-reply ---------- */
+function parseHM(s) {
+  const [h, m] = (s || "").split(":").map((x) => parseInt(x, 10));
+  if (isNaN(h)) return null;
+  return h * 60 + (isNaN(m) ? 0 : m);
+}
+// Current minutes-since-midnight in the studio's timezone (Melbourne).
+function studioNowMinutes() {
+  try {
+    const parts = new Intl.DateTimeFormat("en-GB", { timeZone: "Australia/Melbourne", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(new Date());
+    const h = +parts.find((p) => p.type === "hour").value;
+    const m = +parts.find((p) => p.type === "minute").value;
+    return h * 60 + m;
+  } catch (e) {
+    const d = new Date();
+    return d.getHours() * 60 + d.getMinutes();
+  }
+}
+// Is the auto-reply on AND are we currently inside its active hours?
+function autoReplyActive(cfg) {
+  if (!cfg || !cfg.enabled || !cfg.text || !cfg.text.trim()) return false;
+  const start = parseHM(cfg.start);
+  const end = parseHM(cfg.end);
+  if (start == null || end == null || start === end) return true; // no window = always on
+  const now = studioNowMinutes();
+  return start < end ? now >= start && now < end : now >= start || now < end; // handles overnight (e.g. 16:00–08:00)
+}
+
 const LOGIN_HERO = "/login.jpg";
 
 const REACTIONS = ["👍", "❤️", "🙏", "🎉", "👀"];
@@ -1243,8 +1271,9 @@ function MessagesPanel({ messages, meRole, onSend, onReact, onPin, onLabel, onTa
                 )}
                 <p className={`text-[11px] mt-1 ${mine ? "text-white/50" : "text-stone-400"}`}>
                   {senderLabel(m)} · {formatDate(m.date)} · {formatTime(m.date)}
+                  {m.autoReply && " · Auto-reply"}
                   {m.edited && " · edited"}
-                  {showReceipts && m.from === "studio" && (seen ? " · Seen" : " · Sent")}
+                  {showReceipts && m.from === "studio" && !m.autoReply && (seen ? " · Seen" : " · Sent")}
                 </p>
               </div>
 
@@ -2943,7 +2972,7 @@ function AdminFeatures({ project, onToggle }) {
   );
 }
 
-function StudioSettingsPanel({ studioStatus, studioStatusColor, onChangeStatus, onChangeStatusColor, loginImage, loginMessage, studioInfo, onSaveInfo, onSave }) {
+function StudioSettingsPanel({ studioStatus, studioStatusColor, onChangeStatus, onChangeStatusColor, loginImage, loginMessage, studioInfo, onSaveInfo, autoReply, onSaveAutoReply, onSave }) {
   const [img, setImg] = useState(loginImage || "");
   const [msg, setMsg] = useState(loginMessage || "");
   const [url, setUrl] = useState("");
@@ -2966,6 +2995,29 @@ function StudioSettingsPanel({ studioStatus, studioStatusColor, onChangeStatus, 
     Object.keys(info).forEach((k) => (clean[k] = (info[k] || "").trim()));
     onSaveInfo(clean);
     setInfoSaved(true);
+  }
+
+  const [ar, setAr] = useState(() => ({
+    enabled: !!(autoReply && autoReply.enabled),
+    text: (autoReply && autoReply.text) || "Thanks for your message — we're currently out of office. We'll reply during business hours.",
+    start: (autoReply && autoReply.start) || "16:00",
+    end: (autoReply && autoReply.end) || "08:00",
+  }));
+  const [arSaved, setArSaved] = useState(false);
+  const setArField = (k, v) => {
+    setAr((p) => ({ ...p, [k]: v }));
+    setArSaved(false);
+  };
+  function toggleAr() {
+    const v = { ...ar, enabled: !ar.enabled };
+    setAr(v);
+    onSaveAutoReply(v);
+  }
+  function saveAr() {
+    const v = { ...ar, text: (ar.text || "").trim() };
+    setAr(v);
+    onSaveAutoReply(v);
+    setArSaved(true);
   }
   useEffect(() => setImg(loginImage || ""), [loginImage]);
   useEffect(() => setMsg(loginMessage || ""), [loginMessage]);
@@ -3023,6 +3075,42 @@ function StudioSettingsPanel({ studioStatus, studioStatusColor, onChangeStatus, 
               Save details
             </button>
             {infoSaved && <span className="text-[12px] text-[#576B45]">Saved ✓</span>}
+          </div>
+        </div>
+      </AdminSection>
+
+      <AdminSection title="Out-of-office auto-reply">
+        <div className="border border-stone-200 rounded-lg bg-white p-3.5 space-y-3">
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-[14px] text-stone-800">Auto-reply to client messages</p>
+              <p className="text-[11px] text-stone-400">When on, your message is posted automatically during the hours below.</p>
+            </div>
+            <Toggle on={ar.enabled} onChange={toggleAr} />
+          </div>
+          <textarea
+            value={ar.text}
+            onChange={(e) => setArField("text", e.target.value)}
+            rows={3}
+            placeholder="e.g. Thanks for your message — we're out of office and will reply during business hours."
+            className="w-full px-3 py-2 rounded-lg border border-stone-300 text-[14px] focus:outline-none focus:ring-2 focus:ring-[#B7453C] resize-none"
+          />
+          <div className="flex flex-wrap gap-4 items-end">
+            <label className="text-[11px] text-stone-400 flex flex-col">
+              Active from
+              <input type="time" value={ar.start} onChange={(e) => setArField("start", e.target.value)} className="mt-1 px-3 py-2 rounded-lg border border-stone-300 text-[14px] focus:outline-none focus:ring-2 focus:ring-[#B7453C]" />
+            </label>
+            <label className="text-[11px] text-stone-400 flex flex-col">
+              Until
+              <input type="time" value={ar.end} onChange={(e) => setArField("end", e.target.value)} className="mt-1 px-3 py-2 rounded-lg border border-stone-300 text-[14px] focus:outline-none focus:ring-2 focus:ring-[#B7453C]" />
+            </label>
+          </div>
+          <p className="text-[11px] text-stone-400">Your local (Melbourne) time. e.g. 4:00 PM → 8:00 AM covers overnight. Set both the same for 24/7. It replies at most once every 4 hours per client.</p>
+          <div className="flex items-center gap-3">
+            <button onClick={saveAr} className="bg-stone-900 text-white rounded-lg px-4 py-2 text-[13px] hover:bg-stone-800 transition-colors">
+              Save message &amp; hours
+            </button>
+            {arSaved && <span className="text-[12px] text-[#576B45]">Saved ✓</span>}
           </div>
         </div>
       </AdminSection>
@@ -3136,7 +3224,7 @@ function AdminBell({ projects, onOpen }) {
   );
 }
 
-function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioStatusColor, onChangeStatus, onChangeStatusColor, loginImage, loginMessage, studioInfo, onSaveInfo, onSaveLogin, onLogout }) {
+function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioStatusColor, onChangeStatus, onChangeStatusColor, loginImage, loginMessage, studioInfo, onSaveInfo, autoReply, onSaveAutoReply, onSaveLogin, onLogout }) {
   const [selectedCode, setSelectedCode] = useState(Object.keys(projects)[0] || null);
   const [showNewProject, setShowNewProject] = useState(false);
   const [showNewUpdate, setShowNewUpdate] = useState(false);
@@ -3535,6 +3623,8 @@ function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioSt
             loginMessage={loginMessage}
             studioInfo={studioInfo}
             onSaveInfo={onSaveInfo}
+            autoReply={autoReply}
+            onSaveAutoReply={onSaveAutoReply}
             onSave={onSaveLogin}
           />
         ) : project ? (
@@ -3889,6 +3979,7 @@ export default function App() {
   const [loginImage, setLoginImage] = useState("");
   const [loginMessage, setLoginMessage] = useState("");
   const [studioInfo, setStudioInfo] = useState(null);
+  const [autoReply, setAutoReply] = useState(null);
   const [activeCode, setActiveCode] = useState(null);
   const [saveError, setSaveError] = useState("");
   const [passwordDone, setPasswordDone] = useState(false);
@@ -3930,6 +4021,7 @@ export default function App() {
       setLoginMessage(s.loginMessage);
       setStudioInfo(s.studioInfo);
       applyStudioInfo(s.studioInfo);
+      setAutoReply(s.autoReply);
     });
   }, []);
 
@@ -3949,6 +4041,7 @@ export default function App() {
       setLoginMessage(status.loginMessage);
       setStudioInfo(status.studioInfo);
       applyStudioInfo(status.studioInfo);
+      setAutoReply(status.autoReply);
       setProjects(migrate(raw));
     } catch (e) {
       console.error("refetch failed", e);
@@ -3983,6 +4076,7 @@ export default function App() {
         setLoginMessage(status.loginMessage);
         setStudioInfo(status.studioInfo);
         applyStudioInfo(status.studioInfo);
+        setAutoReply(status.autoReply);
         setProjects(shaped);
         if (!admin) {
           const mine = Object.values(shaped)[0];
@@ -4107,19 +4201,33 @@ export default function App() {
     }
   }, []);
 
+  const handleSaveAutoReply = useCallback(async (config) => {
+    setAutoReply(config);
+    try {
+      await api.saveAutoReply(config);
+    } catch (e) {
+      setSaveError(e?.message || String(e));
+    }
+  }, []);
+
   const handleSendMessage = useCallback(
     (text, replyTo = null, photos = []) => {
-      setProjects((prev) => ({
-        ...prev,
-        [activeCode]: {
-          ...prev[activeCode],
-          lastReadClient: new Date().toISOString(),
-          messages: [...prev[activeCode].messages, { id: uid(), from: "client", fromEmail: session?.user?.email || "", text, photos: photos || [], date: new Date().toISOString(), replyTo, reactions: [], pinned: false }],
-        },
-      }));
+      const me = session?.user?.email || "";
+      setProjects((prev) => {
+        const p = prev[activeCode];
+        let messages = [...p.messages, { id: uid(), from: "client", fromEmail: me, text, photos: photos || [], date: new Date().toISOString(), replyTo, reactions: [], pinned: false }];
+        // Out-of-office auto-reply: post once (max one per 4h) when active.
+        if (autoReplyActive(autoReply)) {
+          const recentAuto = p.messages.some((m) => m.autoReply && Date.now() - new Date(m.date).getTime() < 4 * 3600 * 1000);
+          if (!recentAuto) {
+            messages = [...messages, { id: uid(), from: "studio", text: autoReply.text.trim(), autoReply: true, date: new Date().toISOString(), reactions: [], pinned: false }];
+          }
+        }
+        return { ...prev, [activeCode]: { ...p, lastReadClient: new Date().toISOString(), messages } };
+      });
       api.notifyPush({ toStudio: true, title: "New message from a client", body: text && text.trim() ? text : "Sent a photo", url: "/" });
     },
-    [activeCode, session]
+    [activeCode, session, autoReply]
   );
 
   const handleReactMessage = useCallback(
@@ -4199,6 +4307,8 @@ export default function App() {
         loginMessage={loginMessage}
         studioInfo={studioInfo}
         onSaveInfo={handleSaveInfo}
+        autoReply={autoReply}
+        onSaveAutoReply={handleSaveAutoReply}
         onSaveLogin={handleSaveLogin}
         onLogout={handleSignOut}
       />

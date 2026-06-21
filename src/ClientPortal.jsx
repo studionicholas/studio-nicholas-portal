@@ -976,9 +976,12 @@ function Toggle({ on, onChange }) {
   );
 }
 
-function MessagesPanel({ messages, meRole, onSend, onReact, onPin, onLabel, onTagPhoto, onEdit, onDelete, seenSince, showReceipts, showStatus, onToggleStatus, customStatus, onSetCustomStatus, studioStatus, studioStatusColor, prefill, onPrefillUsed, draftKey, clients, myEmail, fallbackClientName }) {
-  const barColor = studioStatusColor || "#D5A933";
-  const resolvedStatus = customStatus || (showStatus ? studioStatus : "");
+function MessagesPanel({ messages, meRole, onSend, onReact, onPin, onLabel, onTagPhoto, onEdit, onDelete, seenSince, showReceipts, showStatus, onToggleStatus, customStatus, onSetCustomStatus, studioStatus, studioStatusColor, autoStatus, prefill, onPrefillUsed, draftKey, clients, myEmail, fallbackClientName }) {
+  // The automatic out-of-office note shows (to everyone) during its active hours,
+  // unless this project has its own custom status note set.
+  const autoOn = !customStatus && autoStatus && autoReplyActive(autoStatus) && (autoStatus.text || "").trim();
+  const barColor = autoOn ? autoStatus.color || "#D5A933" : studioStatusColor || "#D5A933";
+  const resolvedStatus = customStatus || (autoOn ? autoStatus.text.trim() : showStatus ? studioStatus : "");
   // Resolve a friendly sender name for a message.
   function senderName(m) {
     if (m.from === "studio") return studioFirstName();
@@ -1271,9 +1274,8 @@ function MessagesPanel({ messages, meRole, onSend, onReact, onPin, onLabel, onTa
                 )}
                 <p className={`text-[11px] mt-1 ${mine ? "text-white/50" : "text-stone-400"}`}>
                   {senderLabel(m)} · {formatDate(m.date)} · {formatTime(m.date)}
-                  {m.autoReply && " · Auto-reply"}
                   {m.edited && " · edited"}
-                  {showReceipts && m.from === "studio" && !m.autoReply && (seen ? " · Seen" : " · Sent")}
+                  {showReceipts && m.from === "studio" && (seen ? " · Seen" : " · Sent")}
                 </p>
               </div>
 
@@ -2003,7 +2005,7 @@ function EnablePushBanner({ email }) {
   );
 }
 
-function ClientDashboard({ project, viewerEmail, studioStatus, studioStatusColor, onLogout, onSendMessage, onReactMessage, onPinMessage, onMarkRead, onMarkNotifs, onDismissNotif, onUploadSigned, onRespondMeeting, installOpen }) {
+function ClientDashboard({ project, viewerEmail, studioStatus, studioStatusColor, autoStatus, onLogout, onSendMessage, onReactMessage, onPinMessage, onMarkRead, onMarkNotifs, onDismissNotif, onUploadSigned, onRespondMeeting, installOpen }) {
   const [tab, setTab] = useState("about");
   const [lightbox, setLightbox] = useState(null);
   const [prefillMsg, setPrefillMsg] = useState("");
@@ -2258,6 +2260,7 @@ function ClientDashboard({ project, viewerEmail, studioStatus, studioStatusColor
               customStatus={project.customStatus}
               studioStatus={studioStatus}
               studioStatusColor={studioStatusColor}
+              autoStatus={autoStatus}
               prefill={prefillMsg}
               onPrefillUsed={() => setPrefillMsg("")}
             />
@@ -2999,9 +3002,10 @@ function StudioSettingsPanel({ studioStatus, studioStatusColor, onChangeStatus, 
 
   const [ar, setAr] = useState(() => ({
     enabled: !!(autoReply && autoReply.enabled),
-    text: (autoReply && autoReply.text) || "Thanks for your message — we're currently out of office. We'll reply during business hours.",
+    text: (autoReply && autoReply.text) || "We're currently out of office and will reply during business hours.",
     start: (autoReply && autoReply.start) || "16:00",
     end: (autoReply && autoReply.end) || "08:00",
+    color: (autoReply && autoReply.color) || "#D5A933",
   }));
   const [arSaved, setArSaved] = useState(false);
   const setArField = (k, v) => {
@@ -3079,20 +3083,20 @@ function StudioSettingsPanel({ studioStatus, studioStatusColor, onChangeStatus, 
         </div>
       </AdminSection>
 
-      <AdminSection title="Out-of-office auto-reply">
+      <AdminSection title="Automatic out-of-office note">
         <div className="border border-stone-200 rounded-lg bg-white p-3.5 space-y-3">
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0">
-              <p className="text-[14px] text-stone-800">Auto-reply to client messages</p>
-              <p className="text-[11px] text-stone-400">When on, your message is posted automatically during the hours below.</p>
+              <p className="text-[14px] text-stone-800">Show an out-of-office note automatically</p>
+              <p className="text-[11px] text-stone-400">Shows the status bar at the top of every client's Messages during the hours below — turns itself on and off.</p>
             </div>
             <Toggle on={ar.enabled} onChange={toggleAr} />
           </div>
           <textarea
             value={ar.text}
             onChange={(e) => setArField("text", e.target.value)}
-            rows={3}
-            placeholder="e.g. Thanks for your message — we're out of office and will reply during business hours."
+            rows={2}
+            placeholder="e.g. We're out of office and will reply during business hours."
             className="w-full px-3 py-2 rounded-lg border border-stone-300 text-[14px] focus:outline-none focus:ring-2 focus:ring-[#B7453C] resize-none"
           />
           <div className="flex flex-wrap gap-4 items-end">
@@ -3105,10 +3109,29 @@ function StudioSettingsPanel({ studioStatus, studioStatusColor, onChangeStatus, 
               <input type="time" value={ar.end} onChange={(e) => setArField("end", e.target.value)} className="mt-1 px-3 py-2 rounded-lg border border-stone-300 text-[14px] focus:outline-none focus:ring-2 focus:ring-[#B7453C]" />
             </label>
           </div>
-          <p className="text-[11px] text-stone-400">Your local (Melbourne) time. e.g. 4:00 PM → 8:00 AM covers overnight. Set both the same for 24/7. It replies at most once every 4 hours per client.</p>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-[11px] text-stone-400">Bar colour:</span>
+            {STAGE_SWATCHES.map((sw) => (
+              <button
+                key={sw.bg}
+                type="button"
+                onClick={() => setArField("color", sw.bg)}
+                className="w-6 h-6 rounded-full border-2 transition-transform hover:scale-110"
+                style={{ backgroundColor: sw.bg, borderColor: ar.color === sw.bg ? "#1c1917" : "transparent" }}
+                aria-label="Auto-note colour"
+              />
+            ))}
+          </div>
+          {ar.text.trim() && (
+            <div className="flex items-center gap-2.5 text-[13px] rounded-lg px-3.5 py-2.5" style={{ backgroundColor: ar.color, color: textOn(ar.color) }}>
+              <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: textOn(ar.color) }} />
+              {ar.text}
+            </div>
+          )}
+          <p className="text-[11px] text-stone-400">Your local (Melbourne) time. e.g. 4:00 PM → 8:00 AM covers overnight. Set both times the same for 24/7. A per-project custom note (on its Messages tab) overrides this.</p>
           <div className="flex items-center gap-3">
             <button onClick={saveAr} className="bg-stone-900 text-white rounded-lg px-4 py-2 text-[13px] hover:bg-stone-800 transition-colors">
-              Save message &amp; hours
+              Save note &amp; hours
             </button>
             {arSaved && <span className="text-[12px] text-[#576B45]">Saved ✓</span>}
           </div>
@@ -3843,6 +3866,7 @@ function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioSt
                 onSetCustomStatus={(val) => setField(project.code, "customStatus", val)}
                 studioStatus={studioStatus}
                 studioStatusColor={studioStatusColor}
+                autoStatus={autoReply}
               />
             </AdminSection>
             )}
@@ -4213,21 +4237,17 @@ export default function App() {
   const handleSendMessage = useCallback(
     (text, replyTo = null, photos = []) => {
       const me = session?.user?.email || "";
-      setProjects((prev) => {
-        const p = prev[activeCode];
-        let messages = [...p.messages, { id: uid(), from: "client", fromEmail: me, text, photos: photos || [], date: new Date().toISOString(), replyTo, reactions: [], pinned: false }];
-        // Out-of-office auto-reply: post once (max one per 4h) when active.
-        if (autoReplyActive(autoReply)) {
-          const recentAuto = p.messages.some((m) => m.autoReply && Date.now() - new Date(m.date).getTime() < 4 * 3600 * 1000);
-          if (!recentAuto) {
-            messages = [...messages, { id: uid(), from: "studio", text: autoReply.text.trim(), autoReply: true, date: new Date().toISOString(), reactions: [], pinned: false }];
-          }
-        }
-        return { ...prev, [activeCode]: { ...p, lastReadClient: new Date().toISOString(), messages } };
-      });
+      setProjects((prev) => ({
+        ...prev,
+        [activeCode]: {
+          ...prev[activeCode],
+          lastReadClient: new Date().toISOString(),
+          messages: [...prev[activeCode].messages, { id: uid(), from: "client", fromEmail: me, text, photos: photos || [], date: new Date().toISOString(), replyTo, reactions: [], pinned: false }],
+        },
+      }));
       api.notifyPush({ toStudio: true, title: "New message from a client", body: text && text.trim() ? text : "Sent a photo", url: "/" });
     },
-    [activeCode, session, autoReply]
+    [activeCode, session]
   );
 
   const handleReactMessage = useCallback(
@@ -4321,6 +4341,7 @@ export default function App() {
         viewerEmail={session?.user?.email || ""}
         studioStatus={studioStatus}
         studioStatusColor={studioStatusColor}
+        autoStatus={autoReply}
         onLogout={handleSignOut}
         onSendMessage={handleSendMessage}
         onReactMessage={handleReactMessage}

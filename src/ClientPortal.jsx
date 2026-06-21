@@ -3825,9 +3825,11 @@ export default function App() {
   }, []);
 
   // First-visit "add to home screen" prompt — shows for ANY signed-in user
-  // (client or studio), once per device, when not already installed.
+  // (client or studio), once per device, when not already installed. Waits until
+  // an invited client has finished setting their password (the SetPassword screen).
   useEffect(() => {
     if (!session) return;
+    if (api.needsPasswordSetup && !passwordDone) return;
     try {
       const standalone = window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone;
       if (!standalone && !localStorage.getItem("sn_install_seen")) {
@@ -3835,7 +3837,7 @@ export default function App() {
         setInstallOpen(true);
       }
     } catch (e) {}
-  }, [session]);
+  }, [session, passwordDone]);
 
   // Load the login-page photo + message before anyone signs in (public read).
   useEffect(() => {

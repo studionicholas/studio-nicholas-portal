@@ -1910,7 +1910,7 @@ function EnablePushBanner({ email }) {
   );
 }
 
-function ClientDashboard({ project, viewerEmail, studioStatus, studioStatusColor, onLogout, onSendMessage, onReactMessage, onPinMessage, onMarkRead, onMarkNotifs, onDismissNotif, onUploadSigned, onRespondMeeting }) {
+function ClientDashboard({ project, viewerEmail, studioStatus, studioStatusColor, onLogout, onSendMessage, onReactMessage, onPinMessage, onMarkRead, onMarkNotifs, onDismissNotif, onUploadSigned, onRespondMeeting, installOpen }) {
   const [tab, setTab] = useState("about");
   const [lightbox, setLightbox] = useState(null);
   const [prefillMsg, setPrefillMsg] = useState("");
@@ -1918,27 +1918,6 @@ function ClientDashboard({ project, viewerEmail, studioStatus, studioStatusColor
     setPrefillMsg(`Re: "${u.title}" — `);
     setTab("messages");
   }
-  const [showInstall, setShowInstall] = useState(() => {
-    try {
-      const standalone = window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone;
-      return !standalone && !localStorage.getItem("sn_install_seen");
-    } catch (e) {
-      return false;
-    }
-  });
-  // Mark it seen the instant it appears, so it only ever shows on the very first
-  // visit — even if they close the app without tapping "Got it".
-  useEffect(() => {
-    if (showInstall) {
-      try {
-        localStorage.setItem("sn_install_seen", "1");
-      } catch (e) {}
-    }
-  }, [showInstall]);
-  function dismissInstall() {
-    setShowInstall(false);
-  }
-
   // Notifications prompt — appears after the add-to-home-screen popup. If they
   // close it, the inline banner stays on the page until notifications are on.
   const [notifPerm, setNotifPerm] = useState(() => (api.pushSupported() ? api.pushPermission() : "unsupported"));
@@ -1958,10 +1937,10 @@ function ClientDashboard({ project, viewerEmail, studioStatus, studioStatusColor
   useEffect(() => {
     // Once the install popup is out of the way, prompt for notifications if the
     // device supports them and the user hasn't decided yet.
-    if (!showInstall && api.pushSupported() && api.pushPermission() === "default") {
+    if (!installOpen && api.pushSupported() && api.pushPermission() === "default") {
       setShowNotifPrompt(true);
     }
-  }, [showInstall]);
+  }, [installOpen]);
   const features = project.features || {};
   const programaUrl = programaForViewer(project, viewerEmail);
 
@@ -2196,32 +2175,7 @@ function ClientDashboard({ project, viewerEmail, studioStatus, studioStatusColor
           onIndex={(i) => setLightbox((l) => ({ ...l, index: i }))}
         />
       )}
-      {showInstall && (
-        <div className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center px-4 pb-6 sm:pb-0">
-          <div className="bg-white rounded-2xl max-w-sm w-full p-6">
-            <div className="flex items-center gap-3 mb-3">
-              <img src="/icon-192.png" className="w-11 h-11 rounded-lg" alt="" />
-              <h3 className="text-[18px] text-stone-900" style={{ fontFamily: "Selva, Georgia, serif", fontStyle: "italic" }}>
-                Add to your home screen
-              </h3>
-            </div>
-            <p className="text-[14px] text-stone-600 leading-relaxed mb-4">Keep your project one tap away — it works just like an app, no app store needed.</p>
-            <div className="text-[13px] text-stone-600 space-y-2 mb-5">
-              <p>
-                <strong className="text-stone-900">iPhone (Safari):</strong> tap <strong>Share</strong> → <strong>Add to Home Screen</strong>
-              </p>
-              <p>
-                <strong className="text-stone-900">Android (Chrome):</strong> tap the <strong>⋮</strong> menu → <strong>Install app</strong>
-              </p>
-            </div>
-            <button onClick={dismissInstall} className="w-full bg-stone-900 text-white rounded-lg py-3 text-[14px] hover:bg-stone-800 transition-colors">
-              Got it
-            </button>
-          </div>
-        </div>
-      )}
-
-      {showNotifPrompt && notifPerm === "default" && !showInstall && (
+      {showNotifPrompt && notifPerm === "default" && !installOpen && (
         <div className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center px-4 pb-6 sm:pb-0">
           <div className="bg-white rounded-2xl max-w-sm w-full p-6">
             <div className="flex items-center gap-3 mb-3">
@@ -3854,6 +3808,7 @@ export default function App() {
   const [activeCode, setActiveCode] = useState(null);
   const [saveError, setSaveError] = useState("");
   const [passwordDone, setPasswordDone] = useState(false);
+  const [installOpen, setInstallOpen] = useState(false);
 
   const applyingRemote = useRef(false); // guards the projects save effect
   const applyingStatus = useRef(false); // guards the status save effect
@@ -3868,6 +3823,19 @@ export default function App() {
     const { data } = api.onAuthChange((s) => setSession(s ?? null));
     return () => data?.subscription?.unsubscribe?.();
   }, []);
+
+  // First-visit "add to home screen" prompt — shows for ANY signed-in user
+  // (client or studio), once per device, when not already installed.
+  useEffect(() => {
+    if (!session) return;
+    try {
+      const standalone = window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone;
+      if (!standalone && !localStorage.getItem("sn_install_seen")) {
+        localStorage.setItem("sn_install_seen", "1");
+        setInstallOpen(true);
+      }
+    } catch (e) {}
+  }, [session]);
 
   // Load the login-page photo + message before anyone signs in (public read).
   useEffect(() => {
@@ -4166,6 +4134,7 @@ export default function App() {
         onDismissNotif={handleDismissNotif}
         onUploadSigned={handleUploadSigned}
         onRespondMeeting={handleRespondMeeting}
+        installOpen={installOpen}
       />
     ) : (
       <NoProjectYet onLogout={handleSignOut} />
@@ -4197,6 +4166,30 @@ export default function App() {
         </div>
       )}
       {content}
+      {installOpen && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center px-4 pb-6 sm:pb-0">
+          <div className="bg-white rounded-2xl max-w-sm w-full p-6">
+            <div className="flex items-center gap-3 mb-3">
+              <img src="/icon-192.png" className="w-11 h-11 rounded-lg" alt="" />
+              <h3 className="text-[18px] text-stone-900" style={{ fontFamily: "Selva, Georgia, serif", fontStyle: "italic" }}>
+                Add to your home screen
+              </h3>
+            </div>
+            <p className="text-[14px] text-stone-600 leading-relaxed mb-4">Keep it one tap away — it works just like an app, no app store needed.</p>
+            <div className="text-[13px] text-stone-600 space-y-2 mb-5">
+              <p>
+                <strong className="text-stone-900">iPhone (Safari):</strong> tap <strong>Share</strong> → <strong>Add to Home Screen</strong>
+              </p>
+              <p>
+                <strong className="text-stone-900">Android (Chrome):</strong> tap the <strong>⋮</strong> menu → <strong>Install app</strong>
+              </p>
+            </div>
+            <button onClick={() => setInstallOpen(false)} className="w-full bg-stone-900 text-white rounded-lg py-3 text-[14px] hover:bg-stone-800 transition-colors">
+              Got it
+            </button>
+          </div>
+        </div>
+      )}
     </>
   );
 }

@@ -2314,17 +2314,14 @@ function ClientDashboard({ project, viewerEmail, studioStatus, studioStatusColor
 
           {activeTab === "about" && (
             <div className="space-y-8">
+              <AboutTab project={project} />
               {myClient && (
-                <div className="flex items-center gap-3 bg-white border border-stone-200 rounded-xl px-4 py-3.5">
-                  <Mail className="w-4 h-4 text-stone-400 shrink-0" />
-                  <div className="min-w-0 flex-1">
-                    <p className="text-[14px] text-stone-800">Email updates</p>
-                    <p className="text-[12px] text-stone-400">{myClient.emailNotify ? "On — we'll email you about new messages and updates." : "Off — get an email when there's new activity."}</p>
-                  </div>
+                <div className="flex items-center gap-2.5 border-t border-stone-200 pt-4">
+                  <Mail className="w-3.5 h-3.5 text-stone-400 shrink-0" />
+                  <span className="text-[12px] text-stone-500 flex-1">Email updates {myClient.emailNotify ? "on" : "off"}</span>
                   <Toggle on={!!myClient.emailNotify} onChange={() => onSetEmailNotify(!myClient.emailNotify)} />
                 </div>
               )}
-              <AboutTab project={project} />
             </div>
           )}
 

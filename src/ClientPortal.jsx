@@ -2189,16 +2189,6 @@ function ClientDashboard({ project, viewerEmail, studioStatus, studioStatusColor
             </button>
           </div>
         )}
-        {myClient && typeof myClient.emailNotify !== "undefined" && (
-          <div className="mt-3 flex items-center gap-3 bg-white border border-stone-200 rounded-lg px-3.5 py-2.5">
-            <Mail className="w-4 h-4 text-stone-400 shrink-0" />
-            <div className="min-w-0 flex-1">
-              <p className="text-[13px] text-stone-800">Email updates</p>
-              <p className="text-[11px] text-stone-400">{myClient.emailNotify ? "On — we'll email you about new activity." : "Off"}</p>
-            </div>
-            <Toggle on={!!myClient.emailNotify} onChange={() => onSetEmailNotify(!myClient.emailNotify)} />
-          </div>
-        )}
         {features.programa !== false && programaUrl && (
           <div className="py-3.5 border-b border-stone-200">
             <a
@@ -2322,7 +2312,21 @@ function ClientDashboard({ project, viewerEmail, studioStatus, studioStatusColor
             </div>
           )}
 
-          {activeTab === "about" && <AboutTab project={project} />}
+          {activeTab === "about" && (
+            <div className="space-y-8">
+              {myClient && (
+                <div className="flex items-center gap-3 bg-white border border-stone-200 rounded-xl px-4 py-3.5">
+                  <Mail className="w-4 h-4 text-stone-400 shrink-0" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[14px] text-stone-800">Email updates</p>
+                    <p className="text-[12px] text-stone-400">{myClient.emailNotify ? "On — we'll email you about new messages and updates." : "Off — get an email when there's new activity."}</p>
+                  </div>
+                  <Toggle on={!!myClient.emailNotify} onChange={() => onSetEmailNotify(!myClient.emailNotify)} />
+                </div>
+              )}
+              <AboutTab project={project} />
+            </div>
+          )}
 
           {activeTab === "messages" && (
             <MessagesPanel

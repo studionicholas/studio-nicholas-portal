@@ -863,7 +863,7 @@ function Toggle({ on, onChange }) {
   );
 }
 
-function MessagesPanel({ messages, meRole, onSend, onReact, onPin, onLabel, onEdit, onDelete, seenSince, showReceipts, showStatus, onToggleStatus, customStatus, onSetCustomStatus, studioStatus, studioStatusColor }) {
+function MessagesPanel({ messages, meRole, onSend, onReact, onPin, onLabel, onTagPhoto, onEdit, onDelete, seenSince, showReceipts, showStatus, onToggleStatus, customStatus, onSetCustomStatus, studioStatus, studioStatusColor }) {
   const barColor = studioStatusColor || "#D5A933";
   const resolvedStatus = customStatus || (showStatus ? studioStatus : "");
   const [draft, setDraft] = useState("");
@@ -878,7 +878,22 @@ function MessagesPanel({ messages, meRole, onSend, onReact, onPin, onLabel, onEd
   const [editText, setEditText] = useState("");
   const [query, setQuery] = useState("");
   const [labelFilter, setLabelFilter] = useState(null);
+  const [view, setView] = useState("chat"); // "chat" | "photos"
+  const [photoTagFilter, setPhotoTagFilter] = useState(null);
   const canEdit = !!onEdit;
+  const canTag = !!onTagPhoto;
+
+  // Flatten every photo shared in messages into a gallery list (newest first).
+  const photoItems = [];
+  messages.forEach((m) => (m.photos || []).forEach((url, idx) => photoItems.push({ msgId: m.id, idx, url, tag: (m.photoTags && m.photoTags[idx]) || "", date: m.date })));
+  photoItems.reverse();
+  const photoTagList = [...new Set(photoItems.map((p) => p.tag).filter(Boolean))];
+  const shownPhotos = photoTagFilter ? photoItems.filter((p) => p.tag === photoTagFilter) : photoItems;
+
+  function tagPhotoPrompt(item) {
+    const t = window.prompt("Tag this photo (e.g. Kitchen, Sample, Site):", item.tag || "");
+    if (t !== null) onTagPhoto(item.msgId, item.idx, t.trim());
+  }
 
   const byId = {};
   messages.forEach((m) => (byId[m.id] = m));
@@ -949,6 +964,25 @@ function MessagesPanel({ messages, meRole, onSend, onReact, onPin, onLabel, onEd
         </div>
       ) : null}
 
+      {photoItems.length > 0 && (
+        <div className="flex gap-1.5 mb-3">
+          <button
+            onClick={() => setView("chat")}
+            className={`flex items-center gap-1.5 text-[12px] rounded-full px-3 py-1 border ${view === "chat" ? "border-stone-900 bg-stone-900 text-white" : "border-stone-200 text-stone-500"}`}
+          >
+            <MessageSquare className="w-3.5 h-3.5" /> Messages
+          </button>
+          <button
+            onClick={() => setView("photos")}
+            className={`flex items-center gap-1.5 text-[12px] rounded-full px-3 py-1 border ${view === "photos" ? "border-stone-900 bg-stone-900 text-white" : "border-stone-200 text-stone-500"}`}
+          >
+            <Images className="w-3.5 h-3.5" /> Photos {photoItems.length}
+          </button>
+        </div>
+      )}
+
+      {view === "chat" && (
+      <>
       {messages.length > 0 && (
         <div className="mb-3">
           <div className="relative">
@@ -1253,6 +1287,65 @@ function MessagesPanel({ messages, meRole, onSend, onReact, onPin, onLabel, onEd
           <Send className="w-4 h-4" />
         </button>
       </form>
+      </>
+      )}
+
+      {view === "photos" && (
+        <div>
+          {photoTagList.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 mb-3">
+              <button
+                onClick={() => setPhotoTagFilter(null)}
+                className={`text-[11px] rounded-full px-2.5 py-0.5 border ${!photoTagFilter ? "border-stone-900 bg-stone-900 text-white" : "border-stone-200 text-stone-500"}`}
+              >
+                All
+              </button>
+              {photoTagList.map((t) => (
+                <button
+                  key={t}
+                  onClick={() => setPhotoTagFilter(photoTagFilter === t ? null : t)}
+                  className={`inline-flex items-center gap-1 text-[11px] rounded-full px-2.5 py-0.5 border ${photoTagFilter === t ? "border-stone-900 bg-stone-900 text-white" : "border-stone-200 text-stone-500"}`}
+                >
+                  <Tag className="w-2.5 h-2.5" /> {t}
+                </button>
+              ))}
+            </div>
+          )}
+          {shownPhotos.length === 0 ? (
+            <EmptyState text="No photos yet. Share one with the camera button in Messages." />
+          ) : (
+            <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+              {shownPhotos.map((item, i) => (
+                <div key={item.msgId + ":" + item.idx} className="space-y-1">
+                  <button
+                    onClick={() => setLb({ photos: shownPhotos.map((p) => p.url), index: i })}
+                    className="block w-full aspect-square overflow-hidden rounded-lg bg-stone-100"
+                  >
+                    <img src={item.url} alt="" className="w-full h-full object-cover hover:opacity-90 transition-opacity" />
+                  </button>
+                  {item.tag ? (
+                    <button
+                      disabled={!canTag}
+                      onClick={() => canTag && tagPhotoPrompt(item)}
+                      className="w-full inline-flex items-center justify-center gap-1 text-[10px] rounded-full px-2 py-0.5"
+                      style={{ backgroundColor: "#E6D0C7", color: "#B7453C" }}
+                    >
+                      <Tag className="w-2.5 h-2.5 shrink-0" /> <span className="truncate">{item.tag}</span>
+                    </button>
+                  ) : canTag ? (
+                    <button
+                      onClick={() => tagPhotoPrompt(item)}
+                      className="w-full text-[10px] text-stone-400 hover:text-stone-700 rounded-full px-2 py-0.5 border border-dashed border-stone-300"
+                    >
+                      + Tag
+                    </button>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {lb && (
         <Lightbox
@@ -1730,7 +1823,6 @@ function ClientDashboard({ project, viewerEmail, studioStatus, studioStatusColor
   const allTabs = [
     { id: "about", label: "About", icon: Info, badge: 0 },
     { id: "updates", label: "Project updates", icon: ImageIcon, badge: 0 },
-    { id: "gallery", label: "Gallery", icon: Images, badge: 0 },
     { id: "timeline", label: "Timeline", icon: Flag, badge: 0 },
     { id: "meetings", label: "Meetings", icon: Calendar, badge: pendingInvites },
     { id: "fee", label: "Fee proposal", icon: FileText, badge: 0 },
@@ -1858,27 +1950,6 @@ function ClientDashboard({ project, viewerEmail, studioStatus, studioStatusColor
               ))}
             </div>
           )}
-
-          {activeTab === "gallery" && (() => {
-            const galleryPhotos = [
-              ...[...project.updates].reverse().flatMap((u) => u.photos || []),
-              ...project.messages.flatMap((m) => m.photos || []),
-            ];
-            if (galleryPhotos.length === 0) return <EmptyState text="Photos shared in updates and messages will collect here." />;
-            return (
-              <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
-                {galleryPhotos.map((p, i) => (
-                  <button
-                    key={i}
-                    onClick={() => setLightbox({ photos: galleryPhotos, index: i })}
-                    className="aspect-square overflow-hidden rounded-lg bg-stone-100"
-                  >
-                    <img src={p} alt="" className="w-full h-full object-cover hover:opacity-90 transition-opacity" />
-                  </button>
-                ))}
-              </div>
-            );
-          })()}
 
           {activeTab === "timeline" && <Timeline milestones={project.milestones} />}
 
@@ -2926,6 +2997,17 @@ function AdminPanel({ projects, setProjects, studioStatus, studioStatusColor, on
   function labelMessage(code, id, label) {
     updateProject(code, (p) => ({ ...p, messages: p.messages.map((m) => (m.id === id ? { ...m, label } : m)) }));
   }
+  function tagPhoto(code, id, idx, tag) {
+    updateProject(code, (p) => ({
+      ...p,
+      messages: p.messages.map((m) => {
+        if (m.id !== id) return m;
+        const photoTags = [...(m.photoTags || [])];
+        photoTags[idx] = tag;
+        return { ...m, photoTags };
+      }),
+    }));
+  }
   function editMessage(code, id, text) {
     updateProject(code, (p) => ({ ...p, messages: p.messages.map((m) => (m.id === id ? { ...m, text, edited: true } : m)) }));
   }
@@ -3226,6 +3308,7 @@ function AdminPanel({ projects, setProjects, studioStatus, studioStatusColor, on
                 onReact={(id, emoji) => reactMessage(project.code, id, emoji)}
                 onPin={(id) => pinMessage(project.code, id)}
                 onLabel={(id, label) => labelMessage(project.code, id, label)}
+                onTagPhoto={(id, idx, tag) => tagPhoto(project.code, id, idx, tag)}
                 onEdit={(id, text) => editMessage(project.code, id, text)}
                 onDelete={(id) => deleteMessage(project.code, id)}
                 showReceipts

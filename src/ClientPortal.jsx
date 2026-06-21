@@ -103,7 +103,7 @@ function studioNowMinutes() {
     return d.getHours() * 60 + d.getMinutes();
   }
 }
-// Is the auto-reply on AND are we currently inside its active hours?
+// Is this note on AND are we currently inside its active hours?
 function autoReplyActive(cfg) {
   if (!cfg || !cfg.enabled || !cfg.text || !cfg.text.trim()) return false;
   const start = parseHM(cfg.start);
@@ -111,6 +111,13 @@ function autoReplyActive(cfg) {
   if (start == null || end == null || start === end) return true; // no window = always on
   const now = studioNowMinutes();
   return start < end ? now >= start && now < end : now >= start || now < end; // handles overnight (e.g. 16:00–08:00)
+}
+// From the configured list (or a single legacy object), the first note that's
+// on and within its active hours right now.
+function activeAutoNote(cfg) {
+  if (!cfg) return null;
+  const list = Array.isArray(cfg) ? cfg : [cfg];
+  return list.find((n) => autoReplyActive(n)) || null;
 }
 
 const LOGIN_HERO = "/login.jpg";
@@ -979,9 +986,10 @@ function Toggle({ on, onChange }) {
 function MessagesPanel({ messages, meRole, onSend, onReact, onPin, onLabel, onTagPhoto, onEdit, onDelete, seenSince, showReceipts, showStatus, onToggleStatus, customStatus, onSetCustomStatus, studioStatus, studioStatusColor, autoStatus, prefill, onPrefillUsed, draftKey, clients, myEmail, fallbackClientName }) {
   // The automatic out-of-office note shows (to everyone) during its active hours,
   // unless this project has its own custom status note set.
-  const autoOn = !customStatus && autoStatus && autoReplyActive(autoStatus) && (autoStatus.text || "").trim();
-  const barColor = autoOn ? autoStatus.color || "#D5A933" : studioStatusColor || "#D5A933";
-  const resolvedStatus = customStatus || (autoOn ? autoStatus.text.trim() : showStatus ? studioStatus : "");
+  const autoNote = customStatus ? null : activeAutoNote(autoStatus);
+  const autoOn = autoNote && (autoNote.text || "").trim();
+  const barColor = autoOn ? autoNote.color || "#D5A933" : studioStatusColor || "#D5A933";
+  const resolvedStatus = customStatus || (autoOn ? autoNote.text.trim() : showStatus ? studioStatus : "");
   // Resolve a friendly sender name for a message.
   function senderName(m) {
     if (m.from === "studio") return studioFirstName();
@@ -2036,14 +2044,22 @@ function ClientDashboard({ project, viewerEmail, studioStatus, studioStatusColor
       setShowNotifPrompt(true);
     }
   }, [installOpen]);
-  const features = project.features || {};
+  // Per-client feature access: this client's own overrides on top of the
+  // project-wide defaults (so each client can see a different set of tabs).
+  const myClient = (project.clients || []).find((c) => (c.email || "").trim().toLowerCase() === (viewerEmail || "").trim().toLowerCase());
+  const features = { ...(project.features || {}), ...((myClient && myClient.features) || {}) };
   const programaUrl = programaForViewer(project, viewerEmail);
 
   const now = Date.now();
-  const upcoming = project.meetings
+  const myEmailLc = (viewerEmail || "").trim().toLowerCase();
+  // Only show meetings this client is invited to (no invitees set = everyone).
+  const myMeetings = project.meetings.filter(
+    (m) => !m.invitees || m.invitees.length === 0 || m.invitees.map((e) => (e || "").toLowerCase()).includes(myEmailLc)
+  );
+  const upcoming = myMeetings
     .filter((m) => new Date(m.instant).getTime() >= now)
     .sort((a, b) => new Date(a.instant) - new Date(b.instant));
-  const past = project.meetings
+  const past = myMeetings
     .filter((m) => new Date(m.instant).getTime() < now)
     .sort((a, b) => new Date(b.instant) - new Date(a.instant));
   const pendingInvites = upcoming.filter((m) => ((m.rsvps?.[(viewerEmail || "").toLowerCase()]) || "pending") === "pending").length;
@@ -2633,17 +2649,22 @@ function AdminMilestones({ project, onAdd, onEdit, onSetStatus, onMove, onDelete
 }
 
 function AdminMeetings({ project, onAdd, onEdit, onDelete }) {
-  const [form, setForm] = useState({ title: "", date: "", time: "", timezone: "Australia/Melbourne", mode: "online", link: "", location: "", message: "" });
+  const [form, setForm] = useState({ title: "", date: "", time: "", timezone: "Australia/Melbourne", mode: "online", link: "", location: "", message: "", invitees: [] });
   const [editingId, setEditingId] = useState(null);
   const sorted = [...project.meetings].sort((a, b) => new Date(b.instant) - new Date(a.instant));
+  const projectClients = (project.clients || []).filter((c) => c.email);
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
+  const toggleInvitee = (email) => {
+    const has = (form.invitees || []).some((e) => (e || "").toLowerCase() === email.toLowerCase());
+    set("invitees", has ? form.invitees.filter((e) => (e || "").toLowerCase() !== email.toLowerCase()) : [...(form.invitees || []), email]);
+  };
   const resetForm = () => {
-    setForm({ title: "", date: "", time: "", timezone: form.timezone, mode: "online", link: "", location: "", message: "" });
+    setForm({ title: "", date: "", time: "", timezone: form.timezone, mode: "online", link: "", location: "", message: "", invitees: [] });
     setEditingId(null);
   };
   function startEdit(m) {
     const { date, time } = instantToLocalParts(m.instant, m.timezone);
-    setForm({ title: m.title, date, time, timezone: m.timezone, mode: m.mode, link: m.link || "", location: m.location || "", message: m.message || "" });
+    setForm({ title: m.title, date, time, timezone: m.timezone, mode: m.mode, link: m.link || "", location: m.location || "", message: m.message || "", invitees: m.invitees || [] });
     setEditingId(m.id);
   }
 
@@ -2660,7 +2681,8 @@ function AdminMeetings({ project, onAdd, onEdit, onDelete }) {
             </p>
             {m.mode === "in-person" && m.location && <p className="text-[12px] text-stone-400 truncate">{m.location}</p>}
             {(() => {
-              const clients = (project.clients || []).filter((c) => c.email);
+              const allC = (project.clients || []).filter((c) => c.email);
+              const clients = m.invitees && m.invitees.length ? allC.filter((c) => m.invitees.map((e) => (e || "").toLowerCase()).includes(c.email.toLowerCase())) : allC;
               if (clients.length === 0) {
                 const r = RSVP_META[m.rsvp || "pending"];
                 return (
@@ -2756,6 +2778,27 @@ function AdminMeetings({ project, onAdd, onEdit, onDelete }) {
           placeholder="Message for the client (optional)"
           className="w-full px-3 py-2 rounded-lg border border-stone-300 text-[14px] focus:outline-none focus:ring-2 focus:ring-[#B7453C] resize-none"
         />
+        {projectClients.length > 0 && (
+          <div>
+            <p className="text-[11px] text-stone-400 mb-1.5">Invite (none ticked = everyone on this project):</p>
+            <div className="flex flex-wrap gap-1.5">
+              {projectClients.map((c) => {
+                const sel = (form.invitees || []).some((e) => (e || "").toLowerCase() === c.email.toLowerCase());
+                return (
+                  <button
+                    key={c.email}
+                    type="button"
+                    onClick={() => toggleInvitee(c.email)}
+                    className={`text-[11px] rounded-full px-2.5 py-1 border transition-colors ${sel ? "border-stone-900 bg-stone-900 text-white" : "border-stone-300 text-stone-500 bg-white"}`}
+                  >
+                    {sel ? "✓ " : ""}
+                    {c.name || c.email.split("@")[0]}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
         <div className="flex items-center gap-2">
           <button type="submit" className="bg-stone-900 text-white rounded-lg px-4 py-2 text-[13px] hover:bg-stone-800 transition-colors">
             {editingId ? "Save changes" : "Add meeting"}
@@ -2933,6 +2976,26 @@ function AdminClients({ project, onChange }) {
             placeholder="Their Programa link (https://app.programa.com/...)"
             className="w-full px-3 py-2 rounded-lg border border-stone-300 text-[14px] focus:outline-none focus:ring-2 focus:ring-[#B7453C]"
           />
+          <div>
+            <p className="text-[11px] text-stone-400 mb-1.5">Tabs this client can see &amp; access:</p>
+            <div className="flex flex-wrap gap-1.5">
+              {[...FEATURE_LIST, { key: "programa", label: "Programa" }].map((f) => {
+                const cf = c.features || {};
+                const on = cf[f.key] !== false;
+                return (
+                  <button
+                    key={f.key}
+                    type="button"
+                    onClick={() => update(i, "features", { ...cf, [f.key]: !on })}
+                    className={`text-[11px] rounded-full px-2.5 py-1 border transition-colors ${on ? "border-[#576B45] bg-[#576B45] text-white" : "border-stone-300 text-stone-400 bg-white"}`}
+                  >
+                    {on ? "✓ " : ""}
+                    {f.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
         </div>
       ))}
 
@@ -3000,29 +3063,27 @@ function StudioSettingsPanel({ studioStatus, studioStatusColor, onChangeStatus, 
     setInfoSaved(true);
   }
 
-  const [ar, setAr] = useState(() => ({
-    enabled: !!(autoReply && autoReply.enabled),
-    text: (autoReply && autoReply.text) || "We're currently out of office and will reply during business hours.",
-    start: (autoReply && autoReply.start) || "16:00",
-    end: (autoReply && autoReply.end) || "08:00",
-    color: (autoReply && autoReply.color) || "#D5A933",
-  }));
+  const [notes, setNotes] = useState(() => {
+    if (Array.isArray(autoReply)) return autoReply;
+    if (autoReply && typeof autoReply === "object") return [{ id: uid(), ...autoReply }]; // migrate a single old note
+    return [];
+  });
   const [arSaved, setArSaved] = useState(false);
-  const setArField = (k, v) => {
-    setAr((p) => ({ ...p, [k]: v }));
+  const persistNotes = (next) => {
+    setNotes(next);
+    onSaveAutoReply(next);
+  };
+  const editNote = (i, patch) => {
+    setNotes((arr) => arr.map((n, idx) => (idx === i ? { ...n, ...patch } : n)));
     setArSaved(false);
   };
-  function toggleAr() {
-    const v = { ...ar, enabled: !ar.enabled };
-    setAr(v);
-    onSaveAutoReply(v);
-  }
-  function saveAr() {
-    const v = { ...ar, text: (ar.text || "").trim() };
-    setAr(v);
-    onSaveAutoReply(v);
+  const toggleNote = (i) => persistNotes(notes.map((n, idx) => (idx === i ? { ...n, enabled: !n.enabled } : n)));
+  const addNote = () => persistNotes([...notes, { id: uid(), enabled: true, text: "", start: "16:00", end: "08:00", color: "#D5A933" }]);
+  const removeNote = (i) => persistNotes(notes.filter((_, idx) => idx !== i));
+  const saveNotes = () => {
+    onSaveAutoReply(notes);
     setArSaved(true);
-  }
+  };
   useEffect(() => setImg(loginImage || ""), [loginImage]);
   useEffect(() => setMsg(loginMessage || ""), [loginMessage]);
 
@@ -3083,58 +3144,66 @@ function StudioSettingsPanel({ studioStatus, studioStatusColor, onChangeStatus, 
         </div>
       </AdminSection>
 
-      <AdminSection title="Automatic out-of-office note">
-        <div className="border border-stone-200 rounded-lg bg-white p-3.5 space-y-3">
-          <div className="flex items-center justify-between gap-3">
-            <div className="min-w-0">
-              <p className="text-[14px] text-stone-800">Show an out-of-office note automatically</p>
-              <p className="text-[11px] text-stone-400">Shows the status bar at the top of every client's Messages during the hours below — turns itself on and off.</p>
-            </div>
-            <Toggle on={ar.enabled} onChange={toggleAr} />
-          </div>
-          <textarea
-            value={ar.text}
-            onChange={(e) => setArField("text", e.target.value)}
-            rows={2}
-            placeholder="e.g. We're out of office and will reply during business hours."
-            className="w-full px-3 py-2 rounded-lg border border-stone-300 text-[14px] focus:outline-none focus:ring-2 focus:ring-[#B7453C] resize-none"
-          />
-          <div className="flex flex-wrap gap-4 items-end">
-            <label className="text-[11px] text-stone-400 flex flex-col">
-              Active from
-              <input type="time" value={ar.start} onChange={(e) => setArField("start", e.target.value)} className="mt-1 px-3 py-2 rounded-lg border border-stone-300 text-[14px] focus:outline-none focus:ring-2 focus:ring-[#B7453C]" />
-            </label>
-            <label className="text-[11px] text-stone-400 flex flex-col">
-              Until
-              <input type="time" value={ar.end} onChange={(e) => setArField("end", e.target.value)} className="mt-1 px-3 py-2 rounded-lg border border-stone-300 text-[14px] focus:outline-none focus:ring-2 focus:ring-[#B7453C]" />
-            </label>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-[11px] text-stone-400">Bar colour:</span>
-            {STAGE_SWATCHES.map((sw) => (
-              <button
-                key={sw.bg}
-                type="button"
-                onClick={() => setArField("color", sw.bg)}
-                className="w-6 h-6 rounded-full border-2 transition-transform hover:scale-110"
-                style={{ backgroundColor: sw.bg, borderColor: ar.color === sw.bg ? "#1c1917" : "transparent" }}
-                aria-label="Auto-note colour"
+      <AdminSection title="Automatic status notes">
+        <p className="text-[12px] text-stone-400 mb-3">Add as many as you like. Each one shows the status bar at the top of every client's Messages during its hours, and turns itself on/off. A per-project custom note (on its Messages tab) overrides these.</p>
+        <div className="space-y-3">
+          {notes.length === 0 && <p className="text-[13px] text-stone-400">No automatic notes yet.</p>}
+          {notes.map((n, i) => (
+            <div key={n.id || i} className="border border-stone-200 rounded-lg bg-white p-3.5 space-y-2.5">
+              <div className="flex items-center justify-between gap-3">
+                <Toggle on={!!n.enabled} onChange={() => toggleNote(i)} />
+                <span className="text-[11px] text-stone-400 flex-1">{n.enabled ? "On — shows during its hours" : "Off"}</span>
+                <button onClick={() => removeNote(i)} className="text-stone-300 hover:text-red-600 shrink-0" aria-label="Remove note">
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
+              <textarea
+                value={n.text || ""}
+                onChange={(e) => editNote(i, { text: e.target.value })}
+                rows={2}
+                placeholder="e.g. We're out of office and will reply during business hours."
+                className="w-full px-3 py-2 rounded-lg border border-stone-300 text-[14px] focus:outline-none focus:ring-2 focus:ring-[#B7453C] resize-none"
               />
-            ))}
-          </div>
-          {ar.text.trim() && (
-            <div className="flex items-center gap-2.5 text-[13px] rounded-lg px-3.5 py-2.5" style={{ backgroundColor: ar.color, color: textOn(ar.color) }}>
-              <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: textOn(ar.color) }} />
-              {ar.text}
+              <div className="flex flex-wrap gap-4 items-end">
+                <label className="text-[11px] text-stone-400 flex flex-col">
+                  From
+                  <input type="time" value={n.start || ""} onChange={(e) => editNote(i, { start: e.target.value })} className="mt-1 px-3 py-2 rounded-lg border border-stone-300 text-[14px] focus:outline-none focus:ring-2 focus:ring-[#B7453C]" />
+                </label>
+                <label className="text-[11px] text-stone-400 flex flex-col">
+                  Until
+                  <input type="time" value={n.end || ""} onChange={(e) => editNote(i, { end: e.target.value })} className="mt-1 px-3 py-2 rounded-lg border border-stone-300 text-[14px] focus:outline-none focus:ring-2 focus:ring-[#B7453C]" />
+                </label>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {STAGE_SWATCHES.map((sw) => (
+                    <button
+                      key={sw.bg}
+                      type="button"
+                      onClick={() => editNote(i, { color: sw.bg })}
+                      className="w-5 h-5 rounded-full border-2 transition-transform hover:scale-110"
+                      style={{ backgroundColor: sw.bg, borderColor: (n.color || "#D5A933") === sw.bg ? "#1c1917" : "transparent" }}
+                      aria-label="Note colour"
+                    />
+                  ))}
+                </div>
+              </div>
+              {(n.text || "").trim() && (
+                <div className="flex items-center gap-2.5 text-[13px] rounded-lg px-3.5 py-2.5" style={{ backgroundColor: n.color || "#D5A933", color: textOn(n.color || "#D5A933") }}>
+                  <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: textOn(n.color || "#D5A933") }} />
+                  {n.text}
+                </div>
+              )}
             </div>
-          )}
-          <p className="text-[11px] text-stone-400">Your local (Melbourne) time. e.g. 4:00 PM → 8:00 AM covers overnight. Set both times the same for 24/7. A per-project custom note (on its Messages tab) overrides this.</p>
+          ))}
           <div className="flex items-center gap-3">
-            <button onClick={saveAr} className="bg-stone-900 text-white rounded-lg px-4 py-2 text-[13px] hover:bg-stone-800 transition-colors">
-              Save note &amp; hours
+            <button onClick={addNote} className="inline-flex items-center gap-1.5 text-[13px] text-stone-600 border border-stone-300 rounded-lg px-3 py-2 hover:bg-stone-100">
+              <Plus className="w-3.5 h-3.5" /> Add a note
+            </button>
+            <button onClick={saveNotes} className="bg-stone-900 text-white rounded-lg px-4 py-2 text-[13px] hover:bg-stone-800 transition-colors">
+              Save changes
             </button>
             {arSaved && <span className="text-[12px] text-[#576B45]">Saved ✓</span>}
           </div>
+          <p className="text-[11px] text-stone-400">Times are your local (Melbourne) time. e.g. 4:00 PM → 8:00 AM covers overnight; set both the same for 24/7. If two notes overlap, the first one listed wins.</p>
         </div>
       </AdminSection>
 

@@ -2088,15 +2088,17 @@ function ClientDashboard({ project, viewerEmail, studioStatus, studioStatusColor
   const features = { ...(project.features || {}), ...((myClient && myClient.features) || {}) };
   const programaUrl = programaForViewer(project, viewerEmail);
 
-  // Email-updates opt-in — asked once after the push prompt is resolved.
+  // Email-updates opt-in — asked once after the push prompt is out of the way.
   const [showEmailPrompt, setShowEmailPrompt] = useState(false);
   const emailUndecided = !!(myClient && typeof myClient.emailNotify === "undefined");
-  const pushResolved = pushAsked || !api.pushSupported();
+  // The push popup is only "pending" while it's actually due to appear (supported,
+  // not yet decided, not yet dismissed). Otherwise the email popup is free to show.
+  const pushPending = api.pushSupported() && api.pushPermission() === "default" && !pushAsked;
   useEffect(() => {
-    if (!installOpen && pushResolved && !showNotifPrompt && emailUndecided) {
+    if (!installOpen && !pushPending && !showNotifPrompt && emailUndecided) {
       setShowEmailPrompt(true);
     }
-  }, [installOpen, pushResolved, showNotifPrompt, emailUndecided]);
+  }, [installOpen, pushPending, showNotifPrompt, emailUndecided]);
   function decideEmail(value) {
     onSetEmailNotify(value);
     setShowEmailPrompt(false);

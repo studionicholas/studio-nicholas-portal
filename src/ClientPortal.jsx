@@ -2354,47 +2354,58 @@ function ClientDashboard({ project, viewerEmail, studioStatus, studioStatusColor
             <div className="space-y-8">
               <AboutTab project={project} />
 
-              <div className="border border-stone-200 rounded-xl bg-white p-4 space-y-3">
-                <p className="text-[15px] text-stone-900" style={{ fontFamily: "Selva, Georgia, serif", fontStyle: "italic" }}>
-                  Your app &amp; notifications
-                </p>
-                <div className="text-[13px] text-stone-600 space-y-1.5">
-                  <p className="text-stone-800">Add this to your home screen for one-tap access — it works just like an app.</p>
-                  <p className="text-stone-500">
-                    <strong className="text-stone-700">iPhone (Safari):</strong> tap <strong>Share</strong> → <strong>Add to Home Screen</strong>
-                  </p>
-                  <p className="text-stone-500">
-                    <strong className="text-stone-700">Android (Chrome):</strong> tap the <strong>⋮</strong> menu → <strong>Install app</strong>
-                  </p>
-                </div>
-                <div className="pt-1">
-                  {notifPerm === "granted" ? (
-                    <p className="inline-flex items-center gap-1.5 text-[13px] text-[#576B45]">
-                      <Bell className="w-3.5 h-3.5" /> Notifications are on
+              <div className="space-y-3">
+                <p className="text-[12px] text-stone-400 uppercase tracking-wide">Notifications</p>
+
+                {/* Email notifications bubble */}
+                {myClient && (
+                  <div className="border border-stone-200 rounded-xl bg-white p-4 flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-lg bg-[#F3E7E2] flex items-center justify-center shrink-0">
+                      <Mail className="w-4 h-4 text-[#B7453C]" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[14px] text-stone-800">Email notifications</p>
+                      <p className="text-[12px] text-stone-400">{myClient.emailNotify ? "We'll email you about new messages and updates." : "Get an email when there's new activity."}</p>
+                    </div>
+                    <Toggle on={!!myClient.emailNotify} onChange={() => onSetEmailNotify(!myClient.emailNotify)} />
+                  </div>
+                )}
+
+                {/* Mobile push notifications bubble */}
+                <div className="border border-stone-200 rounded-xl bg-white p-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-lg bg-[#F3E7E2] flex items-center justify-center shrink-0">
+                      <Bell className="w-4 h-4 text-[#B7453C]" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[14px] text-stone-800">Mobile push notifications</p>
+                      <p className="text-[12px] text-stone-400">A pop-up on your phone the moment there's a new message or update.</p>
+                    </div>
+                    {notifPerm === "granted" ? (
+                      <span className="shrink-0 text-[12px] text-[#576B45]">On ✓</span>
+                    ) : api.pushSupported() && notifPerm === "default" ? (
+                      <button
+                        onClick={turnOnNotifs}
+                        disabled={notifBusy}
+                        className="shrink-0 bg-stone-900 text-white text-[12px] rounded-lg px-3 py-1.5 hover:bg-stone-800 transition-colors disabled:opacity-50"
+                      >
+                        {notifBusy ? "…" : "Allow"}
+                      </button>
+                    ) : null}
+                  </div>
+                  {notifPerm === "denied" ? (
+                    <p className="text-[12px] text-stone-400 mt-2.5">Notifications are blocked on this device — switch them back on in your browser's site settings.</p>
+                  ) : !api.pushSupported() ? (
+                    <p className="text-[12px] text-stone-400 mt-2.5">
+                      On iPhone, add this to your home screen first, then open it from the icon to allow notifications. <strong className="text-stone-600">Share → Add to Home Screen</strong>. (Android: <strong className="text-stone-600">⋮ → Install app</strong>.)
                     </p>
-                  ) : notifPerm === "denied" ? (
-                    <p className="text-[12px] text-stone-400">Notifications are blocked on this device — switch them back on in your browser's settings for this site.</p>
-                  ) : api.pushSupported() ? (
-                    <button
-                      onClick={turnOnNotifs}
-                      disabled={notifBusy}
-                      className="inline-flex items-center gap-1.5 bg-stone-900 text-white text-[13px] rounded-lg px-4 py-2 hover:bg-stone-800 transition-colors disabled:opacity-50"
-                    >
-                      <Bell className="w-3.5 h-3.5" /> {notifBusy ? "Turning on…" : "Allow notifications"}
-                    </button>
                   ) : (
-                    <p className="text-[12px] text-stone-400">To get notifications on iPhone, add this to your home screen first (steps above), then open it from the new icon and you'll be able to allow them.</p>
+                    <p className="text-[12px] text-stone-400 mt-2.5">
+                      Tip: add this to your home screen for the best experience — <strong className="text-stone-600">iPhone:</strong> Share → Add to Home Screen · <strong className="text-stone-600">Android:</strong> ⋮ → Install app.
+                    </p>
                   )}
                 </div>
               </div>
-
-              {myClient && (
-                <div className="flex items-center gap-2.5 border-t border-stone-200 pt-4">
-                  <Mail className="w-3.5 h-3.5 text-stone-400 shrink-0" />
-                  <span className="text-[12px] text-stone-500 flex-1">Email updates {myClient.emailNotify ? "on" : "off"}</span>
-                  <Toggle on={!!myClient.emailNotify} onChange={() => onSetEmailNotify(!myClient.emailNotify)} />
-                </div>
-              )}
             </div>
           )}
 

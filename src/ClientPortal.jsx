@@ -2227,13 +2227,14 @@ function ClientDashboard({ project, viewerEmail, studioStatus, studioStatusColor
               href={programaUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="group flex items-center gap-2 bg-white border border-stone-200 rounded-lg px-3.5 py-2.5 hover:border-stone-300 transition-colors"
+              className="group flex items-center gap-2 rounded-lg px-3.5 py-3 transition-opacity hover:opacity-90"
+              style={{ backgroundColor: "#9BACB6" }}
             >
               <div className="min-w-0 flex-1">
-                <p className="text-[13px] text-stone-800">Programa dashboard</p>
-                <p className="text-[11px] text-stone-400 truncate">Schedules, presentations, invoices &amp; documents</p>
+                <p className="text-[13px]" style={{ color: "#1C1A17" }}>Programa dashboard</p>
+                <p className="text-[11px] truncate" style={{ color: "#1C1A17", opacity: 0.7 }}>Schedules, presentations, invoices &amp; documents</p>
               </div>
-              <span className="shrink-0 inline-flex items-center gap-0.5 text-[12px] text-stone-500 group-hover:text-stone-800 transition-colors">
+              <span className="shrink-0 inline-flex items-center gap-0.5 text-[12px]" style={{ color: "#1C1A17" }}>
                 Open <ChevronRight className="w-3.5 h-3.5" />
               </span>
             </a>

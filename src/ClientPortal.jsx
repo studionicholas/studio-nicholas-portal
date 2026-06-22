@@ -1181,25 +1181,20 @@ function MessagesPanel({ messages, meRole, onSend, onReact, onPin, onLabel, onTa
       <>
       {messages.length > 0 && (
         <div className="mb-3 flex flex-wrap items-center gap-1.5">
-          {/* Filters on the left */}
+          {/* Filter dropdown on the left */}
           {labels.length > 0 && (
-            <>
-              <button
-                onClick={() => setLabelFilter(null)}
-                className={`text-[11px] rounded-full px-2.5 py-0.5 border ${!labelFilter ? "border-stone-900 bg-stone-900 text-white" : "border-stone-200 text-stone-500"}`}
-              >
-                All
-              </button>
+            <select
+              value={labelFilter || ""}
+              onChange={(e) => setLabelFilter(e.target.value || null)}
+              className="text-[12px] rounded-lg border border-stone-300 bg-white px-2.5 py-1.5 text-stone-600 focus:outline-none focus:ring-2 focus:ring-[#B7453C]"
+            >
+              <option value="">All labels</option>
               {labels.map((l) => (
-                <button
-                  key={l}
-                  onClick={() => setLabelFilter(labelFilter === l ? null : l)}
-                  className={`inline-flex items-center gap-1 text-[11px] rounded-full px-2.5 py-0.5 border ${labelFilter === l ? "border-stone-900 bg-stone-900 text-white" : "border-stone-200 text-stone-500"}`}
-                >
-                  <Tag className="w-2.5 h-2.5" /> {l}
-                </button>
+                <option key={l} value={l}>
+                  {l}
+                </option>
               ))}
-            </>
+            </select>
           )}
           {/* Search on the right */}
           {searchOpen ? (
@@ -1357,27 +1352,13 @@ function MessagesPanel({ messages, meRole, onSend, onReact, onPin, onLabel, onTa
                 <button onClick={() => setReplyTo(m)} className="text-stone-300 hover:text-stone-600" aria-label="Reply">
                   <Reply className="w-3.5 h-3.5" />
                 </button>
-                <div className="relative">
-                  <button onClick={() => setPickerFor(pickerFor === m.id ? null : m.id)} className="text-stone-300 hover:text-stone-600" aria-label="React">
-                    <Smile className="w-3.5 h-3.5" />
-                  </button>
-                  {pickerFor === m.id && (
-                    <div className="absolute z-10 bottom-6 left-1/2 -translate-x-1/2 flex gap-1 bg-white border border-stone-200 rounded-full px-2 py-1 shadow-sm">
-                      {REACTIONS.map((e) => (
-                        <button
-                          key={e}
-                          onClick={() => {
-                            onReact(m.id, e);
-                            setPickerFor(null);
-                          }}
-                          className="text-[15px] hover:scale-125 transition-transform"
-                        >
-                          {e}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
+                <button
+                  onClick={() => setPickerFor(pickerFor === m.id ? null : m.id)}
+                  className={pickerFor === m.id ? "text-[#B7453C]" : "text-stone-300 hover:text-stone-600"}
+                  aria-label="React"
+                >
+                  <Smile className="w-3.5 h-3.5" />
+                </button>
                 <button onClick={() => onPin(m.id)} className={m.pinned ? "text-[#B7453C]" : "text-stone-300 hover:text-stone-600"} aria-label="Pin">
                   <Pin className="w-3.5 h-3.5" />
                 </button>
@@ -1410,6 +1391,23 @@ function MessagesPanel({ messages, meRole, onSend, onReact, onPin, onLabel, onTa
                   </button>
                 )}
               </div>
+
+              {pickerFor === m.id && (
+                <div className={`mt-1.5 inline-flex gap-1.5 bg-white border border-stone-200 rounded-full px-3 py-1.5 ${mine ? "self-end" : "self-start"}`}>
+                  {REACTIONS.map((e) => (
+                    <button
+                      key={e}
+                      onClick={() => {
+                        onReact(m.id, e);
+                        setPickerFor(null);
+                      }}
+                      className="text-[17px] leading-none hover:scale-125 transition-transform"
+                    >
+                      {e}
+                    </button>
+                  ))}
+                </div>
+              )}
 
               {canLabel && labelingFor === m.id && (
                 <div className={`mt-1.5 w-full sm:w-64 bg-white border border-stone-200 rounded-lg p-2 ${mine ? "self-end" : "self-start"}`}>

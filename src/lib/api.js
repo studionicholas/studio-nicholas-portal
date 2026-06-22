@@ -304,10 +304,10 @@ export async function signAudit() {
 
 // Email the finished signed PDF (as an attachment) to the client and the studio.
 // Best-effort; never blocks the signing flow.
-export async function sendSignedProposal({ pdfBase64, fileName, clientEmail, clientName, projectName, signedAtLabel }) {
+export async function sendSignedProposal({ pdfUrl, pdfBase64, fileName, clientEmail, clientName, projectName, signedAtLabel }) {
   try {
     await supabase.functions.invoke("sign-proposal", {
-      body: { action: "send", pdfBase64, fileName, clientEmail, clientName, projectName, signedAtLabel },
+      body: { action: "send", pdfUrl, pdfBase64, fileName, clientEmail, clientName, projectName, signedAtLabel },
     });
   } catch (e) {
     console.error("send signed proposal failed", e);

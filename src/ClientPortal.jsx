@@ -4680,6 +4680,12 @@ export default function App() {
           meetings: prev[activeCode].meetings.map((m) =>
             m.id === meetingId ? { ...m, rsvp, rsvps: { ...(m.rsvps || {}), [me]: rsvp } } : m
           ),
+          // Responding to an invite also clears any unread meeting alert on the
+          // bell — covers the case where the invite arrived while already on the
+          // Meetings tab (so the open-tab "seen" effect never re-fired).
+          notifications: (prev[activeCode].notifications || []).map((n) =>
+            n.type === "meeting" && !n.read ? { ...n, read: true } : n
+          ),
         },
       }));
     },

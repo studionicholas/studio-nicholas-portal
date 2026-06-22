@@ -1254,7 +1254,7 @@ function MessagesPanel({ messages, meRole, onSend, onReact, onPin, onLabel, onTa
         </div>
       )}
 
-      <div ref={listRef} onScroll={onListScroll} className="space-y-2 mb-4 max-h-[420px] overflow-y-auto overflow-x-hidden">
+      <div ref={listRef} onScroll={onListScroll} className="space-y-2 mb-4 max-h-[420px] overflow-y-auto overflow-x-hidden rounded-2xl border border-stone-200 bg-stone-50/70 p-3.5 shadow-inner">
         {messages.length === 0 && <EmptyState text="No messages yet." />}
         {messages.length > 0 && filtered.length === 0 && <EmptyState text="No messages match your search." />}
         {filtered.map((m) => {

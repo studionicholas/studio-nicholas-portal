@@ -1044,6 +1044,7 @@ function MessagesPanel({ messages, meRole, onSend, onReact, onPin, onLabel, onTa
   const [editingFor, setEditingFor] = useState(null);
   const [editText, setEditText] = useState("");
   const [query, setQuery] = useState("");
+  const [searchOpen, setSearchOpen] = useState(false);
   const [labelFilter, setLabelFilter] = useState(null);
   const [view, setView] = useState("chat"); // "chat" | "photos"
   const [photoTagFilter, setPhotoTagFilter] = useState(null);
@@ -1169,18 +1170,42 @@ function MessagesPanel({ messages, meRole, onSend, onReact, onPin, onLabel, onTa
       {view === "chat" && (
       <>
       {messages.length > 0 && (
-        <div className="mb-3">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-stone-400" />
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search messages…"
-              className="w-full pl-9 pr-3 py-2 rounded-lg border border-stone-300 text-[13px] focus:outline-none focus:ring-2 focus:ring-[#B7453C]"
-            />
-          </div>
+        <div className="mb-3 flex flex-wrap items-center gap-1.5">
+          {searchOpen ? (
+            <div className="relative flex-1 min-w-[150px]">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-stone-400" />
+              <input
+                autoFocus
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                onBlur={() => {
+                  if (!query) setSearchOpen(false);
+                }}
+                placeholder="Search messages…"
+                className="w-full pl-8 pr-7 py-1.5 rounded-lg border border-stone-300 text-[13px] focus:outline-none focus:ring-2 focus:ring-[#B7453C]"
+              />
+              <button
+                onClick={() => {
+                  setQuery("");
+                  setSearchOpen(false);
+                }}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-700"
+                aria-label="Close search"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => setSearchOpen(true)}
+              className="shrink-0 inline-flex items-center justify-center w-8 h-8 text-stone-400 hover:text-stone-700 border border-stone-200 rounded-lg"
+              aria-label="Search messages"
+            >
+              <Search className="w-4 h-4" />
+            </button>
+          )}
           {labels.length > 0 && (
-            <div className="flex flex-wrap gap-1.5 mt-2">
+            <>
               <button
                 onClick={() => setLabelFilter(null)}
                 className={`text-[11px] rounded-full px-2.5 py-0.5 border ${!labelFilter ? "border-stone-900 bg-stone-900 text-white" : "border-stone-200 text-stone-500"}`}
@@ -1196,7 +1221,7 @@ function MessagesPanel({ messages, meRole, onSend, onReact, onPin, onLabel, onTa
                   <Tag className="w-2.5 h-2.5" /> {l}
                 </button>
               ))}
-            </div>
+            </>
           )}
         </div>
       )}

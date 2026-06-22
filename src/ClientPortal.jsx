@@ -1874,6 +1874,19 @@ function Timeline({ milestones }) {
                   {m.title}
                 </h4>
                 {m.note && <p className="text-[13px] text-stone-500 leading-relaxed mt-1">{m.note}</p>}
+                {Array.isArray(m.deliverables) && m.deliverables.filter(Boolean).length > 0 && (
+                  <div className="mt-3">
+                    <p className="text-[11px] text-stone-400 uppercase tracking-wide mb-1.5">Deliverables</p>
+                    <ul className="space-y-1">
+                      {m.deliverables.filter(Boolean).map((d, di) => (
+                        <li key={di} className="flex gap-2 text-[13px] text-stone-600 leading-relaxed">
+                          <span className="mt-1.5 w-1 h-1 rounded-full bg-[#576B45] shrink-0" />
+                          <span>{d}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
               </div>
             </div>
           );
@@ -2957,6 +2970,7 @@ function AdminMilestones({ project, onAdd, onEdit, onSetStatus, onMove, onDelete
   const [endDate, setEndDate] = useState("");
   const [status, setStatus] = useState("upcoming");
   const [note, setNote] = useState("");
+  const [deliverables, setDeliverables] = useState("");
   const [editingId, setEditingId] = useState(null);
 
   const list = project.milestones;
@@ -2966,6 +2980,7 @@ function AdminMilestones({ project, onAdd, onEdit, onSetStatus, onMove, onDelete
     setEndDate("");
     setStatus("upcoming");
     setNote("");
+    setDeliverables("");
     setEditingId(null);
   };
   const startEdit = (m) => {
@@ -2974,6 +2989,7 @@ function AdminMilestones({ project, onAdd, onEdit, onSetStatus, onMove, onDelete
     setEndDate(m.endDate || "");
     setStatus(m.status);
     setNote(m.note || "");
+    setDeliverables((m.deliverables || []).join("\n"));
     setEditingId(m.id);
   };
 
@@ -3023,7 +3039,14 @@ function AdminMilestones({ project, onAdd, onEdit, onSetStatus, onMove, onDelete
         onSubmit={(e) => {
           e.preventDefault();
           if (!title.trim() || !date) return;
-          const data = { title: title.trim(), date, endDate, status, note: note.trim() };
+          const data = {
+            title: title.trim(),
+            date,
+            endDate,
+            status,
+            note: note.trim(),
+            deliverables: deliverables.split("\n").map((s) => s.trim()).filter(Boolean),
+          };
           if (editingId) onEdit(editingId, data);
           else onAdd(data);
           resetForm();
@@ -3052,12 +3075,23 @@ function AdminMilestones({ project, onAdd, onEdit, onSetStatus, onMove, onDelete
             <option value="done">Complete</option>
           </select>
         </div>
-        <input
+        <textarea
           value={note}
           onChange={(e) => setNote(e.target.value)}
-          placeholder="Short note (optional)"
-          className="w-full px-3 py-2 rounded-lg border border-stone-300 text-[14px] focus:outline-none focus:ring-2 focus:ring-[#B7453C]"
+          rows={2}
+          placeholder="Description (optional) — e.g. The concept stage is where the design direction is uncovered…"
+          className="w-full px-3 py-2 rounded-lg border border-stone-300 text-[14px] focus:outline-none focus:ring-2 focus:ring-[#B7453C] resize-none"
         />
+        <div>
+          <textarea
+            value={deliverables}
+            onChange={(e) => setDeliverables(e.target.value)}
+            rows={3}
+            placeholder={"Deliverables — one per line\nPresentation of Conceptual Designs\nVisual imagery capturing look and feel\nClient meeting"}
+            className="w-full px-3 py-2 rounded-lg border border-stone-300 text-[14px] focus:outline-none focus:ring-2 focus:ring-[#B7453C] resize-none"
+          />
+          <p className="text-[11px] text-stone-400 mt-1">One deliverable per line — these show as dot points on the client's timeline.</p>
+        </div>
         <div className="flex items-center gap-2">
           <button type="submit" className="bg-stone-900 text-white rounded-lg px-4 py-2 text-[13px] hover:bg-stone-800 transition-colors">
             {editingId ? "Save changes" : "Add phase"}
@@ -3977,7 +4011,7 @@ function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioSt
       const text = milestoneNotifText(data.status, data.title);
       return {
         ...p,
-        milestones: [...p.milestones, { id: uid(), title: data.title, date: data.date, endDate: data.endDate || "", status: data.status, note: data.note || "" }],
+        milestones: [...p.milestones, { id: uid(), title: data.title, date: data.date, endDate: data.endDate || "", status: data.status, note: data.note || "", deliverables: data.deliverables || [] }],
         notifications: text ? withNotif(p, "milestone", text) : p.notifications,
       };
     });
@@ -4007,7 +4041,7 @@ function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioSt
       const text = changed ? milestoneNotifText(data.status, data.title) : null;
       return {
         ...p,
-        milestones: p.milestones.map((m) => (m.id === id ? { ...m, title: data.title, date: data.date, endDate: data.endDate || "", status: data.status, note: data.note || "" } : m)),
+        milestones: p.milestones.map((m) => (m.id === id ? { ...m, title: data.title, date: data.date, endDate: data.endDate || "", status: data.status, note: data.note || "", deliverables: data.deliverables || [] } : m)),
         notifications: text ? withNotif(p, "milestone", text) : p.notifications,
       };
     });

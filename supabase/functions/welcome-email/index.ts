@@ -24,7 +24,7 @@ function emailHtml() {
   <tr><td align="center">
     <table width="520" cellpadding="0" cellspacing="0" style="max-width:520px;width:100%;background:#ffffff;border-radius:16px;overflow:hidden;border:1px solid #efe7df;">
       <tr><td style="font-size:0;line-height:0;">
-        <img src="${LOGIN_URL}/login.jpg" alt="Studio Nicholas" width="520" style="width:100%;max-width:520px;height:auto;display:block;">
+        <img src="${LOGIN_URL}/login.jpg" alt="Studio Nicholas" width="520" height="168" style="width:100%;max-width:520px;height:168px;object-fit:cover;object-position:center;display:block;">
       </td></tr>
       <tr><td style="height:4px;line-height:4px;font-size:0;background:${accent};">&nbsp;</td></tr>
       <tr><td style="padding:30px 44px 0;text-align:center;">

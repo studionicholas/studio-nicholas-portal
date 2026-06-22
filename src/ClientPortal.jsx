@@ -4014,10 +4014,11 @@ function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioSt
     const emails = (proj?.clients || []).map((c) => (c.email || "").trim().toLowerCase()).filter(Boolean);
     if (emails.length)
       api.notifyPush({ toEmails: emails, title: `${proj?.name || "Your project"} — fee proposal`, body: "Your fee proposal is ready to review and sign.", url: "/" });
-    const em = optedInEmails(proj);
-    if (em.length)
+    // A fee proposal is important/transactional, so email every client on the
+    // project (not only those opted in to general update emails).
+    if (emails.length)
       api.notifyEmail({
-        toEmails: em,
+        toEmails: emails,
         subject: `Your fee proposal is ready — ${proj?.name || "your project"}`,
         heading: "Your fee proposal is ready to sign",
         body: "We've shared your fee proposal in your portal. Open it to review and sign — it only takes a moment.",
@@ -4933,12 +4934,19 @@ export default function App() {
       const originalBytes = await bytesFromUrl(p.feeProposal.dataUrl);
       const fingerprint = await sha256Hex(originalBytes);
 
+      const dateOnly = when.toLocaleDateString("en-AU", {
+        day: "numeric",
+        month: "long",
+        year: "numeric",
+        timeZone: "Australia/Melbourne",
+      });
       const cert = {
         documentTitle: (p.feeProposal.name || "Fee Proposal").replace(/\.pdf$/i, ""),
         documentId,
         signerName: clientName,
         signerEmail: me,
         signedAtLabel,
+        dateOnly,
         ip: audit?.ip || "Recorded at signing",
         device: shortDevice(),
         projectName: p.name || "",

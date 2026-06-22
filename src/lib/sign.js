@@ -4,6 +4,10 @@
 // Completion" page carrying the audit trail. See [[studio-nicholas-esign]].
 
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
+import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf.mjs";
+import pdfWorkerUrl from "pdfjs-dist/legacy/build/pdf.worker.min.mjs?url";
+
+pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
 // Brand palette (see [[studio-nicholas-brand-colours]]).
 const INK = rgb(0.110, 0.102, 0.090); // #1C1A17
@@ -93,6 +97,46 @@ function chunkMono(text, font, size, maxWidth) {
   return lines;
 }
 
+// Locate the document's own "Acceptance" block (the page carrying "I hereby
+// accept…" with name / date / signature labels) and return the label positions,
+// so we can fill the client's details right there. Works for any proposal in the
+// template regardless of which page the block lands on. Returns null if absent.
+async function findAcceptance(bytes) {
+  try {
+    const doc = await pdfjsLib.getDocument({ data: bytes.slice(0) }).promise;
+    for (let n = 1; n <= doc.numPages; n++) {
+      const page = await doc.getPage(n);
+      const tc = await page.getTextContent();
+      const items = tc.items
+        .filter((it) => it && it.str != null)
+        .map((it) => ({
+          s: String(it.str).trim().toLowerCase(),
+          x: it.transform[4],
+          y: it.transform[5],
+          w: it.width || 0,
+          h: it.height || Math.abs(it.transform[3]) || 9,
+        }));
+      if (!items.some((i) => i.s.includes("hereby accept"))) continue;
+      const find = (label) => items.find((i) => i.s === label);
+      const name = find("name");
+      const date = find("date");
+      const sig = find("signature");
+      if (name || date || sig) {
+        try {
+          await doc.destroy();
+        } catch (_e) {}
+        return { pageIndex: n - 1, name, date, sig };
+      }
+    }
+    try {
+      await doc.destroy();
+    } catch (_e) {}
+  } catch (e) {
+    console.error("acceptance detect failed", e);
+  }
+  return null;
+}
+
 // --- main -------------------------------------------------------------------
 
 // cert: { documentTitle, documentId, signerName, signerEmail, signedAtLabel,
@@ -113,6 +157,31 @@ export async function buildSignedProposal({ originalBytes, signaturePng, cert })
       sigImg = await pdf.embedPng(dataUrlPngToBytes(signaturePng));
     } catch (_e) {
       sigImg = null;
+    }
+  }
+
+  // Fill the document's own Acceptance section (name / date / signature) so the
+  // signature sits right against the fee schedule and terms the client accepted.
+  const anchors = await findAcceptance(originalBytes);
+  if (anchors) {
+    const pages = pdf.getPages();
+    const pg = pages[anchors.pageIndex];
+    if (pg) {
+      const gap = 12;
+      if (anchors.name) {
+        pg.drawText(cert.signerName, { x: anchors.name.x + anchors.name.w + gap, y: anchors.name.y, size: 11, font: obl, color: INK });
+      }
+      if (anchors.date && cert.dateOnly) {
+        pg.drawText(cert.dateOnly, { x: anchors.date.x + anchors.date.w + gap, y: anchors.date.y, size: 11, font: helv, color: INK });
+      }
+      if (anchors.sig && sigImg) {
+        const sigX = anchors.sig.x + anchors.sig.w + gap;
+        const avail = pg.getWidth() - sigX - 24;
+        const maxW = Math.max(70, Math.min(150, avail));
+        const maxH = 28;
+        const scale = Math.min(maxW / sigImg.width, maxH / sigImg.height);
+        pg.drawImage(sigImg, { x: sigX, y: anchors.sig.y - 4, width: sigImg.width * scale, height: sigImg.height * scale });
+      }
     }
   }
 

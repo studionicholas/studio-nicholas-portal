@@ -86,6 +86,15 @@ function studioFirstName() {
   return (STUDIO_INFO.contactName || "Nicholas").trim().split(/\s+/)[0] || "Nicholas";
 }
 
+// A readable "sent at" timestamp for notification emails, e.g. "Sun, 22 Jun, 2:45 pm".
+function emailStamp() {
+  try {
+    return new Date().toLocaleString("en-AU", { weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit", hour12: true });
+  } catch (e) {
+    return new Date().toLocaleString();
+  }
+}
+
 /* ---------- Out-of-office auto-reply ---------- */
 function parseHM(s) {
   const [h, m] = (s || "").split(":").map((x) => parseInt(x, 10));
@@ -3684,7 +3693,17 @@ function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioSt
     const emails = (proj?.clients || []).map((c) => (c.email || "").trim().toLowerCase()).filter(Boolean);
     if (emails.length) api.notifyPush({ toEmails: emails, title: `${proj.name || "Your project"} — new update`, body: data.title, url: "/" });
     const em = optedInEmails(proj);
-    if (em.length) api.notifyEmail({ toEmails: em, subject: `${proj.name || "Your project"} — new update`, heading: data.title, body: data.note || "There's a new update on your project." });
+    if (em.length)
+      api.notifyEmail({
+        toEmails: em,
+        subject: `New update: ${data.title} — ${proj.name || "your project"}`,
+        heading: data.title,
+        body: data.note || "There's a new update on your project — open your portal to see it.",
+        projectName: proj.name,
+        senderName: STUDIO_INFO.contactName || "Studio Nicholas",
+        time: emailStamp(),
+        kind: "update",
+      });
     setShowNewUpdate(false);
   }
   function deleteUpdate(code, id) {
@@ -3803,7 +3822,17 @@ function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioSt
     const emails = (proj?.clients || []).map((c) => (c.email || "").trim().toLowerCase()).filter(Boolean);
     if (emails.length) api.notifyPush({ toEmails: emails, title: `${proj.name || "Your project"} — new message`, body: text && text.trim() ? text : "Sent a photo", url: "/" });
     const em = optedInEmails(proj);
-    if (em.length) api.notifyEmail({ toEmails: em, subject: `${proj.name || "Your project"} — new message`, heading: "You have a new message", body: text && text.trim() ? text : "There's a new message waiting in your portal." });
+    if (em.length)
+      api.notifyEmail({
+        toEmails: em,
+        subject: `New message from ${studioFirstName()} — ${proj.name || "your project"}`,
+        heading: "New message",
+        body: text && text.trim() ? text : "Sent you a photo — open your portal to view it.",
+        projectName: proj.name,
+        senderName: STUDIO_INFO.contactName || "Studio Nicholas",
+        time: emailStamp(),
+        kind: "message",
+      });
   }
   function reactMessage(code, id, emoji) {
     updateProject(code, (p) => ({ ...p, messages: toggleReaction(p.messages, id, emoji, "studio") }));

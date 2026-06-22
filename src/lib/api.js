@@ -269,10 +269,10 @@ export async function notifyPush({ toEmails, toStudio, title, body, url }) {
 }
 
 // Best-effort email to clients who opted in to email updates.
-export async function notifyEmail({ toEmails, subject, heading, body }) {
+export async function notifyEmail({ toEmails, subject, heading, body, projectName, senderName, time, kind }) {
   if (!toEmails || toEmails.length === 0) return;
   try {
-    await supabase.functions.invoke("notify-email", { body: { toEmails, subject, heading, body } });
+    await supabase.functions.invoke("notify-email", { body: { toEmails, subject, heading, body, projectName, senderName, time, kind } });
   } catch (e) {
     console.error("notify-email failed", e);
   }

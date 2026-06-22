@@ -15,25 +15,46 @@ const cors = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-function emailHtml(heading: string, body: string) {
+function esc(s: string) {
+  return String(s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+function emailHtml(o: { projectName?: string; heading?: string; body?: string; senderName?: string; time?: string; kind?: string }) {
+  const accent = "#9BACB6"; // brand aqua
+  const isUpdate = o.kind === "update";
+  const eyebrow = `${esc(o.projectName || "Your project")} &nbsp;·&nbsp; ${isUpdate ? "New update" : "New message"}`;
   return `
-<table width="100%" cellpadding="0" cellspacing="0" style="background:#F7F0EC;padding:32px 0;font-family:Georgia,serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#F7F0EC;padding:28px 12px;font-family:Georgia,'Times New Roman',serif;">
   <tr><td align="center">
-    <table width="480" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:14px;">
-      <tr><td style="padding:36px 40px 8px;text-align:center;">
-        <img src="${LOGIN_URL}/logo.png" alt="Studio Nicholas" width="170" style="max-width:170px;height:auto;">
+    <table width="520" cellpadding="0" cellspacing="0" style="max-width:520px;width:100%;background:#ffffff;border-radius:16px;overflow:hidden;border:1px solid #efe7df;">
+      <tr><td style="height:6px;line-height:6px;font-size:0;background:${accent};">&nbsp;</td></tr>
+      <tr><td style="padding:32px 44px 0;text-align:center;">
+        <img src="${LOGIN_URL}/logo.png" alt="Studio Nicholas" width="158" style="max-width:158px;height:auto;">
       </td></tr>
-      <tr><td style="padding:14px 40px 0;">
-        <h1 style="font-size:21px;font-style:italic;color:#1C1A17;margin:0 0 10px;font-weight:normal;">${heading}</h1>
-        <p style="font-size:15px;line-height:1.6;color:#57534e;margin:0 0 22px;font-family:Arial,sans-serif;">${body}</p>
+      <tr><td style="padding:14px 44px 0;text-align:center;">
+        <p style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:11px;letter-spacing:1.5px;text-transform:uppercase;color:#8a9aa3;">${eyebrow}</p>
       </td></tr>
-      <tr><td style="padding:0 40px 28px;text-align:center;">
-        <a href="${LOGIN_URL}" style="display:inline-block;background:#1C1A17;color:#ffffff;text-decoration:none;font-family:Arial,sans-serif;font-size:15px;padding:13px 30px;border-radius:8px;">Open your portal</a>
+      <tr><td style="padding:6px 44px 0;text-align:center;">
+        <h1 style="font-size:24px;font-style:italic;color:#1C1A17;margin:0;font-weight:normal;">${esc(o.heading || (isUpdate ? "New update" : "New message"))}</h1>
       </td></tr>
-      <tr><td style="padding:0 40px 34px;">
-        <p style="font-size:11px;line-height:1.6;color:#a8a29e;margin:0;font-family:Arial,sans-serif;">You're getting this because you asked for email updates on your project. You can reply to this email or message us in your portal.</p>
+      <tr><td style="padding:18px 44px 0;">
+        <table width="100%" cellpadding="0" cellspacing="0" style="background:#F7F0EC;border-radius:12px;">
+          <tr><td style="padding:16px 18px;border-left:3px solid ${accent};border-top-left-radius:12px;border-bottom-left-radius:12px;">
+            <p style="margin:0 0 12px;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.65;color:#44403c;">${esc(o.body || "")}</p>
+            <p style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#a8a29e;">
+              <strong style="color:#576b45;">${esc(o.senderName || "Studio Nicholas")}</strong>${o.time ? " &nbsp;·&nbsp; " + esc(o.time) : ""}
+            </p>
+          </td></tr>
+        </table>
+      </td></tr>
+      <tr><td style="padding:24px 44px 6px;text-align:center;">
+        <a href="${LOGIN_URL}" style="display:inline-block;background:#1C1A17;color:#ffffff;text-decoration:none;font-family:Arial,Helvetica,sans-serif;font-size:15px;padding:13px 34px;border-radius:9px;">Open your portal &nbsp;→</a>
+      </td></tr>
+      <tr><td style="padding:16px 44px 30px;text-align:center;">
+        <p style="font-size:11px;line-height:1.6;color:#b4a89d;margin:0;font-family:Arial,Helvetica,sans-serif;">You're getting this because you asked for email updates on your project. Reply to this email or message us in your portal.</p>
       </td></tr>
     </table>
+    <p style="font-family:Georgia,serif;font-style:italic;font-size:13px;color:#9c958c;margin:14px 0 0;">Studio Nicholas</p>
   </td></tr>
 </table>`;
 }
@@ -41,12 +62,12 @@ function emailHtml(heading: string, body: string) {
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   try {
-    const { toEmails = [], subject, heading, body } = await req.json();
+    const { toEmails = [], subject, heading, body, projectName, senderName, time, kind } = await req.json();
     const emails = [...new Set((toEmails || []).map((e: string) => (e || "").toLowerCase()).filter(Boolean))];
     if (emails.length === 0) {
       return new Response(JSON.stringify({ sent: 0 }), { headers: { ...cors, "Content-Type": "application/json" } });
     }
-    const html = emailHtml(heading || "You have a new update", body || "");
+    const html = emailHtml({ projectName, heading, body, senderName, time, kind });
     let sent = 0;
     await Promise.all(
       emails.map(async (to) => {

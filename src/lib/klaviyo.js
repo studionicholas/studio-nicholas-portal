@@ -8,8 +8,8 @@
 //   LIST ID     – Klaviyo → Audience → Lists & Segments → open your list →
 //                 Settings (or the URL), the List ID (6 chars)
 
-const KLAVIYO_PUBLIC_KEY = ""; // e.g. "AbC123"
-const KLAVIYO_LIST_ID = ""; // e.g. "XyZ987"
+const KLAVIYO_PUBLIC_KEY = "RiR6KU"; // Studio Nicholas public API key / Site ID
+const KLAVIYO_LIST_ID = "TKWRew"; // Portal sign-ups list
 
 export const klaviyoConfigured = () => !!(KLAVIYO_PUBLIC_KEY && KLAVIYO_LIST_ID);
 

@@ -3218,12 +3218,18 @@ function AdminFeatures({ project, onToggle }) {
 function StudioSettingsPanel({ studioStatus, studioStatusColor, onChangeStatus, onChangeStatusColor, onSaveStatus, loginImage, loginMessage, studioInfo, onSaveInfo, autoReply, onSaveAutoReply, viewerEmail, onSave }) {
   const [pPerm, setPPerm] = useState(() => (api.pushSupported() ? api.pushPermission() : "unsupported"));
   const [pBusy, setPBusy] = useState(false);
+  const [pErr, setPErr] = useState("");
+  const [pOk, setPOk] = useState(false);
   async function enableStudioPush() {
     setPBusy(true);
+    setPErr("");
+    setPOk(false);
     try {
-      await api.enablePush(viewerEmail);
+      const ok = await api.enablePush(viewerEmail);
+      if (ok) setPOk(true);
+      else setPErr("You didn't allow notifications in the browser prompt.");
     } catch (e) {
-      console.error(e);
+      setPErr("Couldn't register this device: " + (e?.message || String(e)));
     }
     setPPerm(api.pushPermission());
     setPBusy(false);
@@ -3313,24 +3319,25 @@ function StudioSettingsPanel({ studioStatus, studioStatusColor, onChangeStatus, 
               <p className="text-[14px] text-stone-800">Push notifications</p>
               <p className="text-[12px] text-stone-400">Get a pop-up on this device when a client sends a message.</p>
             </div>
-            {pPerm === "granted" ? (
-              <span className="shrink-0 text-[12px] text-[#576B45]">On ✓</span>
-            ) : api.pushSupported() && pPerm === "default" ? (
+            {pOk ? (
+              <span className="shrink-0 text-[12px] text-[#576B45]">Registered ✓</span>
+            ) : api.pushSupported() && pPerm !== "denied" ? (
               <button
                 onClick={enableStudioPush}
                 disabled={pBusy}
                 className="shrink-0 bg-stone-900 text-white text-[12px] rounded-lg px-3 py-1.5 hover:bg-stone-800 transition-colors disabled:opacity-50"
               >
-                {pBusy ? "…" : "Allow"}
+                {pBusy ? "…" : pPerm === "granted" ? "Re-register this device" : "Allow"}
               </button>
             ) : null}
           </div>
+          {pErr && <p className="text-[12px] text-red-600 mt-2.5">{pErr}</p>}
           {pPerm === "denied" ? (
             <p className="text-[12px] text-stone-400 mt-2.5">Notifications are blocked on this device — switch them back on in your browser's site settings, then come back here.</p>
           ) : !api.pushSupported() ? (
-            <p className="text-[12px] text-stone-400 mt-2.5">On iPhone, add this to your home screen first (Share → Add to Home Screen), open it from the icon, then allow notifications. Turn it on for each device you want alerts on.</p>
+            <p className="text-[12px] text-stone-400 mt-2.5">On iPhone, add this to your home screen first (Share → Add to Home Screen), open it from the icon, then allow notifications.</p>
           ) : (
-            <p className="text-[12px] text-stone-400 mt-2.5">Turn this on for every device you want to be alerted on (phone + computer). On iPhone, add it to your home screen first.</p>
+            <p className="text-[12px] text-stone-400 mt-2.5">Tap to register this device. Do it on every device you want alerts on (phone + computer). On iPhone, add it to your home screen first.</p>
           )}
         </div>
       </AdminSection>

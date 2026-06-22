@@ -2023,9 +2023,10 @@ function SignaturePad({ onChange }) {
   );
 }
 
-// Review-and-sign card for the client's Fee tab. Three states: nothing issued
-// yet, ready to sign, or already signed (locked, view/download only).
-function SignProposalCard({ proposal, signed, projectName, clientName, clientEmail, onSign }) {
+// One bubble for the client's Fee tab: the proposal at the top, then (once a
+// proposal is shared) a divider and the review-and-sign section below it — or
+// the signed-and-accepted summary once it's done.
+function SignProposalCard({ proposal, signed, projectName, clientName, clientEmail, onSign, note, emptyText }) {
   const nameParts = (clientName || "").trim().split(/\s+/).filter(Boolean);
   const [first, setFirst] = useState(nameParts.length > 1 ? nameParts[0] : nameParts[0] || "");
   const [last, setLast] = useState(nameParts.length > 1 ? nameParts.slice(1).join(" ") : "");
@@ -2033,53 +2034,6 @@ function SignProposalCard({ proposal, signed, projectName, clientName, clientEma
   const [agree, setAgree] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-
-  if (signed) {
-    return (
-      <div className="border border-stone-200 rounded-xl bg-white p-5">
-        <div className="flex items-start gap-4">
-          <div className="w-11 h-11 rounded-lg bg-[#D1D2C9] flex items-center justify-center shrink-0">
-            <CheckCircle2 className="w-5 h-5 text-[#576B45]" />
-          </div>
-          <div className="min-w-0 flex-1">
-            <h3 className="text-[16px] text-stone-900" style={{ fontFamily: "Selva, Georgia, serif", fontStyle: "italic" }}>
-              Signed &amp; accepted
-            </h3>
-            <p className="text-[14px] text-stone-700 mt-1 break-words">{signed.name}</p>
-            <p className="text-[12px] text-stone-400 mt-0.5">
-              Signed {formatDate(signed.date)}
-              {signed.documentId ? ` · ${signed.documentId}` : ""}
-            </p>
-            {signed.dataUrl && (
-              <div className="flex flex-wrap gap-2 mt-4">
-                <button onClick={() => openDoc(signed)} className="inline-flex items-center gap-1.5 text-[13px] bg-stone-900 text-white rounded-full px-4 py-2 hover:bg-stone-800 transition-colors">
-                  <ExternalLink className="w-3.5 h-3.5" /> View
-                </button>
-                <button onClick={() => downloadFile(signed)} className="inline-flex items-center gap-1.5 text-[13px] text-stone-700 border border-stone-300 rounded-full px-4 py-2 hover:bg-stone-100 transition-colors">
-                  <Download className="w-3.5 h-3.5" /> Download
-                </button>
-              </div>
-            )}
-            <p className="text-[12px] text-stone-400 mt-3 flex items-start gap-1.5">
-              <Lock className="w-3.5 h-3.5 text-[#576B45] mt-0.5 shrink-0" />
-              <span>Your signed proposal is saved here to view or download any time. A copy was emailed to you. Need a change? Just message the studio.</span>
-            </p>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (!proposal) {
-    return (
-      <div className="border border-stone-200 rounded-xl bg-white p-5">
-        <h3 className="text-[16px] text-stone-900" style={{ fontFamily: "Selva, Georgia, serif", fontStyle: "italic" }}>
-          Sign your proposal
-        </h3>
-        <p className="text-[13px] text-stone-400 mt-2">Your fee proposal will appear here to review and sign once the studio shares it.</p>
-      </div>
-    );
-  }
 
   async function submit() {
     if (!first.trim() || !last.trim()) {
@@ -2098,8 +2052,8 @@ function SignProposalCard({ proposal, signed, projectName, clientName, clientEma
     setError("");
     try {
       await onSign(sig, `${first.trim()} ${last.trim()}`);
-      // On success the parent sets `signed`, which swaps this card to the
-      // signed state, so there's nothing else to reset here.
+      // On success the parent sets `signed`, swapping the lower section to the
+      // signed summary, so there's nothing else to reset here.
     } catch (e) {
       console.error(e);
       setError(e?.message || "Sorry — something went wrong while signing. Please try again.");
@@ -2109,67 +2063,142 @@ function SignProposalCard({ proposal, signed, projectName, clientName, clientEma
 
   return (
     <div className="border border-stone-200 rounded-xl bg-white p-5">
-      <h3 className="text-[16px] text-stone-900" style={{ fontFamily: "Selva, Georgia, serif", fontStyle: "italic" }}>
-        Review &amp; sign
-      </h3>
-      <p className="text-[13px] text-stone-500 leading-relaxed mt-1">
-        Read the full proposal above, then add your name and signature below to accept. A signed PDF copy is emailed to you the moment you sign.
-      </p>
-      <div className="grid grid-cols-2 gap-2 mt-4">
-        <div>
-          <label className="text-[11px] text-stone-400">First name</label>
-          <input
-            value={first}
-            onChange={(e) => {
-              setFirst(e.target.value);
-              setError("");
-            }}
-            placeholder="First name"
-            className="w-full mt-1 px-3 py-2 rounded-lg border border-stone-300 text-[14px] focus:outline-none focus:ring-2 focus:ring-[#B7453C]"
-          />
+      {/* The fee proposal itself */}
+      <div className="flex items-start gap-4">
+        <div className="w-11 h-11 rounded-lg bg-[#F7F0EC] flex items-center justify-center shrink-0">
+          <FileText className="w-5 h-5 text-stone-500" />
         </div>
-        <div>
-          <label className="text-[11px] text-stone-400">Last name</label>
-          <input
-            value={last}
-            onChange={(e) => {
-              setLast(e.target.value);
-              setError("");
-            }}
-            placeholder="Last name"
-            className="w-full mt-1 px-3 py-2 rounded-lg border border-stone-300 text-[14px] focus:outline-none focus:ring-2 focus:ring-[#B7453C]"
-          />
-        </div>
-      </div>
-      <div className="mt-3">
-        <label className="text-[11px] text-stone-400">Signature</label>
-        <div className="mt-1">
-          <SignaturePad
-            onChange={(v) => {
-              setSig(v);
-              setError("");
-            }}
-          />
+        <div className="min-w-0 flex-1">
+          <h3 className="text-[16px] text-stone-900" style={{ fontFamily: "Selva, Georgia, serif", fontStyle: "italic" }}>
+            Fee proposal
+          </h3>
+          {proposal ? (
+            <>
+              <p className="text-[14px] text-stone-700 mt-1 break-words">{proposal.name}</p>
+              <p className="text-[12px] text-stone-400 mt-0.5">
+                Issued {formatDate(proposal.date)}
+                {proposal.size != null && ` · ${formatBytes(proposal.size)}`}
+              </p>
+              {note && <p className="text-[13px] text-stone-500 leading-relaxed mt-3">{note}</p>}
+              {proposal.dataUrl ? (
+                <div className="flex flex-wrap gap-2 mt-4">
+                  <button onClick={() => openDoc(proposal)} className="inline-flex items-center gap-1.5 text-[13px] bg-stone-900 text-white rounded-full px-4 py-2 hover:bg-stone-800 transition-colors">
+                    <ExternalLink className="w-3.5 h-3.5" /> View
+                  </button>
+                  <button onClick={() => downloadFile(proposal)} className="inline-flex items-center gap-1.5 text-[13px] text-stone-700 border border-stone-300 rounded-full px-4 py-2 hover:bg-stone-100 transition-colors">
+                    <Download className="w-3.5 h-3.5" /> Download
+                  </button>
+                </div>
+              ) : (
+                <span className="text-[12px] text-stone-400">Sample document — upload a real file in admin to enable view &amp; download.</span>
+              )}
+            </>
+          ) : (
+            <p className="text-[13px] text-stone-400 mt-1">{emptyText}</p>
+          )}
         </div>
       </div>
-      <label className="flex gap-2.5 items-start mt-4 cursor-pointer">
-        <input type="checkbox" checked={agree} onChange={(e) => setAgree(e.target.checked)} className="mt-0.5 w-4 h-4 accent-[#576B45]" />
-        <span className="text-[12.5px] text-stone-600 leading-relaxed">
-          I agree to sign this document electronically. I understand my electronic signature is the legal equivalent of my handwritten signature (Electronic Transactions Act 1999).
-        </span>
-      </label>
-      {error && <p className="text-[12px] text-red-600 mt-2">{error}</p>}
-      <button
-        onClick={submit}
-        disabled={busy}
-        className="w-full mt-4 bg-stone-900 text-white rounded-lg py-3 text-[14px] hover:bg-stone-800 transition-colors disabled:opacity-60 flex items-center justify-center gap-2"
-      >
-        {busy ? "Preparing your signed copy…" : (
-          <>
-            Sign &amp; accept proposal <ChevronRight className="w-4 h-4" />
-          </>
-        )}
-      </button>
+
+      {/* Sign / signed section — flows on from the proposal above */}
+      {proposal && (
+        <div className="mt-5 pt-5 border-t border-stone-200">
+          {signed ? (
+            <div className="flex items-start gap-4">
+              <div className="w-11 h-11 rounded-lg bg-[#D1D2C9] flex items-center justify-center shrink-0">
+                <CheckCircle2 className="w-5 h-5 text-[#576B45]" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <h3 className="text-[16px] text-stone-900" style={{ fontFamily: "Selva, Georgia, serif", fontStyle: "italic" }}>
+                  Signed &amp; accepted
+                </h3>
+                <p className="text-[14px] text-stone-700 mt-1 break-words">{signed.name}</p>
+                <p className="text-[12px] text-stone-400 mt-0.5">
+                  Signed {formatDate(signed.date)}
+                  {signed.documentId ? ` · ${signed.documentId}` : ""}
+                </p>
+                {signed.dataUrl && (
+                  <div className="flex flex-wrap gap-2 mt-4">
+                    <button onClick={() => openDoc(signed)} className="inline-flex items-center gap-1.5 text-[13px] bg-stone-900 text-white rounded-full px-4 py-2 hover:bg-stone-800 transition-colors">
+                      <ExternalLink className="w-3.5 h-3.5" /> View
+                    </button>
+                    <button onClick={() => downloadFile(signed)} className="inline-flex items-center gap-1.5 text-[13px] text-stone-700 border border-stone-300 rounded-full px-4 py-2 hover:bg-stone-100 transition-colors">
+                      <Download className="w-3.5 h-3.5" /> Download
+                    </button>
+                  </div>
+                )}
+                <p className="text-[12px] text-stone-400 mt-3 flex items-start gap-1.5">
+                  <Lock className="w-3.5 h-3.5 text-[#576B45] mt-0.5 shrink-0" />
+                  <span>Your signed proposal is saved here to view or download any time. A copy was emailed to you. Need a change? Just message the studio.</span>
+                </p>
+              </div>
+            </div>
+          ) : (
+            <>
+              <h3 className="text-[16px] text-stone-900" style={{ fontFamily: "Selva, Georgia, serif", fontStyle: "italic" }}>
+                Review &amp; sign
+              </h3>
+              <p className="text-[13px] text-stone-500 leading-relaxed mt-1">
+                Read the proposal above, then add your name and signature to accept. A signed PDF copy is emailed to you the moment you sign.
+              </p>
+              <div className="grid grid-cols-2 gap-2 mt-4">
+                <div>
+                  <label className="text-[11px] text-stone-400">First name</label>
+                  <input
+                    value={first}
+                    onChange={(e) => {
+                      setFirst(e.target.value);
+                      setError("");
+                    }}
+                    placeholder="First name"
+                    className="w-full mt-1 px-3 py-2 rounded-lg border border-stone-300 text-[14px] focus:outline-none focus:ring-2 focus:ring-[#B7453C]"
+                  />
+                </div>
+                <div>
+                  <label className="text-[11px] text-stone-400">Last name</label>
+                  <input
+                    value={last}
+                    onChange={(e) => {
+                      setLast(e.target.value);
+                      setError("");
+                    }}
+                    placeholder="Last name"
+                    className="w-full mt-1 px-3 py-2 rounded-lg border border-stone-300 text-[14px] focus:outline-none focus:ring-2 focus:ring-[#B7453C]"
+                  />
+                </div>
+              </div>
+              <div className="mt-3">
+                <label className="text-[11px] text-stone-400">Signature</label>
+                <div className="mt-1">
+                  <SignaturePad
+                    onChange={(v) => {
+                      setSig(v);
+                      setError("");
+                    }}
+                  />
+                </div>
+              </div>
+              <label className="flex gap-2.5 items-start mt-4 cursor-pointer">
+                <input type="checkbox" checked={agree} onChange={(e) => setAgree(e.target.checked)} className="mt-0.5 w-4 h-4 accent-[#576B45]" />
+                <span className="text-[12.5px] text-stone-600 leading-relaxed">
+                  I agree to sign this document electronically. I understand my electronic signature is the legal equivalent of my handwritten signature (Electronic Transactions Act 1999).
+                </span>
+              </label>
+              {error && <p className="text-[12px] text-red-600 mt-2">{error}</p>}
+              <button
+                onClick={submit}
+                disabled={busy}
+                className="w-full mt-4 bg-stone-900 text-white rounded-lg py-3 text-[14px] hover:bg-stone-800 transition-colors disabled:opacity-60 flex items-center justify-center gap-2"
+              >
+                {busy ? "Preparing your signed copy…" : (
+                  <>
+                    Sign &amp; accept proposal <ChevronRight className="w-4 h-4" />
+                  </>
+                )}
+              </button>
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -2557,23 +2586,16 @@ function ClientDashboard({ project, viewerEmail, studioStatus, studioStatusColor
           )}
 
           {activeTab === "fee" && (
-            <div className="space-y-4">
-              <FeeDocCard
-                label="Fee proposal"
-                dateLabel="Issued"
-                file={project.feeProposal}
-                note={project.feeProposal?.note}
-                emptyText={`Your fee proposal will appear here once ${studioFirstName()} has shared it.`}
-              />
-              <SignProposalCard
-                proposal={project.feeProposal}
-                signed={project.feeProposalSigned}
-                projectName={project.name}
-                clientName={myClient?.name || project.clientName}
-                clientEmail={viewerEmail}
-                onSign={onSignProposal}
-              />
-            </div>
+            <SignProposalCard
+              proposal={project.feeProposal}
+              signed={project.feeProposalSigned}
+              projectName={project.name}
+              clientName={myClient?.name || project.clientName}
+              clientEmail={viewerEmail}
+              onSign={onSignProposal}
+              note={project.feeProposal?.note}
+              emptyText={`Your fee proposal will appear here to review and sign once ${studioFirstName()} has shared it.`}
+            />
           )}
 
           {activeTab === "about" && (

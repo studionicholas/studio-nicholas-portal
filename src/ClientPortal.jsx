@@ -2282,7 +2282,7 @@ function ClientDashboard({ project, viewerEmail, studioStatus, studioStatusColor
           })}
         </div>
 
-        <div className="py-8">
+        <div className={`pb-8 ${activeTab === "messages" ? "pt-4" : "pt-8"}`}>
           {activeTab === "updates" && (
             <div className="space-y-10">
               {project.updates.length === 0 && <EmptyState text="No project updates yet. They'll appear here as soon as they're posted." />}
@@ -3523,7 +3523,7 @@ function AdminBell({ projects, onOpen }) {
       {open && (
         <>
           <div className="fixed inset-0 z-20" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 mt-2 w-64 bg-white border border-stone-200 rounded-lg shadow-lg z-30 overflow-hidden">
+          <div className="fixed top-14 right-3 sm:absolute sm:top-auto sm:right-0 sm:mt-2 w-64 max-w-[calc(100vw-1.5rem)] bg-white border border-stone-200 rounded-lg shadow-lg z-30 overflow-hidden">
             <p className="px-3 py-2 text-[11px] text-stone-400 uppercase tracking-wide border-b border-stone-100">New messages</p>
             {items.length === 0 ? (
               <p className="px-3 py-3 text-[13px] text-stone-400">No new messages from clients.</p>

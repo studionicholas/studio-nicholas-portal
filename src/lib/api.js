@@ -314,6 +314,19 @@ export async function sendSignedProposal({ pdfUrl, pdfBase64, fileName, clientEm
   }
 }
 
+// Email the studio mailbox (info@) when something needs the studio's attention —
+// a client activating their account, signing, or sending a message. Reliable
+// backstop to push (which only lands if the studio device is subscribed).
+export async function notifyStudioEmail({ subject, heading, body, projectName, time }) {
+  try {
+    await supabase.functions.invoke("notify-email", {
+      body: { audience: "studio", subject, heading, body, projectName, time },
+    });
+  } catch (e) {
+    console.error("notify studio email failed", e);
+  }
+}
+
 // Tell the studio (push) that a client has signed their fee proposal.
 export async function notifyStudioProposalSigned({ clientName, projectName }) {
   return notifyPush({

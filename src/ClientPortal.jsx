@@ -4591,8 +4591,15 @@ function SetPassword({ onDone }) {
     else {
       const email = data?.user?.email;
       if (email) api.sendSetupEmail(email); // best-effort confirmation email to the client
-      // Tell the studio the account is live (first-time invite setup only, not resets).
-      if (email && api.isInviteSetup) api.notifyStudioClientReady(email);
+      // Tell the studio the account is live (first-time invite setup only, not resets) — push + email.
+      if (email && api.isInviteSetup) {
+        api.notifyStudioClientReady(email);
+        api.notifyStudioEmail({
+          subject: "A client set up their portal",
+          heading: "New client account ready",
+          body: `${email} has set their password and can now access their portal — you can message them and they'll receive it.`,
+        });
+      }
       onDone();
     }
   }
@@ -4921,9 +4928,18 @@ export default function App() {
           messages: [...prev[activeCode].messages, { id: uid(), from: "client", fromEmail: me, text, photos: photos || [], date: new Date().toISOString(), replyTo, reactions: [], pinned: false }],
         },
       }));
-      api.notifyPush({ toStudio: true, title: "New message from a client", body: text && text.trim() ? text : "Sent a photo", url: "/" });
+      const proj = projects[activeCode];
+      const body = text && text.trim() ? text : "Sent a photo";
+      api.notifyPush({ toStudio: true, title: "New message from a client", body, url: "/" });
+      api.notifyStudioEmail({
+        subject: `New client message${proj?.name ? " — " + proj.name : ""}`,
+        heading: "New message from a client",
+        body,
+        projectName: proj?.name,
+        time: emailStamp(),
+      });
     },
-    [activeCode, session]
+    [activeCode, session, projects]
   );
 
   const handleSetEmailNotify = useCallback(
@@ -5097,6 +5113,13 @@ export default function App() {
         signedAtLabel,
       });
       api.notifyStudioProposalSigned({ clientName, projectName: p.name });
+      api.notifyStudioEmail({
+        subject: `Fee proposal signed${p.name ? " — " + p.name : ""}`,
+        heading: "Fee proposal signed & accepted",
+        body: `${clientName} signed the fee proposal${p.name ? " for " + p.name : ""}. The signed PDF is attached in the separate "Your signed fee proposal" email.`,
+        projectName: p.name,
+        time: signedAtLabel,
+      });
     },
     [activeCode, session, projects]
   );

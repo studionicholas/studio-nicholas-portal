@@ -8,6 +8,7 @@
 
 const RESEND = Deno.env.get("RESEND_API_KEY") ?? "";
 const FROM = Deno.env.get("WELCOME_FROM") ?? "Studio Nicholas <info@studionicholas.com.au>";
+const STUDIO_EMAIL = Deno.env.get("STUDIO_EMAIL") ?? "info@studionicholas.com.au";
 const LOGIN_URL = "https://portal.studionicholas.com.au";
 
 const cors = {
@@ -19,10 +20,16 @@ function esc(s: string) {
   return String(s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
-function emailHtml(o: { projectName?: string; heading?: string; body?: string; senderName?: string; time?: string; kind?: string }) {
+function emailHtml(o: { projectName?: string; heading?: string; body?: string; senderName?: string; time?: string; kind?: string; audience?: string }) {
   const accent = "#9BACB6"; // brand aqua
+  const isStudio = o.audience === "studio";
   const isUpdate = o.kind === "update";
-  const eyebrow = `${esc(o.projectName || "Your project")} &nbsp;·&nbsp; ${isUpdate ? "New update" : "New message"}`;
+  const eyebrow = isStudio
+    ? `${esc(o.projectName || "Studio Nicholas")} &nbsp;·&nbsp; Studio alert`
+    : `${esc(o.projectName || "Your project")} &nbsp;·&nbsp; ${isUpdate ? "New update" : "New message"}`;
+  const footer = isStudio
+    ? "Automated alert from your Studio Nicholas portal."
+    : "You're getting this because you asked for email updates on your project. Reply to this email or message us in your portal.";
   return `
 <table width="100%" cellpadding="0" cellspacing="0" style="background:#F7F0EC;padding:28px 12px;font-family:Georgia,'Times New Roman',serif;">
   <tr><td align="center">
@@ -51,7 +58,7 @@ function emailHtml(o: { projectName?: string; heading?: string; body?: string; s
         <a href="${LOGIN_URL}" style="display:inline-block;background:#1C1A17;color:#ffffff;text-decoration:none;font-family:Arial,Helvetica,sans-serif;font-size:15px;padding:13px 34px;border-radius:9px;">Open your portal &nbsp;→</a>
       </td></tr>
       <tr><td style="padding:16px 44px 30px;text-align:center;">
-        <p style="font-size:11px;line-height:1.6;color:#b4a89d;margin:0;font-family:Arial,Helvetica,sans-serif;">You're getting this because you asked for email updates on your project. Reply to this email or message us in your portal.</p>
+        <p style="font-size:11px;line-height:1.6;color:#b4a89d;margin:0;font-family:Arial,Helvetica,sans-serif;">${footer}</p>
       </td></tr>
     </table>
     <p style="font-family:Georgia,serif;font-style:italic;font-size:13px;color:#9c958c;margin:14px 0 0;">Studio Nicholas</p>
@@ -62,12 +69,17 @@ function emailHtml(o: { projectName?: string; heading?: string; body?: string; s
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   try {
-    const { toEmails = [], subject, heading, body, projectName, senderName, time, kind } = await req.json();
-    const emails = [...new Set((toEmails || []).map((e: string) => (e || "").toLowerCase()).filter(Boolean))];
+    const { toEmails = [], audience, subject, heading, body, projectName, senderName, time, kind } = await req.json();
+    // Studio alerts go to the studio mailbox (kept server-side); client alerts go
+    // to the opted-in recipients passed in.
+    const emails =
+      audience === "studio"
+        ? [STUDIO_EMAIL.toLowerCase()]
+        : [...new Set((toEmails || []).map((e: string) => (e || "").toLowerCase()).filter(Boolean))];
     if (emails.length === 0) {
       return new Response(JSON.stringify({ sent: 0 }), { headers: { ...cors, "Content-Type": "application/json" } });
     }
-    const html = emailHtml({ projectName, heading, body, senderName, time, kind });
+    const html = emailHtml({ projectName, heading, body, senderName, time, kind, audience });
     let sent = 0;
     await Promise.all(
       emails.map(async (to) => {

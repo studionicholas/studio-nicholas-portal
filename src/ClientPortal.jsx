@@ -2173,10 +2173,15 @@ function ClientDashboard({ project, viewerEmail, studioStatus, studioStatusColor
   const activeTab = tabs.some((t) => t.id === tab) ? tab : tabs[0]?.id;
 
   // Opening a tab clears its red dot (marks that tab's notifications seen).
+  // Also watches the unread count for the current tab, so an alert that arrives
+  // (via realtime) while you're already on that tab still clears itself instead
+  // of sticking until you switch away and back.
+  const unreadHere = activeTab === "messages" ? unreadForClient(project) : activeTab ? newForTab(activeTab) : 0;
   useEffect(() => {
+    if (!activeTab || unreadHere === 0) return;
     if (activeTab === "messages") onMarkRead();
-    else if (activeTab) onSeenTab(activeTab);
-  }, [activeTab, onMarkRead, onSeenTab]);
+    else onSeenTab(activeTab);
+  }, [activeTab, unreadHere, onMarkRead, onSeenTab]);
 
   return (
     <div className="min-h-screen bg-[#F7F0EC] overflow-x-hidden">

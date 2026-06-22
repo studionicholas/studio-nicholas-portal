@@ -494,6 +494,26 @@ function downloadFile(f) {
   a.remove();
 }
 
+// Open a stored document in a new tab. Browsers (Chrome especially) block
+// navigating to a `data:` URL as a top-level page (you land on about:blank#blocked),
+// so for inline docs we convert to a short-lived Blob URL first; remote (storage)
+// URLs open directly.
+function openDoc(f) {
+  if (!f || !f.dataUrl) return;
+  const url = f.dataUrl;
+  if (url.startsWith("data:")) {
+    try {
+      const blobUrl = URL.createObjectURL(dataUrlToBlob(url));
+      window.open(blobUrl, "_blank", "noopener");
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
+      return;
+    } catch (e) {
+      console.error("open doc failed", e);
+    }
+  }
+  window.open(url, "_blank", "noopener");
+}
+
 function escapeICS(s) {
   return String(s).replace(/\\/g, "\\\\").replace(/;/g, "\\;").replace(/,/g, "\\,").replace(/\n/g, "\\n");
 }
@@ -1886,14 +1906,12 @@ function FeeDocCard({ label, dateLabel, file, note, emptyText }) {
               <div className="flex flex-wrap gap-2 mt-4">
                 {file.dataUrl ? (
                   <>
-                    <a
-                      href={file.dataUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
+                    <button
+                      onClick={() => openDoc(file)}
                       className="inline-flex items-center gap-1.5 text-[13px] bg-stone-900 text-white rounded-full px-4 py-2 hover:bg-stone-800 transition-colors"
                     >
                       <ExternalLink className="w-3.5 h-3.5" /> View
-                    </a>
+                    </button>
                     <button
                       onClick={() => downloadFile(file)}
                       className="inline-flex items-center gap-1.5 text-[13px] text-stone-700 border border-stone-300 rounded-full px-4 py-2 hover:bg-stone-100 transition-colors"
@@ -2031,9 +2049,9 @@ function SignProposalCard({ proposal, signed, projectName, clientName, clientEma
             </p>
             {signed.dataUrl && (
               <div className="flex flex-wrap gap-2 mt-4">
-                <a href={signed.dataUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-[13px] bg-stone-900 text-white rounded-full px-4 py-2 hover:bg-stone-800 transition-colors">
+                <button onClick={() => openDoc(signed)} className="inline-flex items-center gap-1.5 text-[13px] bg-stone-900 text-white rounded-full px-4 py-2 hover:bg-stone-800 transition-colors">
                   <ExternalLink className="w-3.5 h-3.5" /> View
-                </a>
+                </button>
                 <button onClick={() => downloadFile(signed)} className="inline-flex items-center gap-1.5 text-[13px] text-stone-700 border border-stone-300 rounded-full px-4 py-2 hover:bg-stone-100 transition-colors">
                   <Download className="w-3.5 h-3.5" /> Download
                 </button>
@@ -3176,7 +3194,17 @@ function AdminDocSlot({ label, dateLabel, file, onSet, onRemove, hint }) {
     }
     setBusy(true);
     try {
-      const dataUrl = await readFileAsDataURL(f);
+      // Prefer fast storage (keeps the project record small so it syncs to the
+      // client reliably and opens as a normal URL). Fall back to inline if the
+      // storage bucket isn't set up yet.
+      let dataUrl;
+      try {
+        const ext = f.name.split(".").pop()?.toLowerCase() || "pdf";
+        dataUrl = await api.uploadMedia(f, ext);
+      } catch (up) {
+        console.error("doc storage upload failed, embedding inline", up);
+        dataUrl = await readFileAsDataURL(f);
+      }
       onSet({ name: f.name, date: today(), size: f.size, dataUrl });
     } catch (err) {
       setError(`Couldn't read "${f.name}".`);
@@ -3982,6 +4010,22 @@ function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioSt
 
   function setIssuedProposal(code, file) {
     updateProject(code, (p) => ({ ...p, feeProposal: file, notifications: withNotif(p, "fee", "Fee proposal shared") }));
+    const proj = projects[code];
+    const emails = (proj?.clients || []).map((c) => (c.email || "").trim().toLowerCase()).filter(Boolean);
+    if (emails.length)
+      api.notifyPush({ toEmails: emails, title: `${proj?.name || "Your project"} — fee proposal`, body: "Your fee proposal is ready to review and sign.", url: "/" });
+    const em = optedInEmails(proj);
+    if (em.length)
+      api.notifyEmail({
+        toEmails: em,
+        subject: `Your fee proposal is ready — ${proj?.name || "your project"}`,
+        heading: "Your fee proposal is ready to sign",
+        body: "We've shared your fee proposal in your portal. Open it to review and sign — it only takes a moment.",
+        projectName: proj?.name,
+        senderName: STUDIO_INFO.contactName || "Studio Nicholas",
+        time: emailStamp(),
+        kind: "update",
+      });
   }
   function removeIssuedProposal(code) {
     updateProject(code, (p) => ({ ...p, feeProposal: null }));

@@ -1171,8 +1171,29 @@ function MessagesPanel({ messages, meRole, onSend, onReact, onPin, onLabel, onTa
       <>
       {messages.length > 0 && (
         <div className="mb-3 flex flex-wrap items-center gap-1.5">
+          {/* Filters on the left */}
+          {labels.length > 0 && (
+            <>
+              <button
+                onClick={() => setLabelFilter(null)}
+                className={`text-[11px] rounded-full px-2.5 py-0.5 border ${!labelFilter ? "border-stone-900 bg-stone-900 text-white" : "border-stone-200 text-stone-500"}`}
+              >
+                All
+              </button>
+              {labels.map((l) => (
+                <button
+                  key={l}
+                  onClick={() => setLabelFilter(labelFilter === l ? null : l)}
+                  className={`inline-flex items-center gap-1 text-[11px] rounded-full px-2.5 py-0.5 border ${labelFilter === l ? "border-stone-900 bg-stone-900 text-white" : "border-stone-200 text-stone-500"}`}
+                >
+                  <Tag className="w-2.5 h-2.5" /> {l}
+                </button>
+              ))}
+            </>
+          )}
+          {/* Search on the right */}
           {searchOpen ? (
-            <div className="relative flex-1 min-w-[150px]">
+            <div className="relative flex-1 min-w-[150px] ml-auto">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-stone-400" />
               <input
                 autoFocus
@@ -1198,30 +1219,11 @@ function MessagesPanel({ messages, meRole, onSend, onReact, onPin, onLabel, onTa
           ) : (
             <button
               onClick={() => setSearchOpen(true)}
-              className="shrink-0 inline-flex items-center justify-center w-8 h-8 text-stone-400 hover:text-stone-700 border border-stone-200 rounded-lg"
+              className="ml-auto shrink-0 inline-flex items-center justify-center w-8 h-8 text-stone-400 hover:text-stone-700 border border-stone-200 rounded-lg"
               aria-label="Search messages"
             >
               <Search className="w-4 h-4" />
             </button>
-          )}
-          {labels.length > 0 && (
-            <>
-              <button
-                onClick={() => setLabelFilter(null)}
-                className={`text-[11px] rounded-full px-2.5 py-0.5 border ${!labelFilter ? "border-stone-900 bg-stone-900 text-white" : "border-stone-200 text-stone-500"}`}
-              >
-                All
-              </button>
-              {labels.map((l) => (
-                <button
-                  key={l}
-                  onClick={() => setLabelFilter(labelFilter === l ? null : l)}
-                  className={`inline-flex items-center gap-1 text-[11px] rounded-full px-2.5 py-0.5 border ${labelFilter === l ? "border-stone-900 bg-stone-900 text-white" : "border-stone-200 text-stone-500"}`}
-                >
-                  <Tag className="w-2.5 h-2.5" /> {l}
-                </button>
-              ))}
-            </>
           )}
         </div>
       )}
@@ -1251,7 +1253,12 @@ function MessagesPanel({ messages, meRole, onSend, onReact, onPin, onLabel, onTa
         {messages.length === 0 && <EmptyState text="No messages yet." />}
         {messages.length > 0 && filtered.length === 0 && <EmptyState text="No messages match your search." />}
         {filtered.map((m) => {
-          const mine = m.from === meRole;
+          // The logged-in viewer's own messages sit on the right; everyone else
+          // (the studio, or other clients on the project) sits on the left.
+          const mine =
+            m.from === "studio"
+              ? meRole === "studio"
+              : meRole === "client" && (!m.fromEmail || (m.fromEmail || "").toLowerCase() === (myEmail || "").toLowerCase());
           const ref = m.replyTo ? byId[m.replyTo] : null;
           const reacts = aggregateReactions(m.reactions);
           const seen = showReceipts && m.from === "studio" && seenSince && new Date(seenSince) >= new Date(m.date);

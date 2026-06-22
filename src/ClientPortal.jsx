@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import * as api from "./lib/api";
+import { subscribeToNews } from "./lib/klaviyo";
 import {
   Lock,
   Send,
@@ -846,6 +847,7 @@ function ClientLogin({ onEnter, onSignUp, loginImage, loginMessage }) {
   const [mode, setMode] = useState("signin"); // "signin" | "signup"
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [news, setNews] = useState(false);
   const [error, setError] = useState("");
   const [resetMsg, setResetMsg] = useState("");
   const [resetBusy, setResetBusy] = useState(false);
@@ -875,7 +877,7 @@ function ClientLogin({ onEnter, onSignUp, loginImage, loginMessage }) {
     }
     setBusy(true);
     setError("");
-    if (isSignUp) await onSignUp(email, password, setError);
+    if (isSignUp) await onSignUp(email, password, news, setError);
     else await onEnter(email, password, setError);
     setBusy(false);
   }
@@ -936,6 +938,12 @@ function ClientLogin({ onEnter, onSignUp, loginImage, loginMessage }) {
                   className="w-full pl-11 pr-4 py-3.5 rounded-lg border border-stone-300 bg-white text-stone-900 placeholder-stone-400 text-[15px] focus:outline-none focus:ring-2 focus:ring-[#B7453C] focus:border-transparent"
                 />
               </div>
+              {isSignUp && (
+                <label className="flex gap-2.5 items-start cursor-pointer pt-1">
+                  <input type="checkbox" checked={news} onChange={(e) => setNews(e.target.checked)} className="mt-0.5 w-4 h-4 accent-[#576B45]" />
+                  <span className="text-[12.5px] text-stone-500 leading-relaxed">Keep me updated with the latest news, projects and journal from Studio Nicholas.</span>
+                </label>
+              )}
               {error && <p className="text-[13px] text-red-600">{error}</p>}
               {resetMsg && <p className="text-[13px] text-[#576B45]">{resetMsg}</p>}
               <button type="submit" disabled={busy} className="w-full bg-stone-900 text-white rounded-lg py-3.5 text-[14px] tracking-wide hover:bg-stone-800 transition-colors disabled:opacity-60">
@@ -4939,7 +4947,10 @@ export default function App() {
   // Self-service "set up login": create the account (email + password). If the
   // email already has an account, fall back to signing them in with what they
   // typed. On success, the auth listener loads their project automatically.
-  const handleSignUp = useCallback(async (email, password, setError) => {
+  const handleSignUp = useCallback(async (email, password, optIn, setError) => {
+    // Opt-in to the news list (Klaviyo) — best-effort, regardless of whether the
+    // account is new or already existed.
+    if (optIn) subscribeToNews(email);
     const { data, error } = await api.signUp(email, password);
     if (error) {
       if (/already|registered|exists/i.test(error.message || "")) {

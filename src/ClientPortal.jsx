@@ -950,8 +950,8 @@ function ClientLogin({ onEnter, onSignUp, loginImage, loginMessage }) {
               )}
             </form>
 
-            <div className="mt-6 pt-5 border-t border-stone-200 text-center">
-              {isSignUp ? (
+            {isSignUp ? (
+              <div className="mt-6 pt-5 border-t border-stone-200 text-center">
                 <p className="text-[13px] text-stone-500">
                   Already have a login?{" "}
                   <button
@@ -966,23 +966,23 @@ function ClientLogin({ onEnter, onSignUp, loginImage, loginMessage }) {
                     Sign in
                   </button>
                 </p>
-              ) : (
-                <p className="text-[13px] text-stone-500">
-                  First time here?{" "}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setMode("signup");
-                      setError("");
-                      setResetMsg("");
-                    }}
-                    className="text-stone-900 underline hover:text-stone-700"
-                  >
-                    Set up your login
-                  </button>
-                </p>
-              )}
-            </div>
+              </div>
+            ) : (
+              <div className="mt-6 rounded-xl border border-[#9BACB6] bg-[#9BACB6]/20 px-4 py-4 text-center">
+                <p className="text-[13.5px] text-stone-700 mb-2.5">First time here? Create your login to access your project.</p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMode("signup");
+                    setError("");
+                    setResetMsg("");
+                  }}
+                  className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-[#9BACB6] px-5 py-2.5 text-[14px] text-[#1C1A17] hover:opacity-90 transition-opacity"
+                >
+                  Set up your login
+                </button>
+              </div>
+            )}
 
             <div className="mt-4 text-center">
               <a href={`mailto:${STUDIO_INFO.email}?subject=Trouble%20signing%20in`} className="inline-flex items-center gap-1.5 text-[13px] text-stone-500 hover:text-stone-800">

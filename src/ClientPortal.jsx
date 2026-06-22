@@ -4968,8 +4968,18 @@ export default function App() {
       if (!p || !p.feeProposal || !p.feeProposal.dataUrl) {
         throw new Error("There's no fee proposal to sign yet.");
       }
-      // Lazy-load the PDF toolkit (pdf-lib) only when someone actually signs.
-      const { buildSignedProposal, bytesFromUrl, sha256Hex, bytesToDataUrl } = await import("./lib/sign");
+      // Lazy-load the PDF toolkit (pdf-lib + pdf.js) only when someone actually
+      // signs. If the tab was opened before a new deploy, the old chunk hash is
+      // gone (404) — surface a clear "please refresh" message instead of a
+      // cryptic import error.
+      let signLib;
+      try {
+        signLib = await import("./lib/sign");
+      } catch (e) {
+        console.error("sign module load failed", e);
+        throw new Error("The app was just updated. Please refresh the page (pull down to refresh on a phone), then sign again.");
+      }
+      const { buildSignedProposal, bytesFromUrl, sha256Hex, bytesToDataUrl } = signLib;
 
       const me = (session?.user?.email || "").trim();
       const myClient = (p.clients || []).find((c) => (c.email || "").trim().toLowerCase() === me.toLowerCase());

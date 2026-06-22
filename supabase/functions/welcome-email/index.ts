@@ -18,27 +18,44 @@ const cors = {
 };
 
 function emailHtml() {
+  const accent = "#9BACB6";
   return `
-<table width="100%" cellpadding="0" cellspacing="0" style="background:#F7F0EC;padding:32px 0;font-family:Georgia,serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#F7F0EC;padding:28px 12px;font-family:Georgia,'Times New Roman',serif;">
   <tr><td align="center">
-    <table width="480" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:14px;">
-      <tr><td style="padding:36px 40px 8px;text-align:center;">
-        <img src="${LOGIN_URL}/logo.png" alt="Studio Nicholas" width="180" style="max-width:180px;height:auto;">
+    <table width="520" cellpadding="0" cellspacing="0" style="max-width:520px;width:100%;background:#ffffff;border-radius:16px;overflow:hidden;border:1px solid #efe7df;">
+      <tr><td style="font-size:0;line-height:0;">
+        <img src="${LOGIN_URL}/login.jpg" alt="Studio Nicholas" width="520" style="width:100%;max-width:520px;height:auto;display:block;">
       </td></tr>
-      <tr><td style="padding:16px 40px 0;">
-        <h1 style="font-size:22px;font-style:italic;color:#1C1A17;margin:0 0 12px;font-weight:normal;">You're all set</h1>
-        <p style="font-size:15px;line-height:1.6;color:#57534e;margin:0 0 24px;font-family:Arial,sans-serif;">
-          Your password is set and your Studio Nicholas portal is ready. You can log in any time to see your project updates, timeline, meetings, documents and messages. Save this email so you always have the link handy.
+      <tr><td style="height:4px;line-height:4px;font-size:0;background:${accent};">&nbsp;</td></tr>
+      <tr><td style="padding:30px 44px 0;text-align:center;">
+        <img src="${LOGIN_URL}/logo.png" alt="Studio Nicholas" width="160" style="max-width:160px;height:auto;">
+      </td></tr>
+      <tr><td style="padding:8px 44px 0;text-align:center;">
+        <p style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:11px;letter-spacing:1.5px;text-transform:uppercase;color:#8a9aa3;">Welcome</p>
+      </td></tr>
+      <tr><td style="padding:6px 44px 0;text-align:center;">
+        <h1 style="font-size:25px;font-style:italic;color:#1C1A17;margin:0;font-weight:normal;">You're all set</h1>
+      </td></tr>
+      <tr><td style="padding:14px 44px 0;text-align:center;">
+        <p style="font-size:15px;line-height:1.65;color:#57534e;margin:0;font-family:Arial,Helvetica,sans-serif;">
+          Your password is set and your private portal is ready. Log in any time to follow your project — updates, timeline, meetings, documents and messages, all in one place.
         </p>
       </td></tr>
-      <tr><td style="padding:0 40px 28px;text-align:center;">
-        <a href="${LOGIN_URL}" style="display:inline-block;background:#1C1A17;color:#ffffff;text-decoration:none;font-family:Arial,sans-serif;font-size:15px;padding:14px 32px;border-radius:8px;">Open your portal</a>
+      <tr><td style="padding:24px 44px 4px;text-align:center;">
+        <a href="${LOGIN_URL}" style="display:inline-block;background:#1C1A17;color:#ffffff;text-decoration:none;font-family:Arial,Helvetica,sans-serif;font-size:15px;padding:14px 34px;border-radius:9px;">Open your portal &nbsp;→</a>
       </td></tr>
-      <tr><td style="padding:0 40px 36px;">
-        <p style="font-size:12px;line-height:1.6;color:#a8a29e;margin:0;font-family:Arial,sans-serif;">
-          Your login page: <a href="${LOGIN_URL}" style="color:#B7453C;">${LOGIN_URL.replace("https://", "")}</a><br>
-          Tip: add it to your home screen for one-tap access.
-        </p>
+      <tr><td style="padding:18px 44px 0;">
+        <table width="100%" cellpadding="0" cellspacing="0" style="background:#F7F0EC;border-radius:12px;">
+          <tr><td style="padding:14px 18px;text-align:center;">
+            <p style="margin:0;font-size:12px;line-height:1.6;color:#8a8079;font-family:Arial,Helvetica,sans-serif;">
+              Save this email for easy access. Your login: <a href="${LOGIN_URL}" style="color:#576b45;text-decoration:none;">${LOGIN_URL.replace("https://", "")}</a><br>
+              Tip — add it to your home screen for one-tap access.
+            </p>
+          </td></tr>
+        </table>
+      </td></tr>
+      <tr><td style="padding:18px 44px 30px;text-align:center;">
+        <p style="font-family:Georgia,serif;font-style:italic;font-size:14px;color:#9c958c;margin:0;">Studio Nicholas</p>
       </td></tr>
     </table>
   </td></tr>

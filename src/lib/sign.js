@@ -167,22 +167,23 @@ export async function buildSignedProposal({ originalBytes, signaturePng, cert })
     const pages = pdf.getPages();
     const pg = pages[anchors.pageIndex];
     if (pg) {
-      const gap = 12;
+      // The labels sit at the bottom of each field, with the write-space ABOVE
+      // them, so we draw the client's details just above each label, aligned to it.
       if (anchors.name) {
-        pg.drawText(cert.signerName, { x: anchors.name.x + anchors.name.w + gap, y: anchors.name.y, size: 11, font: obl, color: INK });
+        pg.drawText(cert.signerName, { x: anchors.name.x, y: anchors.name.y + 15, size: 12, font: obl, color: INK });
       }
       if (anchors.date && cert.dateOnly) {
-        pg.drawText(cert.dateOnly, { x: anchors.date.x + anchors.date.w + gap, y: anchors.date.y, size: 11, font: helv, color: INK });
+        pg.drawText(cert.dateOnly, { x: anchors.date.x, y: anchors.date.y + 15, size: 12, font: helv, color: INK });
       }
       if (anchors.sig && sigImg) {
-        const sigX = anchors.sig.x + anchors.sig.w + gap;
-        const avail = pg.getWidth() - sigX - 24;
-        const maxW = Math.max(70, Math.min(150, avail));
-        const maxH = 28;
+        const avail = pg.getWidth() - anchors.sig.x - 24;
+        const maxW = Math.max(90, Math.min(200, avail));
+        const maxH = 40;
         const scale = Math.min(maxW / sigImg.width, maxH / sigImg.height);
-        pg.drawImage(sigImg, { x: sigX, y: anchors.sig.y - 4, width: sigImg.width * scale, height: sigImg.height * scale });
+        pg.drawImage(sigImg, { x: anchors.sig.x, y: anchors.sig.y + 12, width: sigImg.width * scale, height: sigImg.height * scale });
       }
     }
+
   }
 
   // Discreet "signed" stamp at the very bottom edge of each original page.

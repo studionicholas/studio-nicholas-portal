@@ -38,28 +38,51 @@ function bytesToBase64(bytes: Uint8Array): string {
   return btoa(bin);
 }
 
+function row(label: string, value: string) {
+  if (!value) return "";
+  return `<tr>
+    <td style="padding:9px 0;border-top:1px solid #efe7df;font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#9c958c;width:38%;">${label}</td>
+    <td style="padding:9px 0;border-top:1px solid #efe7df;font-family:Arial,Helvetica,sans-serif;font-size:13px;color:#1C1A17;">${value}</td>
+  </tr>`;
+}
+
 function emailHtml(o: { clientName?: string; projectName?: string; signedAtLabel?: string }) {
   const accent = "#9BACB6";
+  const sage = "#576B45";
   return `
 <table width="100%" cellpadding="0" cellspacing="0" style="background:#F7F0EC;padding:28px 12px;font-family:Georgia,'Times New Roman',serif;">
   <tr><td align="center">
     <table width="520" cellpadding="0" cellspacing="0" style="max-width:520px;width:100%;background:#ffffff;border-radius:16px;overflow:hidden;border:1px solid #efe7df;">
       <tr><td style="height:6px;line-height:6px;font-size:0;background:${accent};">&nbsp;</td></tr>
-      <tr><td style="padding:32px 44px 0;text-align:center;">
-        <img src="${LOGIN_URL}/logo.png" alt="Studio Nicholas" width="158" style="max-width:158px;height:auto;">
+      <tr><td style="padding:30px 44px 0;text-align:center;">
+        <img src="${LOGIN_URL}/logo.png" alt="Studio Nicholas" width="150" style="max-width:150px;height:auto;">
+      </td></tr>
+      <tr><td style="padding:20px 44px 0;text-align:center;">
+        <table cellpadding="0" cellspacing="0" align="center"><tr><td style="width:54px;height:54px;background:#E7EBE2;border-radius:50%;text-align:center;vertical-align:middle;font-family:Arial,Helvetica,sans-serif;font-size:26px;color:${sage};line-height:54px;">&#10003;</td></tr></table>
       </td></tr>
       <tr><td style="padding:14px 44px 0;text-align:center;">
-        <p style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:11px;letter-spacing:1.5px;text-transform:uppercase;color:#8a9aa3;">${o.projectName ? String(o.projectName) : "Your project"} &nbsp;·&nbsp; Signed</p>
+        <p style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:11px;letter-spacing:1.5px;text-transform:uppercase;color:#8a9aa3;">${o.projectName ? String(o.projectName) : "Your project"} &nbsp;·&nbsp; Signed &amp; accepted</p>
       </td></tr>
       <tr><td style="padding:6px 44px 0;text-align:center;">
-        <h1 style="font-size:24px;font-style:italic;color:#1C1A17;margin:0;font-weight:normal;">Your signed proposal</h1>
+        <h1 style="font-size:25px;font-style:italic;color:#1C1A17;margin:0;font-weight:normal;">Your signed proposal</h1>
       </td></tr>
       <tr><td style="padding:14px 44px 0;text-align:center;">
         <p style="font-size:15px;line-height:1.65;color:#57534e;margin:0;font-family:Arial,Helvetica,sans-serif;">
-          Thank you${o.clientName ? ", " + String(o.clientName) : ""} — your fee proposal is signed and accepted. Your signed copy is attached to this email as a PDF, including the Certificate of Completion.${o.signedAtLabel ? " Signed " + String(o.signedAtLabel) + "." : ""}
+          Thank you${o.clientName ? ", " + String(o.clientName) : ""} — your fee proposal is signed and accepted. Your signed copy, including the Certificate of Completion, is attached to this email as a PDF.
         </p>
       </td></tr>
-      <tr><td style="padding:24px 44px 4px;text-align:center;">
+      <tr><td style="padding:20px 44px 0;">
+        <table width="100%" cellpadding="0" cellspacing="0" style="background:#F7F0EC;border-radius:12px;">
+          <tr><td style="padding:6px 20px 12px;">
+            <table width="100%" cellpadding="0" cellspacing="0">
+              ${row("Document", o.projectName ? "Fee Proposal — " + String(o.projectName) : "Fee Proposal")}
+              ${row("Signed by", o.clientName ? String(o.clientName) : "")}
+              ${row("Date signed", o.signedAtLabel ? String(o.signedAtLabel) : "")}
+            </table>
+          </td></tr>
+        </table>
+      </td></tr>
+      <tr><td style="padding:22px 44px 4px;text-align:center;">
         <a href="${LOGIN_URL}" style="display:inline-block;background:#1C1A17;color:#ffffff;text-decoration:none;font-family:Arial,Helvetica,sans-serif;font-size:15px;padding:13px 34px;border-radius:9px;">Open your portal &nbsp;&rarr;</a>
       </td></tr>
       <tr><td style="padding:16px 44px 30px;text-align:center;">

@@ -3,6 +3,11 @@ import { supabase, inviteType } from "./supabase";
 // True when the user arrived via an invite or password-reset link and must set a password.
 export const needsPasswordSetup = inviteType === "invite" || inviteType === "recovery";
 
+// True only for a brand-new invited client setting their password for the first
+// time (not an existing client resetting it). Used to ping the studio once the
+// account is live.
+export const isInviteSetup = inviteType === "invite";
+
 export async function setPassword(password) {
   return supabase.auth.updateUser({ password });
 }
@@ -256,6 +261,19 @@ export async function enablePush(email) {
     throw error;
   }
   return true;
+}
+
+// Tell the studio (via push) that a client has finished setting up their account
+// and set a password — so the studio knows they can now message that client and
+// the message will be received. Best-effort; never blocks the client's flow.
+export async function notifyStudioClientReady(email) {
+  const who = (email || "").trim();
+  return notifyPush({
+    toStudio: true,
+    title: "Client account ready ✓",
+    body: who ? `${who} has set their password — you can message them now.` : "A client has set up their portal — you can message them now.",
+    url: "/",
+  });
 }
 
 // Best-effort push to the recipients (the studio, or specific client emails).

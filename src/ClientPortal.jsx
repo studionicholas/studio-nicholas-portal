@@ -4291,7 +4291,9 @@ function SetPassword({ onDone }) {
     if (error) setError(error.message || "Couldn't set your password. Try again.");
     else {
       const email = data?.user?.email;
-      if (email) api.sendSetupEmail(email); // best-effort confirmation email
+      if (email) api.sendSetupEmail(email); // best-effort confirmation email to the client
+      // Tell the studio the account is live (first-time invite setup only, not resets).
+      if (email && api.isInviteSetup) api.notifyStudioClientReady(email);
       onDone();
     }
   }

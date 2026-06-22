@@ -7,6 +7,7 @@ import {
   Image as ImageIcon,
   MessageSquare,
   ArrowLeft,
+  LogOut,
   Plus,
   Upload,
   ChevronRight,
@@ -2183,7 +2184,7 @@ function ClientDashboard({ project, viewerEmail, studioStatus, studioStatusColor
               onDismiss={onDismissNotif}
             />
             <button onClick={onLogout} className="text-stone-400 hover:text-stone-700 text-[13px] flex items-center gap-1 shrink-0">
-              <ArrowLeft className="w-4 h-4 sm:w-3.5 sm:h-3.5" /> <span className="hidden sm:inline">Logout</span>
+              <LogOut className="w-4 h-4 sm:w-3.5 sm:h-3.5" /> <span className="hidden sm:inline">Logout</span>
             </button>
           </div>
         </div>
@@ -3214,7 +3215,19 @@ function AdminFeatures({ project, onToggle }) {
   );
 }
 
-function StudioSettingsPanel({ studioStatus, studioStatusColor, onChangeStatus, onChangeStatusColor, onSaveStatus, loginImage, loginMessage, studioInfo, onSaveInfo, autoReply, onSaveAutoReply, onSave }) {
+function StudioSettingsPanel({ studioStatus, studioStatusColor, onChangeStatus, onChangeStatusColor, onSaveStatus, loginImage, loginMessage, studioInfo, onSaveInfo, autoReply, onSaveAutoReply, viewerEmail, onSave }) {
+  const [pPerm, setPPerm] = useState(() => (api.pushSupported() ? api.pushPermission() : "unsupported"));
+  const [pBusy, setPBusy] = useState(false);
+  async function enableStudioPush() {
+    setPBusy(true);
+    try {
+      await api.enablePush(viewerEmail);
+    } catch (e) {
+      console.error(e);
+    }
+    setPPerm(api.pushPermission());
+    setPBusy(false);
+  }
   const [img, setImg] = useState(loginImage || "");
   const [msg, setMsg] = useState(loginMessage || "");
   const [url, setUrl] = useState("");
@@ -3289,6 +3302,38 @@ function StudioSettingsPanel({ studioStatus, studioStatusColor, onChangeStatus, 
         Studio settings
       </h1>
       <p className="text-stone-500 text-[13px] mb-8">Studio-wide settings: your details, status note and the login page.</p>
+
+      <AdminSection title="Your notifications">
+        <div className="border border-stone-200 rounded-lg bg-white p-4">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-lg bg-[#F3E7E2] flex items-center justify-center shrink-0">
+              <Bell className="w-4 h-4 text-[#B7453C]" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-[14px] text-stone-800">Push notifications</p>
+              <p className="text-[12px] text-stone-400">Get a pop-up on this device when a client sends a message.</p>
+            </div>
+            {pPerm === "granted" ? (
+              <span className="shrink-0 text-[12px] text-[#576B45]">On ✓</span>
+            ) : api.pushSupported() && pPerm === "default" ? (
+              <button
+                onClick={enableStudioPush}
+                disabled={pBusy}
+                className="shrink-0 bg-stone-900 text-white text-[12px] rounded-lg px-3 py-1.5 hover:bg-stone-800 transition-colors disabled:opacity-50"
+              >
+                {pBusy ? "…" : "Allow"}
+              </button>
+            ) : null}
+          </div>
+          {pPerm === "denied" ? (
+            <p className="text-[12px] text-stone-400 mt-2.5">Notifications are blocked on this device — switch them back on in your browser's site settings, then come back here.</p>
+          ) : !api.pushSupported() ? (
+            <p className="text-[12px] text-stone-400 mt-2.5">On iPhone, add this to your home screen first (Share → Add to Home Screen), open it from the icon, then allow notifications. Turn it on for each device you want alerts on.</p>
+          ) : (
+            <p className="text-[12px] text-stone-400 mt-2.5">Turn this on for every device you want to be alerted on (phone + computer). On iPhone, add it to your home screen first.</p>
+          )}
+        </div>
+      </AdminSection>
 
       <AdminSection title="Your details">
         <p className="text-[12px] text-stone-400 mb-3">Shown to clients — contact info, the About tab and the login help link.</p>
@@ -3902,6 +3947,7 @@ function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioSt
             onSaveInfo={onSaveInfo}
             autoReply={autoReply}
             onSaveAutoReply={onSaveAutoReply}
+            viewerEmail={viewerEmail}
             onSave={onSaveLogin}
           />
         ) : project ? (

@@ -2026,6 +2026,9 @@ function SignaturePad({ onChange }) {
 // Review-and-sign card for the client's Fee tab. Three states: nothing issued
 // yet, ready to sign, or already signed (locked, view/download only).
 function SignProposalCard({ proposal, signed, projectName, clientName, clientEmail, onSign }) {
+  const nameParts = (clientName || "").trim().split(/\s+/).filter(Boolean);
+  const [first, setFirst] = useState(nameParts.length > 1 ? nameParts[0] : nameParts[0] || "");
+  const [last, setLast] = useState(nameParts.length > 1 ? nameParts.slice(1).join(" ") : "");
   const [sig, setSig] = useState("");
   const [agree, setAgree] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -2079,6 +2082,10 @@ function SignProposalCard({ proposal, signed, projectName, clientName, clientEma
   }
 
   async function submit() {
+    if (!first.trim() || !last.trim()) {
+      setError("Please enter your first and last name.");
+      return;
+    }
     if (!sig) {
       setError("Please add your signature above.");
       return;
@@ -2090,7 +2097,7 @@ function SignProposalCard({ proposal, signed, projectName, clientName, clientEma
     setBusy(true);
     setError("");
     try {
-      await onSign(sig);
+      await onSign(sig, `${first.trim()} ${last.trim()}`);
       // On success the parent sets `signed`, which swaps this card to the
       // signed state, so there's nothing else to reset here.
     } catch (e) {
@@ -2106,15 +2113,44 @@ function SignProposalCard({ proposal, signed, projectName, clientName, clientEma
         Review &amp; sign
       </h3>
       <p className="text-[13px] text-stone-500 leading-relaxed mt-1">
-        Read the full proposal above, then sign below to accept. A signed PDF copy is emailed to you the moment you sign.
+        Read the full proposal above, then add your name and signature below to accept. A signed PDF copy is emailed to you the moment you sign.
       </p>
-      <div className="mt-4">
-        <SignaturePad
-          onChange={(v) => {
-            setSig(v);
-            setError("");
-          }}
-        />
+      <div className="grid grid-cols-2 gap-2 mt-4">
+        <div>
+          <label className="text-[11px] text-stone-400">First name</label>
+          <input
+            value={first}
+            onChange={(e) => {
+              setFirst(e.target.value);
+              setError("");
+            }}
+            placeholder="First name"
+            className="w-full mt-1 px-3 py-2 rounded-lg border border-stone-300 text-[14px] focus:outline-none focus:ring-2 focus:ring-[#B7453C]"
+          />
+        </div>
+        <div>
+          <label className="text-[11px] text-stone-400">Last name</label>
+          <input
+            value={last}
+            onChange={(e) => {
+              setLast(e.target.value);
+              setError("");
+            }}
+            placeholder="Last name"
+            className="w-full mt-1 px-3 py-2 rounded-lg border border-stone-300 text-[14px] focus:outline-none focus:ring-2 focus:ring-[#B7453C]"
+          />
+        </div>
+      </div>
+      <div className="mt-3">
+        <label className="text-[11px] text-stone-400">Signature</label>
+        <div className="mt-1">
+          <SignaturePad
+            onChange={(v) => {
+              setSig(v);
+              setError("");
+            }}
+          />
+        </div>
       </div>
       <label className="flex gap-2.5 items-start mt-4 cursor-pointer">
         <input type="checkbox" checked={agree} onChange={(e) => setAgree(e.target.checked)} className="mt-0.5 w-4 h-4 accent-[#576B45]" />
@@ -4905,7 +4941,7 @@ export default function App() {
   // (original + Certificate of Completion), stores it, then emails a copy to the
   // client + studio and pings the studio. See [[studio-nicholas-esign]].
   const handleSignProposal = useCallback(
-    async (signaturePng) => {
+    async (signaturePng, signerName) => {
       const p = projects[activeCode];
       if (!p || !p.feeProposal || !p.feeProposal.dataUrl) {
         throw new Error("There's no fee proposal to sign yet.");
@@ -4915,7 +4951,8 @@ export default function App() {
 
       const me = (session?.user?.email || "").trim();
       const myClient = (p.clients || []).find((c) => (c.email || "").trim().toLowerCase() === me.toLowerCase());
-      const clientName = (myClient?.name || p.clientName || me || "Client").trim();
+      // Prefer the first/last name the client typed on the signing screen.
+      const clientName = (signerName || "").trim() || (myClient?.name || p.clientName || me || "Client").trim();
 
       // Authoritative IP + timestamp from the server (falls back to local time).
       const audit = await api.signAudit();

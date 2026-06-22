@@ -2077,7 +2077,7 @@ function EnablePushBanner({ email }) {
   );
 }
 
-function ClientDashboard({ project, viewerEmail, studioStatus, studioStatusColor, autoStatus, onLogout, onSetEmailNotify, onSendMessage, onReactMessage, onPinMessage, onMarkRead, onMarkNotifs, onDismissNotif, onUploadSigned, onRespondMeeting, installOpen }) {
+function ClientDashboard({ project, viewerEmail, studioStatus, studioStatusColor, autoStatus, onLogout, onSetEmailNotify, onSendMessage, onReactMessage, onPinMessage, onMarkRead, onMarkNotifs, onDismissNotif, onSeenTab, onUploadSigned, onRespondMeeting, installOpen }) {
   const [tab, setTab] = useState("about");
   const [lightbox, setLightbox] = useState(null);
   const [prefillMsg, setPrefillMsg] = useState("");
@@ -2150,20 +2150,25 @@ function ClientDashboard({ project, viewerEmail, studioStatus, studioStatusColor
     .sort((a, b) => new Date(b.instant) - new Date(a.instant));
   const pendingInvites = upcoming.filter((m) => ((m.rsvps?.[(viewerEmail || "").toLowerCase()]) || "pending") === "pending").length;
 
+  // Unread notifications mapped to each tab → drives the red dot on that tab.
+  const notifs = project.notifications || [];
+  const newForTab = (id) => notifs.filter((n) => !n.read && NOTIF_TAB[n.type] === id).length;
   const allTabs = [
     { id: "about", label: "About", icon: Info, badge: 0 },
-    { id: "updates", label: "Updates", icon: ImageIcon, badge: 0 },
-    { id: "timeline", label: "Timeline", icon: Flag, badge: 0 },
+    { id: "updates", label: "Updates", icon: ImageIcon, badge: newForTab("updates") },
+    { id: "timeline", label: "Timeline", icon: Flag, badge: newForTab("timeline") },
     { id: "meetings", label: "Meetings", icon: Calendar, badge: pendingInvites },
-    { id: "fee", label: "Fee", icon: FileText, badge: 0 },
+    { id: "fee", label: "Fee", icon: FileText, badge: newForTab("fee") },
     { id: "messages", label: "Messages", icon: MessageSquare, badge: unreadForClient(project) },
   ];
   const tabs = allTabs.filter((t) => features[t.id] !== false);
   const activeTab = tabs.some((t) => t.id === tab) ? tab : tabs[0]?.id;
 
+  // Opening a tab clears its red dot (marks that tab's notifications seen).
   useEffect(() => {
     if (activeTab === "messages") onMarkRead();
-  }, [activeTab, onMarkRead]);
+    else if (activeTab) onSeenTab(activeTab);
+  }, [activeTab, onMarkRead, onSeenTab]);
 
   return (
     <div className="min-h-screen bg-[#F7F0EC] overflow-x-hidden">
@@ -2348,6 +2353,41 @@ function ClientDashboard({ project, viewerEmail, studioStatus, studioStatusColor
           {activeTab === "about" && (
             <div className="space-y-8">
               <AboutTab project={project} />
+
+              <div className="border border-stone-200 rounded-xl bg-white p-4 space-y-3">
+                <p className="text-[15px] text-stone-900" style={{ fontFamily: "Selva, Georgia, serif", fontStyle: "italic" }}>
+                  Your app &amp; notifications
+                </p>
+                <div className="text-[13px] text-stone-600 space-y-1.5">
+                  <p className="text-stone-800">Add this to your home screen for one-tap access — it works just like an app.</p>
+                  <p className="text-stone-500">
+                    <strong className="text-stone-700">iPhone (Safari):</strong> tap <strong>Share</strong> → <strong>Add to Home Screen</strong>
+                  </p>
+                  <p className="text-stone-500">
+                    <strong className="text-stone-700">Android (Chrome):</strong> tap the <strong>⋮</strong> menu → <strong>Install app</strong>
+                  </p>
+                </div>
+                <div className="pt-1">
+                  {notifPerm === "granted" ? (
+                    <p className="inline-flex items-center gap-1.5 text-[13px] text-[#576B45]">
+                      <Bell className="w-3.5 h-3.5" /> Notifications are on
+                    </p>
+                  ) : notifPerm === "denied" ? (
+                    <p className="text-[12px] text-stone-400">Notifications are blocked on this device — switch them back on in your browser's settings for this site.</p>
+                  ) : api.pushSupported() ? (
+                    <button
+                      onClick={turnOnNotifs}
+                      disabled={notifBusy}
+                      className="inline-flex items-center gap-1.5 bg-stone-900 text-white text-[13px] rounded-lg px-4 py-2 hover:bg-stone-800 transition-colors disabled:opacity-50"
+                    >
+                      <Bell className="w-3.5 h-3.5" /> {notifBusy ? "Turning on…" : "Allow notifications"}
+                    </button>
+                  ) : (
+                    <p className="text-[12px] text-stone-400">To get notifications on iPhone, add this to your home screen first (steps above), then open it from the new icon and you'll be able to allow them.</p>
+                  )}
+                </div>
+              </div>
+
               {myClient && (
                 <div className="flex items-center gap-2.5 border-t border-stone-200 pt-4">
                   <Mail className="w-3.5 h-3.5 text-stone-400 shrink-0" />
@@ -4510,6 +4550,19 @@ export default function App() {
     });
   }, [activeCode]);
 
+  // Mark notifications belonging to a tab read when the client opens that tab
+  // (clears that tab's red dot).
+  const handleSeenTab = useCallback(
+    (tabId) => {
+      setProjects((prev) => {
+        const p = prev[activeCode];
+        if (!p || !(p.notifications || []).some((n) => !n.read && NOTIF_TAB[n.type] === tabId)) return prev;
+        return { ...prev, [activeCode]: { ...p, notifications: p.notifications.map((n) => (NOTIF_TAB[n.type] === tabId ? { ...n, read: true } : n)) } };
+      });
+    },
+    [activeCode]
+  );
+
   const handleDismissNotif = useCallback(
     (id) => {
       setProjects((prev) => {
@@ -4585,6 +4638,7 @@ export default function App() {
         onMarkRead={handleMarkClientRead}
         onMarkNotifs={handleMarkNotifs}
         onDismissNotif={handleDismissNotif}
+        onSeenTab={handleSeenTab}
         onUploadSigned={handleUploadSigned}
         onRespondMeeting={handleRespondMeeting}
         installOpen={installOpen}

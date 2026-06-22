@@ -229,11 +229,11 @@ export async function buildSignedProposal({ originalBytes, signaturePng, cert })
     page.drawText(cert.documentTitle, { x: valX, y: ry - 9, size: 11, font: bold, color: INK });
   });
 
-  // Fingerprint (full hash, monospace, wrapped)
+  // Verification code (full hash, monospace, wrapped)
   const fpLines = chunkMono(`SHA-256  ${cert.fingerprint}`, mono, 8, valW);
-  row("Document fingerprint", (ry) => {
+  row("Verification code", (ry) => {
     fpLines.forEach((ln, i) => page.drawText(ln, { x: valX, y: ry - 9 - i * 10, size: 8, font: mono, color: INK }));
-    page.drawText("Tamper-evident", { x: valX, y: ry - 9 - fpLines.length * 10 - 2, size: 8.5, font: obl, color: SAGE });
+    page.drawText("Confirms this is the original, unaltered document.", { x: valX, y: ry - 9 - fpLines.length * 10 - 2, size: 8.5, font: obl, color: SAGE });
   }, fpLines.length * 10 + 12);
 
   // Signed by

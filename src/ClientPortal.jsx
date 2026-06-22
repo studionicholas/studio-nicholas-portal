@@ -842,13 +842,16 @@ function Lightbox({ photos, index, onClose, onIndex }) {
 
 /* ---------------- Client Login ---------------- */
 
-function ClientLogin({ onEnter, loginImage, loginMessage }) {
+function ClientLogin({ onEnter, onSignUp, loginImage, loginMessage }) {
+  const [mode, setMode] = useState("signin"); // "signin" | "signup"
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [resetMsg, setResetMsg] = useState("");
   const [resetBusy, setResetBusy] = useState(false);
+  const [busy, setBusy] = useState(false);
   const heroSrc = loginImage || LOGIN_HERO;
+  const isSignUp = mode === "signup";
 
   async function handleReset() {
     if (!email.trim()) {
@@ -861,6 +864,20 @@ function ClientLogin({ onEnter, loginImage, loginMessage }) {
     setResetBusy(false);
     if (err) setError(err.message || "Couldn't send the reset email. Try again.");
     else setResetMsg(`We've emailed a password-reset link to ${email.trim()}. Check your inbox.`);
+  }
+
+  async function submit(e) {
+    e.preventDefault();
+    setResetMsg("");
+    if (isSignUp && password.length < 6) {
+      setError("Choose a password of at least 6 characters.");
+      return;
+    }
+    setBusy(true);
+    setError("");
+    if (isSignUp) await onSignUp(email, password, setError);
+    else await onEnter(email, password, setError);
+    setBusy(false);
   }
 
   return (
@@ -882,17 +899,15 @@ function ClientLogin({ onEnter, loginImage, loginMessage }) {
               <Logo large />
             </div>
             <h1 className="text-[27px] text-stone-900 mb-1.5" style={{ fontFamily: "Selva, Georgia, serif", fontStyle: "italic" }}>
-              Welcome back
+              {isSignUp ? "Set up your login" : "Welcome back"}
             </h1>
-            <p className="text-stone-500 text-[14px] mb-7">Sign in to view your project updates, files, and messages.</p>
+            <p className="text-stone-500 text-[14px] mb-7">
+              {isSignUp
+                ? "First time here? Enter the email Studio Nicholas has on file and choose a password to access your project."
+                : "Sign in to view your project updates, files, and messages."}
+            </p>
 
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                onEnter(email, password, setError);
-              }}
-              className="space-y-3"
-            >
+            <form onSubmit={submit} className="space-y-3">
               <div className="relative">
                 <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400" />
                 <input
@@ -916,29 +931,66 @@ function ClientLogin({ onEnter, loginImage, loginMessage }) {
                     setPassword(e.target.value);
                     setError("");
                   }}
-                  placeholder="Password"
+                  placeholder={isSignUp ? "Choose a password" : "Password"}
+                  autoComplete={isSignUp ? "new-password" : "current-password"}
                   className="w-full pl-11 pr-4 py-3.5 rounded-lg border border-stone-300 bg-white text-stone-900 placeholder-stone-400 text-[15px] focus:outline-none focus:ring-2 focus:ring-[#B7453C] focus:border-transparent"
                 />
               </div>
               {error && <p className="text-[13px] text-red-600">{error}</p>}
               {resetMsg && <p className="text-[13px] text-[#576B45]">{resetMsg}</p>}
-              <button type="submit" className="w-full bg-stone-900 text-white rounded-lg py-3.5 text-[14px] tracking-wide hover:bg-stone-800 transition-colors">
-                Sign in
+              <button type="submit" disabled={busy} className="w-full bg-stone-900 text-white rounded-lg py-3.5 text-[14px] tracking-wide hover:bg-stone-800 transition-colors disabled:opacity-60">
+                {busy ? (isSignUp ? "Setting up…" : "Signing in…") : isSignUp ? "Set up my login" : "Sign in"}
               </button>
-              <div className="text-center">
-                <button type="button" onClick={handleReset} disabled={resetBusy} className="text-[13px] text-stone-500 hover:text-stone-800 underline disabled:opacity-50">
-                  {resetBusy ? "Sending…" : "Forgot your password?"}
-                </button>
-              </div>
+              {!isSignUp && (
+                <div className="text-center">
+                  <button type="button" onClick={handleReset} disabled={resetBusy} className="text-[13px] text-stone-500 hover:text-stone-800 underline disabled:opacity-50">
+                    {resetBusy ? "Sending…" : "Forgot your password?"}
+                  </button>
+                </div>
+              )}
             </form>
 
-            <div className="mt-5 text-center">
+            <div className="mt-6 pt-5 border-t border-stone-200 text-center">
+              {isSignUp ? (
+                <p className="text-[13px] text-stone-500">
+                  Already have a login?{" "}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMode("signin");
+                      setError("");
+                      setResetMsg("");
+                    }}
+                    className="text-stone-900 underline hover:text-stone-700"
+                  >
+                    Sign in
+                  </button>
+                </p>
+              ) : (
+                <p className="text-[13px] text-stone-500">
+                  First time here?{" "}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMode("signup");
+                      setError("");
+                      setResetMsg("");
+                    }}
+                    className="text-stone-900 underline hover:text-stone-700"
+                  >
+                    Set up your login
+                  </button>
+                </p>
+              )}
+            </div>
+
+            <div className="mt-4 text-center">
               <a href={`mailto:${STUDIO_INFO.email}?subject=Trouble%20signing%20in`} className="inline-flex items-center gap-1.5 text-[13px] text-stone-500 hover:text-stone-800">
                 <Mail className="w-3.5 h-3.5" /> Trouble signing in? Contact us
               </a>
             </div>
 
-            <p className="text-center text-stone-400 text-[12px] mt-6">Accounts are set up for you by Studio Nicholas.</p>
+            <p className="text-center text-stone-400 text-[12px] mt-6">Use the email address Studio Nicholas has on file for your project.</p>
           </div>
         </div>
       </div>
@@ -4884,6 +4936,26 @@ export default function App() {
     if (error) setError(error.message || "Those details didn't match. Check and try again.");
   }, []);
 
+  // Self-service "set up login": create the account (email + password). If the
+  // email already has an account, fall back to signing them in with what they
+  // typed. On success, the auth listener loads their project automatically.
+  const handleSignUp = useCallback(async (email, password, setError) => {
+    const { data, error } = await api.signUp(email, password);
+    if (error) {
+      if (/already|registered|exists/i.test(error.message || "")) {
+        const { error: sErr } = await api.signIn(email, password);
+        if (sErr) setError("You already have a login for this email. Use “Sign in” above — or “Forgot your password?” to reset it.");
+        return;
+      }
+      setError(error.message || "Couldn't set up your login. Please try again.");
+      return;
+    }
+    // If the project requires email confirmation, there's no session yet.
+    if (!data?.session) {
+      setError("Almost there — check your inbox to confirm your email, then sign in.");
+    }
+  }, []);
+
   const handleSignOut = useCallback(async () => {
     await api.signOut();
   }, []);
@@ -5148,7 +5220,7 @@ export default function App() {
 
   let content = null;
   if (session === undefined) content = <Loading />;
-  else if (!session) content = <ClientLogin onEnter={handleSignIn} loginImage={loginImage} loginMessage={loginMessage} />;
+  else if (!session) content = <ClientLogin onEnter={handleSignIn} onSignUp={handleSignUp} loginImage={loginImage} loginMessage={loginMessage} />;
   else if (api.needsPasswordSetup && !passwordDone) content = <SetPassword onDone={() => setPasswordDone(true)} />;
   else if (!projects || role === null) content = <Loading />;
   else if (role === "admin") {

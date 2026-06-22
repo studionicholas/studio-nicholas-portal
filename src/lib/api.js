@@ -45,6 +45,14 @@ export async function signIn(email, password) {
   return supabase.auth.signInWithPassword({ email: (email || "").trim(), password });
 }
 
+// Self-service account creation: a client whose email is on a project can set up
+// their own login (email + password) instead of waiting for an invite. Access to
+// data is still gated by Row Level Security (their email must be on a project),
+// so signing up with an unknown email shows nothing.
+export async function signUp(email, password) {
+  return supabase.auth.signUp({ email: (email || "").trim(), password });
+}
+
 // Send a password-reset email. The link returns to the portal with
 // type=recovery, which routes to the "set a new password" screen.
 export async function resetPassword(email) {

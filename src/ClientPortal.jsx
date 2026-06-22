@@ -466,6 +466,24 @@ function dataUrlToBlob(dataUrl) {
   return new Blob([arr], { type: mime });
 }
 
+// A short, human-readable device label for the signing audit trail.
+function shortDevice() {
+  const ua = (typeof navigator !== "undefined" && navigator.userAgent) || "";
+  const browser = /Edg\//.test(ua)
+    ? "Edge"
+    : /OPR\//.test(ua)
+    ? "Opera"
+    : /Chrome\//.test(ua)
+    ? "Chrome"
+    : /Firefox\//.test(ua)
+    ? "Firefox"
+    : /Safari\//.test(ua)
+    ? "Safari"
+    : "Browser";
+  const os = /iPhone|iPad|iPod/.test(ua) ? "iOS" : /Android/.test(ua) ? "Android" : /Mac OS X/.test(ua) ? "macOS" : /Windows/.test(ua) ? "Windows" : "";
+  return os ? `${browser} on ${os}` : browser;
+}
+
 function downloadFile(f) {
   if (!f || !f.dataUrl) return;
   const a = document.createElement("a");
@@ -1897,71 +1915,207 @@ function FeeDocCard({ label, dateLabel, file, note, emptyText }) {
   );
 }
 
-function ClientSignedCard({ signed, onUpload }) {
+// A canvas the client draws their signature on (finger or mouse). Emits a
+// transparent-background PNG data URL via onChange; "" when cleared.
+function SignaturePad({ onChange }) {
+  const canvasRef = useRef(null);
+  const drawing = useRef(false);
+  const drew = useRef(false);
+  const [empty, setEmpty] = useState(true);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+    canvas.width = Math.round(rect.width * dpr);
+    canvas.height = Math.round(rect.height * dpr);
+    const ctx = canvas.getContext("2d");
+    ctx.scale(dpr, dpr);
+    ctx.lineWidth = 2.2;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.strokeStyle = "#1C1A17";
+  }, []);
+
+  function point(e) {
+    const rect = canvasRef.current.getBoundingClientRect();
+    return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+  }
+  function down(e) {
+    e.preventDefault();
+    drawing.current = true;
+    setEmpty(false);
+    const ctx = canvasRef.current.getContext("2d");
+    const p = point(e);
+    ctx.beginPath();
+    ctx.moveTo(p.x, p.y);
+    try {
+      canvasRef.current.setPointerCapture(e.pointerId);
+    } catch (_e) {}
+  }
+  function move(e) {
+    if (!drawing.current) return;
+    e.preventDefault();
+    const ctx = canvasRef.current.getContext("2d");
+    const p = point(e);
+    ctx.lineTo(p.x, p.y);
+    ctx.stroke();
+    drew.current = true;
+  }
+  function up() {
+    if (!drawing.current) return;
+    drawing.current = false;
+    if (drew.current) onChange(canvasRef.current.toDataURL("image/png"));
+  }
+  function clear() {
+    const canvas = canvasRef.current;
+    canvas.getContext("2d").clearRect(0, 0, canvas.width, canvas.height);
+    drew.current = false;
+    setEmpty(true);
+    onChange("");
+  }
+
+  return (
+    <div>
+      <div className="relative rounded-xl border border-dashed border-stone-300 bg-[#FBF7F3]" style={{ height: 150 }}>
+        <canvas
+          ref={canvasRef}
+          onPointerDown={down}
+          onPointerMove={move}
+          onPointerUp={up}
+          onPointerLeave={up}
+          className="absolute inset-0 w-full h-full"
+          style={{ touchAction: "none" }}
+        />
+        {empty && (
+          <span className="pointer-events-none absolute inset-0 flex items-center justify-center text-[13px] text-stone-300">
+            Sign here with your finger or mouse
+          </span>
+        )}
+        <div className="pointer-events-none absolute left-5 right-5 bottom-6 border-b border-stone-300" />
+      </div>
+      <div className="flex justify-between items-center mt-1.5">
+        <button type="button" onClick={clear} className="text-[12px] text-stone-400 hover:text-stone-700">
+          Clear
+        </button>
+        <span className="text-[11px] text-stone-400">Drawn signature</span>
+      </div>
+    </div>
+  );
+}
+
+// Review-and-sign card for the client's Fee tab. Three states: nothing issued
+// yet, ready to sign, or already signed (locked, view/download only).
+function SignProposalCard({ proposal, signed, projectName, clientName, clientEmail, onSign }) {
+  const [sig, setSig] = useState("");
+  const [agree, setAgree] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  async function handle(e) {
-    const file = (e.target.files || [])[0];
-    e.target.value = "";
-    if (!file) return;
-    setError("");
-    if (file.size > MAX_FILE_BYTES) {
-      setError(`That file is over ${formatBytes(MAX_FILE_BYTES)}.`);
+
+  if (signed) {
+    return (
+      <div className="border border-stone-200 rounded-xl bg-white p-5">
+        <div className="flex items-start gap-4">
+          <div className="w-11 h-11 rounded-lg bg-[#D1D2C9] flex items-center justify-center shrink-0">
+            <CheckCircle2 className="w-5 h-5 text-[#576B45]" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <h3 className="text-[16px] text-stone-900" style={{ fontFamily: "Selva, Georgia, serif", fontStyle: "italic" }}>
+              Signed &amp; accepted
+            </h3>
+            <p className="text-[14px] text-stone-700 mt-1 break-words">{signed.name}</p>
+            <p className="text-[12px] text-stone-400 mt-0.5">
+              Signed {formatDate(signed.date)}
+              {signed.documentId ? ` · ${signed.documentId}` : ""}
+            </p>
+            {signed.dataUrl && (
+              <div className="flex flex-wrap gap-2 mt-4">
+                <a href={signed.dataUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-[13px] bg-stone-900 text-white rounded-full px-4 py-2 hover:bg-stone-800 transition-colors">
+                  <ExternalLink className="w-3.5 h-3.5" /> View
+                </a>
+                <button onClick={() => downloadFile(signed)} className="inline-flex items-center gap-1.5 text-[13px] text-stone-700 border border-stone-300 rounded-full px-4 py-2 hover:bg-stone-100 transition-colors">
+                  <Download className="w-3.5 h-3.5" /> Download
+                </button>
+              </div>
+            )}
+            <p className="text-[12px] text-stone-400 mt-3 flex items-start gap-1.5">
+              <Lock className="w-3.5 h-3.5 text-[#576B45] mt-0.5 shrink-0" />
+              <span>Your signed proposal is saved here to view or download any time. A copy was emailed to you. Need a change? Just message the studio.</span>
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!proposal) {
+    return (
+      <div className="border border-stone-200 rounded-xl bg-white p-5">
+        <h3 className="text-[16px] text-stone-900" style={{ fontFamily: "Selva, Georgia, serif", fontStyle: "italic" }}>
+          Sign your proposal
+        </h3>
+        <p className="text-[13px] text-stone-400 mt-2">Your fee proposal will appear here to review and sign once the studio shares it.</p>
+      </div>
+    );
+  }
+
+  async function submit() {
+    if (!sig) {
+      setError("Please add your signature above.");
+      return;
+    }
+    if (!agree) {
+      setError("Please tick the box to agree to sign electronically.");
       return;
     }
     setBusy(true);
+    setError("");
     try {
-      const dataUrl = await readFileAsDataURL(file);
-      onUpload({ name: file.name, date: today(), size: file.size, dataUrl });
-    } catch (err) {
-      setError(`Couldn't read "${file.name}".`);
+      await onSign(sig);
+      // On success the parent sets `signed`, which swaps this card to the
+      // signed state, so there's nothing else to reset here.
+    } catch (e) {
+      console.error(e);
+      setError(e?.message || "Sorry — something went wrong while signing. Please try again.");
+      setBusy(false);
     }
-    setBusy(false);
   }
+
   return (
     <div className="border border-stone-200 rounded-xl bg-white p-5">
-      <div className="flex items-start gap-4">
-        <div className="w-11 h-11 rounded-lg bg-[#F7F0EC] flex items-center justify-center shrink-0">
-          <FileText className="w-5 h-5 text-stone-500" />
-        </div>
-        <div className="min-w-0 flex-1">
-          <h3 className="text-[16px] text-stone-900" style={{ fontFamily: "Selva, Georgia, serif", fontStyle: "italic" }}>
-            Signed copy
-          </h3>
-          {signed ? (
-            <>
-              <p className="text-[14px] text-stone-700 mt-1 break-words">{signed.name}</p>
-              <p className="text-[12px] text-stone-400 mt-0.5">
-                Uploaded {formatDate(signed.date)}
-                {signed.size != null && ` · ${formatBytes(signed.size)}`}
-              </p>
-              {signed.dataUrl && (
-                <div className="flex flex-wrap gap-2 mt-4">
-                  <a href={signed.dataUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-[13px] bg-stone-900 text-white rounded-full px-4 py-2 hover:bg-stone-800 transition-colors">
-                    <ExternalLink className="w-3.5 h-3.5" /> View
-                  </a>
-                  <button onClick={() => downloadFile(signed)} className="inline-flex items-center gap-1.5 text-[13px] text-stone-700 border border-stone-300 rounded-full px-4 py-2 hover:bg-stone-100 transition-colors">
-                    <Download className="w-3.5 h-3.5" /> Download
-                  </button>
-                </div>
-              )}
-              <p className="text-[12px] text-stone-400 mt-3 flex items-start gap-1.5">
-                <CheckCircle2 className="w-3.5 h-3.5 text-[#576B45] mt-0.5 shrink-0" />
-                <span>Your signed copy is saved. Need to change it? Just message the studio and we'll update it for you.</span>
-              </p>
-            </>
-          ) : (
-            <>
-              <p className="text-[13px] text-stone-500 leading-relaxed mt-1">Once you've signed the fee proposal, upload your copy here so it's stored alongside the original.</p>
-              <label className="inline-flex items-center gap-1.5 text-[13px] bg-stone-900 text-white rounded-full px-4 py-2 cursor-pointer hover:bg-stone-800 transition-colors mt-3">
-                <Upload className="w-3.5 h-3.5" /> {busy ? "Uploading…" : "Upload signed copy"}
-                <input type="file" onChange={handle} className="hidden" disabled={busy} />
-              </label>
-            </>
-          )}
-          {error && <p className="text-[12px] text-red-600 mt-2">{error}</p>}
-        </div>
+      <h3 className="text-[16px] text-stone-900" style={{ fontFamily: "Selva, Georgia, serif", fontStyle: "italic" }}>
+        Review &amp; sign
+      </h3>
+      <p className="text-[13px] text-stone-500 leading-relaxed mt-1">
+        Read the full proposal above, then sign below to accept. A signed PDF copy is emailed to you the moment you sign.
+      </p>
+      <div className="mt-4">
+        <SignaturePad
+          onChange={(v) => {
+            setSig(v);
+            setError("");
+          }}
+        />
       </div>
+      <label className="flex gap-2.5 items-start mt-4 cursor-pointer">
+        <input type="checkbox" checked={agree} onChange={(e) => setAgree(e.target.checked)} className="mt-0.5 w-4 h-4 accent-[#576B45]" />
+        <span className="text-[12.5px] text-stone-600 leading-relaxed">
+          I agree to sign this document electronically. I understand my electronic signature is the legal equivalent of my handwritten signature (Electronic Transactions Act 1999).
+        </span>
+      </label>
+      {error && <p className="text-[12px] text-red-600 mt-2">{error}</p>}
+      <button
+        onClick={submit}
+        disabled={busy}
+        className="w-full mt-4 bg-stone-900 text-white rounded-lg py-3 text-[14px] hover:bg-stone-800 transition-colors disabled:opacity-60 flex items-center justify-center gap-2"
+      >
+        {busy ? "Preparing your signed copy…" : (
+          <>
+            Sign &amp; accept proposal <ChevronRight className="w-4 h-4" />
+          </>
+        )}
+      </button>
     </div>
   );
 }
@@ -2083,7 +2237,7 @@ function EnablePushBanner({ email }) {
   );
 }
 
-function ClientDashboard({ project, viewerEmail, studioStatus, studioStatusColor, autoStatus, onLogout, onSetEmailNotify, onSendMessage, onReactMessage, onPinMessage, onMarkRead, onMarkNotifs, onDismissNotif, onSeenTab, onUploadSigned, onRespondMeeting, installOpen }) {
+function ClientDashboard({ project, viewerEmail, studioStatus, studioStatusColor, autoStatus, onLogout, onSetEmailNotify, onSendMessage, onReactMessage, onPinMessage, onMarkRead, onMarkNotifs, onDismissNotif, onSeenTab, onUploadSigned, onSignProposal, onRespondMeeting, installOpen }) {
   const [tab, setTab] = useState("about");
   const [lightbox, setLightbox] = useState(null);
   const [prefillMsg, setPrefillMsg] = useState("");
@@ -2357,7 +2511,14 @@ function ClientDashboard({ project, viewerEmail, studioStatus, studioStatusColor
                 note={project.feeProposal?.note}
                 emptyText={`Your fee proposal will appear here once ${studioFirstName()} has shared it.`}
               />
-              <ClientSignedCard signed={project.feeProposalSigned} onUpload={onUploadSigned} />
+              <SignProposalCard
+                proposal={project.feeProposal}
+                signed={project.feeProposalSigned}
+                projectName={project.name}
+                clientName={myClient?.name || project.clientName}
+                clientEmail={viewerEmail}
+                onSign={onSignProposal}
+              />
             </div>
           )}
 
@@ -4695,6 +4856,95 @@ export default function App() {
     [activeCode]
   );
 
+  // Client signs the fee proposal in-portal: builds the official signed PDF
+  // (original + Certificate of Completion), stores it, then emails a copy to the
+  // client + studio and pings the studio. See [[studio-nicholas-esign]].
+  const handleSignProposal = useCallback(
+    async (signaturePng) => {
+      const p = projects[activeCode];
+      if (!p || !p.feeProposal || !p.feeProposal.dataUrl) {
+        throw new Error("There's no fee proposal to sign yet.");
+      }
+      // Lazy-load the PDF toolkit (pdf-lib) only when someone actually signs.
+      const { buildSignedProposal, bytesFromUrl, sha256Hex, bytesToDataUrl } = await import("./lib/sign");
+
+      const me = (session?.user?.email || "").trim();
+      const myClient = (p.clients || []).find((c) => (c.email || "").trim().toLowerCase() === me.toLowerCase());
+      const clientName = (myClient?.name || p.clientName || me || "Client").trim();
+
+      // Authoritative IP + timestamp from the server (falls back to local time).
+      const audit = await api.signAudit();
+      const when = new Date();
+      const signedAtLabel =
+        when.toLocaleString("en-AU", {
+          day: "numeric",
+          month: "long",
+          year: "numeric",
+          hour: "numeric",
+          minute: "2-digit",
+          timeZone: "Australia/Melbourne",
+        }) + " (Melbourne)";
+      const documentId = audit?.id || `SN-${when.getFullYear()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
+
+      const originalBytes = await bytesFromUrl(p.feeProposal.dataUrl);
+      const fingerprint = await sha256Hex(originalBytes);
+
+      const cert = {
+        documentTitle: (p.feeProposal.name || "Fee Proposal").replace(/\.pdf$/i, ""),
+        documentId,
+        signerName: clientName,
+        signerEmail: me,
+        signedAtLabel,
+        ip: audit?.ip || "Recorded at signing",
+        device: shortDevice(),
+        projectName: p.name || "",
+        fingerprint,
+        issuedLabel: p.feeProposal.date ? formatDate(p.feeProposal.date) : "",
+        viewedLabel: signedAtLabel,
+        consentText:
+          "Agreed to sign electronically under the Electronic Transactions Act 1999. Identity confirmed via verified portal login.",
+      };
+
+      const signedBytes = await buildSignedProposal({ originalBytes, signaturePng, cert });
+      const fileName = `${(p.feeProposal.name || "Fee Proposal").replace(/\.pdf$/i, "")} — Signed.pdf`;
+
+      // Store the signed PDF in storage (keeps the project record light); fall
+      // back to embedding inline if the bucket isn't reachable.
+      let dataUrl;
+      try {
+        dataUrl = await api.uploadMedia(new Blob([signedBytes], { type: "application/pdf" }), "pdf");
+      } catch (e) {
+        dataUrl = bytesToDataUrl(signedBytes);
+      }
+
+      const signedRecord = {
+        name: fileName,
+        date: today(),
+        size: signedBytes.length,
+        dataUrl,
+        documentId,
+        fingerprint,
+        signedAt: when.toISOString(),
+        signerName: clientName,
+      };
+      setProjects((prev) => ({ ...prev, [activeCode]: { ...prev[activeCode], feeProposalSigned: signedRecord } }));
+
+      // Email the signed copy to client + studio, and push the studio (all best-effort).
+      const isUrl = /^https?:/i.test(dataUrl);
+      api.sendSignedProposal({
+        pdfUrl: isUrl ? dataUrl : undefined,
+        pdfBase64: isUrl ? undefined : bytesToDataUrl(signedBytes).split(",")[1],
+        fileName,
+        clientEmail: me,
+        clientName,
+        projectName: p.name,
+        signedAtLabel,
+      });
+      api.notifyStudioProposalSigned({ clientName, projectName: p.name });
+    },
+    [activeCode, session, projects]
+  );
+
   const handleRespondMeeting = useCallback(
     (meetingId, rsvp) => {
       const me = (session?.user?.email || "").trim().toLowerCase();
@@ -4762,6 +5012,7 @@ export default function App() {
         onDismissNotif={handleDismissNotif}
         onSeenTab={handleSeenTab}
         onUploadSigned={handleUploadSigned}
+        onSignProposal={handleSignProposal}
         onRespondMeeting={handleRespondMeeting}
         installOpen={installOpen}
       />

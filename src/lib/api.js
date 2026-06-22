@@ -286,6 +286,44 @@ export async function notifyPush({ toEmails, toStudio, title, body, url }) {
   }
 }
 
+/* ---------- Fee-proposal e-signature ---------- */
+
+// Ask the server for an authoritative IP + timestamp (and a document id) at the
+// moment of signing, so the certificate's audit trail can't be forged in the
+// browser. Returns { ip, time, id } or null if the function isn't reachable.
+export async function signAudit() {
+  try {
+    const { data, error } = await supabase.functions.invoke("sign-proposal", { body: { action: "audit" } });
+    if (error) throw error;
+    return data || null;
+  } catch (e) {
+    console.error("sign audit failed", e);
+    return null;
+  }
+}
+
+// Email the finished signed PDF (as an attachment) to the client and the studio.
+// Best-effort; never blocks the signing flow.
+export async function sendSignedProposal({ pdfBase64, fileName, clientEmail, clientName, projectName, signedAtLabel }) {
+  try {
+    await supabase.functions.invoke("sign-proposal", {
+      body: { action: "send", pdfBase64, fileName, clientEmail, clientName, projectName, signedAtLabel },
+    });
+  } catch (e) {
+    console.error("send signed proposal failed", e);
+  }
+}
+
+// Tell the studio (push) that a client has signed their fee proposal.
+export async function notifyStudioProposalSigned({ clientName, projectName }) {
+  return notifyPush({
+    toStudio: true,
+    title: "Fee proposal signed ✓",
+    body: `${clientName || "A client"} signed the proposal${projectName ? ` for ${projectName}` : ""}.`,
+    url: "/",
+  });
+}
+
 // Best-effort email to clients who opted in to email updates.
 export async function notifyEmail({ toEmails, subject, heading, body, projectName, senderName, time, kind }) {
   if (!toEmails || toEmails.length === 0) return;

@@ -64,9 +64,10 @@ const STUDIO_INFO = {
   logoUrl: "/logo.png",
   tagline: "Considered interiors & architecture",
   socials: [
-    { label: "Instagram", url: "https://instagram.com/studionicholas" },
-    { label: "Pinterest", url: "https://pinterest.com/studionicholas" },
-    { label: "LinkedIn", url: "https://linkedin.com/company/studionicholas" },
+    { label: "Instagram", url: "https://instagram.com/studio_nicholas" },
+    { label: "Pinterest", url: "https://www.pinterest.com/Studio_nicholas" },
+    { label: "LinkedIn", url: "https://www.linkedin.com/in/nicholas-g-568657157" },
+    { label: "Substack", url: "https://nicholasgilbert0.substack.com" },
   ],
 };
 

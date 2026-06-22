@@ -7,7 +7,7 @@
 // Optional: WELCOME_FROM – e.g. "Studio Nicholas <studio@studionicholas.com.au>"
 
 const RESEND = Deno.env.get("RESEND_API_KEY") ?? "";
-const FROM = Deno.env.get("WELCOME_FROM") ?? "Studio Nicholas <studio@studionicholas.com.au>";
+const FROM = Deno.env.get("WELCOME_FROM") ?? "Studio Nicholas <info@studionicholas.com.au>";
 const LOGIN_URL = "https://portal.studionicholas.com.au";
 
 const cors = {
@@ -31,7 +31,7 @@ function emailHtml(heading: string, body: string) {
         <a href="${LOGIN_URL}" style="display:inline-block;background:#1C1A17;color:#ffffff;text-decoration:none;font-family:Arial,sans-serif;font-size:15px;padding:13px 30px;border-radius:8px;">Open your portal</a>
       </td></tr>
       <tr><td style="padding:0 40px 34px;">
-        <p style="font-size:11px;line-height:1.6;color:#a8a29e;margin:0;font-family:Arial,sans-serif;">You're getting this because you asked for email updates on your project. Reply in the portal, not to this email.</p>
+        <p style="font-size:11px;line-height:1.6;color:#a8a29e;margin:0;font-family:Arial,sans-serif;">You're getting this because you asked for email updates on your project. You can reply to this email or message us in your portal.</p>
       </td></tr>
     </table>
   </td></tr>
@@ -54,7 +54,7 @@ Deno.serve(async (req) => {
           const r = await fetch("https://api.resend.com/emails", {
             method: "POST",
             headers: { Authorization: `Bearer ${RESEND}`, "Content-Type": "application/json" },
-            body: JSON.stringify({ from: FROM, to: [to], subject: subject || "New activity on your project", html }),
+            body: JSON.stringify({ from: FROM, to: [to], reply_to: "info@studionicholas.com.au", subject: subject || "New activity on your project", html }),
           });
           if (r.ok) sent++;
         } catch (_e) {

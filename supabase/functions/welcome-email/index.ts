@@ -9,7 +9,7 @@
 //   WELCOME_FROM    – e.g. "Studio Nicholas <studio@studionicholas.com.au>"
 
 const RESEND = Deno.env.get("RESEND_API_KEY") ?? "";
-const FROM = Deno.env.get("WELCOME_FROM") ?? "Studio Nicholas <studio@studionicholas.com.au>";
+const FROM = Deno.env.get("WELCOME_FROM") ?? "Studio Nicholas <info@studionicholas.com.au>";
 const LOGIN_URL = "https://portal.studionicholas.com.au";
 
 const cors = {
@@ -58,6 +58,7 @@ Deno.serve(async (req) => {
       body: JSON.stringify({
         from: FROM,
         to: [email],
+        reply_to: "info@studionicholas.com.au",
         subject: "Your Studio Nicholas portal is ready",
         html: emailHtml(),
       }),

@@ -1935,22 +1935,20 @@ function ClientSignedCard({ signed, onUpload }) {
                 Uploaded {formatDate(signed.date)}
                 {signed.size != null && ` · ${formatBytes(signed.size)}`}
               </p>
-              <div className="flex flex-wrap gap-2 mt-4">
-                {signed.dataUrl && (
-                  <>
-                    <a href={signed.dataUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-[13px] bg-stone-900 text-white rounded-full px-4 py-2 hover:bg-stone-800 transition-colors">
-                      <ExternalLink className="w-3.5 h-3.5" /> View
-                    </a>
-                    <button onClick={() => downloadFile(signed)} className="inline-flex items-center gap-1.5 text-[13px] text-stone-700 border border-stone-300 rounded-full px-4 py-2 hover:bg-stone-100 transition-colors">
-                      <Download className="w-3.5 h-3.5" /> Download
-                    </button>
-                  </>
-                )}
-                <label className="inline-flex items-center gap-1.5 text-[13px] text-stone-600 border border-stone-300 rounded-full px-4 py-2 cursor-pointer hover:bg-stone-100">
-                  <Upload className="w-3.5 h-3.5" /> {busy ? "Uploading…" : "Replace"}
-                  <input type="file" onChange={handle} className="hidden" disabled={busy} />
-                </label>
-              </div>
+              {signed.dataUrl && (
+                <div className="flex flex-wrap gap-2 mt-4">
+                  <a href={signed.dataUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-[13px] bg-stone-900 text-white rounded-full px-4 py-2 hover:bg-stone-800 transition-colors">
+                    <ExternalLink className="w-3.5 h-3.5" /> View
+                  </a>
+                  <button onClick={() => downloadFile(signed)} className="inline-flex items-center gap-1.5 text-[13px] text-stone-700 border border-stone-300 rounded-full px-4 py-2 hover:bg-stone-100 transition-colors">
+                    <Download className="w-3.5 h-3.5" /> Download
+                  </button>
+                </div>
+              )}
+              <p className="text-[12px] text-stone-400 mt-3 flex items-start gap-1.5">
+                <CheckCircle2 className="w-3.5 h-3.5 text-[#576B45] mt-0.5 shrink-0" />
+                <span>Your signed copy is saved. Need to change it? Just message the studio and we'll update it for you.</span>
+              </p>
             </>
           ) : (
             <>
@@ -3719,21 +3717,33 @@ function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioSt
     }));
   }
 
+  // Timeline alerts only fire when a milestone is actively "In progress" or
+  // "Complete" — never for an upcoming/planned one being added or scheduled.
+  function milestoneNotifText(status, title) {
+    if (status === "done") return `Milestone reached: ${title}`;
+    if (status === "current") return `Now in progress: ${title}`;
+    return null;
+  }
   function addMilestone(code, data) {
-    updateProject(code, (p) => ({
-      ...p,
-      milestones: [...p.milestones, { id: uid(), title: data.title, date: data.date, endDate: data.endDate || "", status: data.status, note: data.note || "" }],
-      notifications: withNotif(p, "milestone", `New milestone: ${data.title}`),
-    }));
+    updateProject(code, (p) => {
+      const text = milestoneNotifText(data.status, data.title);
+      return {
+        ...p,
+        milestones: [...p.milestones, { id: uid(), title: data.title, date: data.date, endDate: data.endDate || "", status: data.status, note: data.note || "" }],
+        notifications: text ? withNotif(p, "milestone", text) : p.notifications,
+      };
+    });
   }
   function setMilestoneStatus(code, id, status) {
     updateProject(code, (p) => {
       const ms = p.milestones.find((m) => m.id === id);
-      const reached = ms && status === "done" && ms.status !== "done";
+      // Only notify when the status actually changes into "in progress" or "complete".
+      const changed = ms && ms.status !== status;
+      const text = changed ? milestoneNotifText(status, ms.title) : null;
       return {
         ...p,
         milestones: p.milestones.map((m) => (m.id === id ? { ...m, status } : m)),
-        notifications: reached ? withNotif(p, "milestone", `Milestone reached: ${ms.title}`) : p.notifications,
+        notifications: text ? withNotif(p, "milestone", text) : p.notifications,
       };
     });
   }
@@ -3741,10 +3751,18 @@ function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioSt
     updateProject(code, (p) => ({ ...p, milestones: p.milestones.filter((m) => m.id !== id) }));
   }
   function editMilestone(code, id, data) {
-    updateProject(code, (p) => ({
-      ...p,
-      milestones: p.milestones.map((m) => (m.id === id ? { ...m, title: data.title, date: data.date, endDate: data.endDate || "", status: data.status, note: data.note || "" } : m)),
-    }));
+    updateProject(code, (p) => {
+      const ms = p.milestones.find((m) => m.id === id);
+      // Editing details is silent; only a real status change into in-progress/
+      // complete sends an alert (mirrors the inline status dropdown).
+      const changed = ms && ms.status !== data.status;
+      const text = changed ? milestoneNotifText(data.status, data.title) : null;
+      return {
+        ...p,
+        milestones: p.milestones.map((m) => (m.id === id ? { ...m, title: data.title, date: data.date, endDate: data.endDate || "", status: data.status, note: data.note || "" } : m)),
+        notifications: text ? withNotif(p, "milestone", text) : p.notifications,
+      };
+    });
   }
   function moveMilestone(code, index, dir) {
     updateProject(code, (p) => {

@@ -1,0 +1,39 @@
+<!-- Supabase → Authentication → Email Templates → "Confirm signup"
+     Subject: Confirm your email — Studio Nicholas portal
+     Sent when a client self-signs-up (with "Confirm email" turned ON).
+     Uses {{ .ConfirmationURL }} — clicking it confirms the email and signs them in. -->
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#F7F0EC;padding:28px 12px;font-family:Georgia,'Times New Roman',serif;">
+  <tr><td align="center">
+    <table width="520" cellpadding="0" cellspacing="0" style="max-width:520px;width:100%;background:#ffffff;border-radius:16px;overflow:hidden;border:1px solid #efe7df;">
+      <tr><td style="font-size:0;line-height:0;">
+        <img src="https://portal.studionicholas.com.au/email-banner.jpg" alt="Studio Nicholas" width="520" style="width:100%;max-width:520px;height:auto;display:block;">
+      </td></tr>
+      <tr><td style="height:4px;line-height:4px;font-size:0;background:#9BACB6;">&nbsp;</td></tr>
+      <tr><td style="padding:30px 44px 0;text-align:center;">
+        <img src="https://portal.studionicholas.com.au/logo.png" alt="Studio Nicholas" width="160" style="max-width:160px;height:auto;">
+      </td></tr>
+      <tr><td style="padding:8px 44px 0;text-align:center;">
+        <p style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:11px;letter-spacing:1.5px;text-transform:uppercase;color:#8a9aa3;">Confirm your email</p>
+      </td></tr>
+      <tr><td style="padding:6px 44px 0;text-align:center;">
+        <h1 style="font-size:25px;font-style:italic;color:#1C1A17;margin:0;font-weight:normal;">You're almost in</h1>
+      </td></tr>
+      <tr><td style="padding:14px 44px 0;text-align:center;">
+        <p style="font-size:15px;line-height:1.65;color:#57534e;margin:0;font-family:Arial,Helvetica,sans-serif;">
+          Thanks for setting up your Studio Nicholas portal login. Confirm your email below and you'll go straight to your project — updates, timeline, meetings, documents and messages, all in one place.
+        </p>
+      </td></tr>
+      <tr><td style="padding:24px 44px 4px;text-align:center;">
+        <a href="{{ .ConfirmationURL }}" style="display:inline-block;background:#1C1A17;color:#ffffff;text-decoration:none;font-family:Arial,Helvetica,sans-serif;font-size:15px;padding:14px 34px;border-radius:9px;">Confirm my email &nbsp;&rarr;</a>
+      </td></tr>
+      <tr><td style="padding:18px 44px 30px;text-align:center;">
+        <p style="font-size:12px;line-height:1.6;color:#a8a29e;margin:0;font-family:Arial,Helvetica,sans-serif;">
+          If the button doesn't work, paste this link into your browser:<br>
+          <a href="{{ .ConfirmationURL }}" style="color:#576b45;word-break:break-all;">{{ .ConfirmationURL }}</a><br><br>
+          If you didn't create this account, you can safely ignore this email.
+        </p>
+      </td></tr>
+    </table>
+    <p style="font-family:Georgia,serif;font-style:italic;font-size:13px;color:#9c958c;margin:14px 0 0;">Studio Nicholas</p>
+  </td></tr>
+</table>

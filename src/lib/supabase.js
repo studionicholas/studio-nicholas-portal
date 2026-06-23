@@ -18,3 +18,15 @@ try {
 export const inviteType = _inviteType;
 
 export const supabase = createClient(url, anon);
+
+// Keep the realtime (live-sync) connection authenticated with the signed-in
+// user's token. Without this, RLS-protected postgres_changes on projects /
+// studio_settings can be silently withheld, so the app falls back to slow
+// polling and cross-device edits (messages, RSVPs) lag or get clobbered.
+supabase.auth.onAuthStateChange((_event, session) => {
+  try {
+    supabase.realtime.setAuth(session?.access_token ?? null);
+  } catch (e) {
+    console.error("realtime setAuth failed", e);
+  }
+});

@@ -3272,7 +3272,7 @@ function AdminMeetings({ project, onAdd, onEdit, onDelete }) {
                     // exact key but this is a single-client meeting, fall back to the
                     // meeting's overall rsvp (covers a login-email vs listed-email mismatch).
                     const status =
-                      (m.rsvps && m.rsvps[(c.email || "").toLowerCase()]) || (clients.length === 1 ? m.rsvp : null) || "pending";
+                      (m.rsvps && m.rsvps[(c.email || "").trim().toLowerCase()]) || (clients.length === 1 ? m.rsvp : null) || "pending";
                     const r = RSVP_META[status];
                     return (
                       <span key={c.email} className="inline-flex items-center text-[11px] rounded-full px-2 py-0.5" style={{ color: r.color, backgroundColor: r.tint }}>

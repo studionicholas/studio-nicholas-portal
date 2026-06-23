@@ -852,8 +852,18 @@ function ClientLogin({ onEnter, onSignUp, loginImage, loginMessage }) {
   const [resetMsg, setResetMsg] = useState("");
   const [resetBusy, setResetBusy] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [confirmSentTo, setConfirmSentTo] = useState(null); // email awaiting confirmation
   const heroSrc = loginImage || LOGIN_HERO;
   const isSignUp = mode === "signup";
+
+  async function handleResend() {
+    setBusy(true);
+    setError("");
+    const { error: err } = await api.resendConfirmation(confirmSentTo || email);
+    setBusy(false);
+    if (err) setError(err.message || "Couldn't resend just now — wait a minute and try again.");
+    else setResetMsg("Sent again — check your inbox and your spam/junk folder.");
+  }
 
   async function handleReset() {
     if (!email.trim()) {
@@ -877,9 +887,11 @@ function ClientLogin({ onEnter, onSignUp, loginImage, loginMessage }) {
     }
     setBusy(true);
     setError("");
-    if (isSignUp) await onSignUp(email, password, news, setError);
-    else await onEnter(email, password, setError);
+    const res = isSignUp ? await onSignUp(email, password, news) : await onEnter(email, password);
     setBusy(false);
+    if (res?.needsConfirm) setConfirmSentTo(email.trim());
+    else if (res?.error) setError(res.error);
+    // res.ok → the auth listener logs them in automatically.
   }
 
   return (
@@ -900,6 +912,47 @@ function ClientLogin({ onEnter, onSignUp, loginImage, loginMessage }) {
             <div className="mb-8 hidden md:block">
               <Logo large />
             </div>
+
+            {confirmSentTo ? (
+              <div>
+                <div className="w-12 h-12 rounded-xl bg-[#9BACB6]/25 flex items-center justify-center mb-5">
+                  <Mail className="w-6 h-6 text-[#576B45]" />
+                </div>
+                <h1 className="text-[27px] text-stone-900 mb-2" style={{ fontFamily: "Selva, Georgia, serif", fontStyle: "italic" }}>
+                  Check your email
+                </h1>
+                <p className="text-stone-600 text-[14px] leading-relaxed mb-2">
+                  We've sent a confirmation link to <strong className="text-stone-900">{confirmSentTo}</strong>. Click it to finish setting up, and you'll go straight to your project.
+                </p>
+                <p className="text-stone-400 text-[13px] mb-6">Can't find it? Check your spam/junk folder — it can take a minute to arrive.</p>
+                {error && <p className="text-[13px] text-red-600 mb-3">{error}</p>}
+                {resetMsg && <p className="text-[13px] text-[#576B45] mb-3">{resetMsg}</p>}
+                <button
+                  onClick={handleResend}
+                  disabled={busy}
+                  className="w-full bg-stone-900 text-white rounded-lg py-3.5 text-[14px] hover:bg-stone-800 transition-colors disabled:opacity-60"
+                >
+                  {busy ? "Sending…" : "Resend the confirmation email"}
+                </button>
+                <button
+                  onClick={() => {
+                    setConfirmSentTo(null);
+                    setMode("signin");
+                    setError("");
+                    setResetMsg("");
+                  }}
+                  className="w-full text-stone-500 hover:text-stone-800 text-[13px] py-3 mt-1"
+                >
+                  Back to sign in
+                </button>
+                <div className="mt-4 text-center">
+                  <a href={`mailto:${STUDIO_INFO.email}?subject=Trouble%20signing%20in`} className="inline-flex items-center gap-1.5 text-[13px] text-stone-500 hover:text-stone-800">
+                    <Mail className="w-3.5 h-3.5" /> Still stuck? Contact us
+                  </a>
+                </div>
+              </div>
+            ) : (
+            <>
             <h1 className="text-[27px] text-stone-900 mb-1.5" style={{ fontFamily: "Selva, Georgia, serif", fontStyle: "italic" }}>
               {isSignUp ? "Set up your login" : "Welcome back"}
             </h1>
@@ -999,6 +1052,8 @@ function ClientLogin({ onEnter, onSignUp, loginImage, loginMessage }) {
             </div>
 
             <p className="text-center text-stone-400 text-[12px] mt-6">Use the email address Studio Nicholas has on file for your project.</p>
+            </>
+            )}
           </div>
         </div>
       </div>
@@ -4939,15 +4994,21 @@ export default function App() {
     }
   }, []);
 
-  const handleSignIn = useCallback(async (email, password, setError) => {
+  const handleSignIn = useCallback(async (email, password) => {
     const { error } = await api.signIn(email, password);
-    if (error) setError(error.message || "Those details didn't match. Check and try again.");
+    if (error) {
+      // Supabase says "Email not confirmed" when confirmation is on and they
+      // haven't clicked the link yet.
+      if (/confirm/i.test(error.message || "")) return { needsConfirm: true };
+      return { error: error.message || "Those details didn't match. Check and try again." };
+    }
+    return { ok: true };
   }, []);
 
   // Self-service "set up login": create the account (email + password). If the
   // email already has an account, fall back to signing them in with what they
   // typed. On success, the auth listener loads their project automatically.
-  const handleSignUp = useCallback(async (email, password, optIn, setError) => {
+  const handleSignUp = useCallback(async (email, password, optIn) => {
     // Opt-in to the news list (Klaviyo) — best-effort, regardless of whether the
     // account is new or already existed.
     if (optIn) subscribeToNews(email);
@@ -4955,27 +5016,30 @@ export default function App() {
     if (error) {
       if (/already|registered|exists/i.test(error.message || "")) {
         const { error: sErr } = await api.signIn(email, password);
-        if (sErr) setError("You already have a login for this email. Use “Sign in” above — or “Forgot your password?” to reset it.");
-        return;
+        if (sErr) {
+          if (/confirm/i.test(sErr.message || "")) return { needsConfirm: true };
+          return { error: "You already have a login for this email. Use “Sign in” above — or “Forgot your password?” to reset it." };
+        }
+        return { ok: true };
       }
-      setError(error.message || "Couldn't set up your login. Please try again.");
-      return;
+      return { error: error.message || "Couldn't set up your login. Please try again." };
     }
-    // Genuinely new account → welcome the client + alert the studio (same as the
-    // invite flow), so a self-service signup isn't silent.
     if (data?.user) {
-      api.sendSetupEmail(email);
+      // Always let the studio know a client signed up.
       api.notifyStudioClientReady(email);
       api.notifyStudioEmail({
         subject: "A client set up their portal",
         heading: "New client account ready",
         body: `${email} has set up their login and can now access their portal — you can message them and they'll receive it.`,
       });
+      // Only send the "your portal is ready" welcome when they're already in
+      // (email confirmation OFF). With confirmation ON, Supabase's confirm email
+      // IS their welcome — don't double up.
+      if (data.session) api.sendSetupEmail(email);
     }
-    // If the project requires email confirmation, there's no session yet.
-    if (!data?.session) {
-      setError("Almost there — check your inbox to confirm your email, then sign in.");
-    }
+    // No session = email confirmation is on; they need to click the link.
+    if (!data?.session) return { needsConfirm: true };
+    return { ok: true };
   }, []);
 
   const handleSignOut = useCallback(async () => {

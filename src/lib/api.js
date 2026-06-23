@@ -65,6 +65,11 @@ export async function signOut() {
   return supabase.auth.signOut();
 }
 
+// Resend the "confirm your email" link (for clients who didn't get it / lost it).
+export async function resendConfirmation(email) {
+  return supabase.auth.resend({ type: "signup", email: (email || "").trim() });
+}
+
 // True if the signed-in user is a studio admin (listed in the `admins` table).
 export async function isAdmin() {
   const { data, error } = await supabase.rpc("is_admin");

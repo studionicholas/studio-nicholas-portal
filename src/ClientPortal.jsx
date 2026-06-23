@@ -4961,6 +4961,17 @@ export default function App() {
       setError(error.message || "Couldn't set up your login. Please try again.");
       return;
     }
+    // Genuinely new account → welcome the client + alert the studio (same as the
+    // invite flow), so a self-service signup isn't silent.
+    if (data?.user) {
+      api.sendSetupEmail(email);
+      api.notifyStudioClientReady(email);
+      api.notifyStudioEmail({
+        subject: "A client set up their portal",
+        heading: "New client account ready",
+        body: `${email} has set up their login and can now access their portal — you can message them and they'll receive it.`,
+      });
+    }
     // If the project requires email confirmation, there's no session yet.
     if (!data?.session) {
       setError("Almost there — check your inbox to confirm your email, then sign in.");

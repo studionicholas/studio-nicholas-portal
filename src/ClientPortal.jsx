@@ -4945,7 +4945,7 @@ export default function App() {
         console.error("poll failed", e);
       }
     };
-    const id = setInterval(tick, 6000);
+    const id = setInterval(tick, 3000);
     const onFocus = () => refetchRemote();
     const onVisible = () => {
       if (document.visibilityState === "visible") refetchRemote();

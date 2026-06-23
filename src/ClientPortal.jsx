@@ -3225,7 +3225,17 @@ function AdminMilestones({ project, onAdd, onEdit, onSetStatus, onMove, onDelete
 function AdminMeetings({ project, onAdd, onEdit, onDelete }) {
   const [form, setForm] = useState({ title: "", date: "", time: "", timezone: "Australia/Melbourne", mode: "online", link: "", location: "", message: "", invitees: [] });
   const [editingId, setEditingId] = useState(null);
-  const sorted = [...project.meetings].sort((a, b) => new Date(b.instant) - new Date(a.instant));
+  // Order chronologically: upcoming meetings first (soonest at the top), then
+  // past meetings (most recent first) — matches the client's view.
+  const nowMs = Date.now();
+  const sorted = [...project.meetings].sort((a, b) => {
+    const ta = new Date(a.instant).getTime();
+    const tb = new Date(b.instant).getTime();
+    const fa = ta >= nowMs;
+    const fb = tb >= nowMs;
+    if (fa !== fb) return fa ? -1 : 1; // upcoming before past
+    return fa ? ta - tb : tb - ta; // upcoming: soonest first; past: most recent first
+  });
   const projectClients = (project.clients || []).filter((c) => c.email);
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
   const toggleInvitee = (email) => {

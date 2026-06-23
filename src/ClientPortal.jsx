@@ -3268,7 +3268,11 @@ function AdminMeetings({ project, onAdd, onEdit, onDelete }) {
               return (
                 <div className="flex flex-wrap gap-1.5 mt-1.5">
                   {clients.map((c) => {
-                    const status = (m.rsvps && m.rsvps[(c.email || "").toLowerCase()]) || "pending";
+                    // Read the client's RSVP by their email; if it's not under that
+                    // exact key but this is a single-client meeting, fall back to the
+                    // meeting's overall rsvp (covers a login-email vs listed-email mismatch).
+                    const status =
+                      (m.rsvps && m.rsvps[(c.email || "").toLowerCase()]) || (clients.length === 1 ? m.rsvp : null) || "pending";
                     const r = RSVP_META[status];
                     return (
                       <span key={c.email} className="inline-flex items-center text-[11px] rounded-full px-2 py-0.5" style={{ color: r.color, backgroundColor: r.tint }}>

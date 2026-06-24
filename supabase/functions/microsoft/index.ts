@@ -124,7 +124,15 @@ Deno.serve(async (req) => {
     if (action === "deleteEvent") {
       const token = await freshAccess();
       if (!token || !p.id) return json({ ok: false });
-      await fetch(`https://graph.microsoft.com/v1.0/me/events/${p.id}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
+      // "cancel" emails the attendees a cancellation notice AND removes the event
+      // from the organiser's calendar (moves it to Deleted Items).
+      const r = await fetch(`https://graph.microsoft.com/v1.0/me/events/${p.id}/cancel`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ comment: p.comment || "This meeting has been cancelled." }),
+      });
+      // If it can't be cancelled (e.g. already gone), fall back to a plain delete.
+      if (!r.ok) await fetch(`https://graph.microsoft.com/v1.0/me/events/${p.id}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
       return json({ ok: true });
     }
 

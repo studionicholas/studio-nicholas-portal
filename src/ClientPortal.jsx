@@ -3230,17 +3230,10 @@ function AdminMeetings({ project, onAdd, onEdit, onDelete, onSyncResponses }) {
     if ((project.meetings || []).some((m) => m.msEventId)) onSyncResponses && onSyncResponses();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [project.code]);
-  // Order chronologically: upcoming meetings first (soonest at the top), then
-  // past meetings (most recent first) — matches the client's view.
+  // Split into upcoming (soonest first) and past (most recent first).
   const nowMs = Date.now();
-  const sorted = [...project.meetings].sort((a, b) => {
-    const ta = new Date(a.instant).getTime();
-    const tb = new Date(b.instant).getTime();
-    const fa = ta >= nowMs;
-    const fb = tb >= nowMs;
-    if (fa !== fb) return fa ? -1 : 1; // upcoming before past
-    return fa ? ta - tb : tb - ta; // upcoming: soonest first; past: most recent first
-  });
+  const upcoming = [...project.meetings].filter((m) => new Date(m.instant).getTime() >= nowMs).sort((a, b) => new Date(a.instant) - new Date(b.instant));
+  const past = [...project.meetings].filter((m) => new Date(m.instant).getTime() < nowMs).sort((a, b) => new Date(b.instant) - new Date(a.instant));
   const projectClients = (project.clients || []).filter((c) => c.email);
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
   const toggleInvitee = (email) => {
@@ -3257,10 +3250,7 @@ function AdminMeetings({ project, onAdd, onEdit, onDelete, onSyncResponses }) {
     setEditingId(m.id);
   }
 
-  return (
-    <div className="space-y-3">
-      {sorted.length === 0 && <p className="text-[13px] text-stone-400">No meetings yet.</p>}
-      {sorted.map((m) => (
+  const renderMeeting = (m) => (
         <div key={m.id} className="border border-stone-200 rounded-lg p-3.5 bg-white flex items-start gap-3">
           <span className="shrink-0 text-stone-400 mt-0.5">{m.mode === "online" ? <Video className="w-4 h-4" /> : <MapPin className="w-4 h-4" />}</span>
           <div className="min-w-0 flex-1">
@@ -3313,7 +3303,18 @@ function AdminMeetings({ project, onAdd, onEdit, onDelete, onSyncResponses }) {
             </button>
           </div>
         </div>
-      ))}
+  );
+
+  return (
+    <div className="space-y-3">
+      {project.meetings.length === 0 && <p className="text-[13px] text-stone-400">No meetings yet.</p>}
+      {upcoming.map(renderMeeting)}
+      {past.length > 0 && (
+        <div className="pt-1">
+          <p className="text-[11px] text-stone-400 uppercase tracking-wide mb-2">Past meetings</p>
+          <div className="space-y-2 opacity-70">{past.map(renderMeeting)}</div>
+        </div>
+      )}
 
       <form
         onSubmit={(e) => {

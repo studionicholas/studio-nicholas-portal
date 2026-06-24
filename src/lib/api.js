@@ -351,6 +351,15 @@ export async function microsoftDeleteEvent(id) {
     console.error("ms delete event failed", e);
   }
 }
+// Read attendees' calendar responses for a Teams event → [{ email, response }].
+export async function microsoftEventStatus(id) {
+  try {
+    const { data } = await supabase.functions.invoke("microsoft", { body: { action: "eventStatus", id } });
+    return data?.responses || [];
+  } catch (e) {
+    return [];
+  }
+}
 
 /* ---------- Fee-proposal e-signature ---------- */
 

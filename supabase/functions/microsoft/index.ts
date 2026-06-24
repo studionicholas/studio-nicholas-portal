@@ -121,6 +121,14 @@ Deno.serve(async (req) => {
       return json({ id: data.id, joinUrl: data.onlineMeeting?.joinUrl || "", webLink: data.webLink || "" });
     }
 
+    if (action === "eventStatus") {
+      const token = await freshAccess();
+      if (!token || !p.id) return json({ responses: [] });
+      const ev = await fetch(`https://graph.microsoft.com/v1.0/me/events/${p.id}?$select=attendees`, { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.json());
+      const responses = (ev.attendees || []).map((a) => ({ email: (a.emailAddress?.address || "").toLowerCase(), response: a.status?.response || "none" }));
+      return json({ responses });
+    }
+
     if (action === "deleteEvent") {
       const token = await freshAccess();
       if (!token || !p.id) return json({ ok: false });

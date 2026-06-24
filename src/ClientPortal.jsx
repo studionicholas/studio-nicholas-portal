@@ -3222,9 +3222,14 @@ function AdminMilestones({ project, onAdd, onEdit, onSetStatus, onMove, onDelete
   );
 }
 
-function AdminMeetings({ project, onAdd, onEdit, onDelete }) {
+function AdminMeetings({ project, onAdd, onEdit, onDelete, onSyncResponses }) {
   const [form, setForm] = useState({ title: "", date: "", time: "", timezone: "Australia/Melbourne", mode: "online", link: "", location: "", message: "", invitees: [] });
   const [editingId, setEditingId] = useState(null);
+  // On opening this project's meetings, pull calendar (Teams) responses in.
+  useEffect(() => {
+    if ((project.meetings || []).some((m) => m.msEventId)) onSyncResponses && onSyncResponses();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [project.code]);
   // Order chronologically: upcoming meetings first (soonest at the top), then
   // past meetings (most recent first) — matches the client's view.
   const nowMs = Date.now();
@@ -3264,6 +3269,11 @@ function AdminMeetings({ project, onAdd, onEdit, onDelete }) {
               {fmtInZone(m.instant, m.timezone)} {tzAbbrev(m.instant, m.timezone)} · {m.mode === "online" ? "Online" : "In person"}
             </p>
             {m.mode === "in-person" && m.location && <p className="text-[12px] text-stone-400 truncate">{m.location}</p>}
+            {m.mode === "online" && m.link && (
+              <a href={m.link} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-[12px] text-[#185FA5] hover:underline mt-1">
+                <Video className="w-3 h-3" /> Join Teams meeting
+              </a>
+            )}
             {(() => {
               const allC = (project.clients || []).filter((c) => c.email);
               const clients = m.invitees && m.invitees.length ? allC.filter((c) => m.invitees.map((e) => (e || "").toLowerCase()).includes(c.email.toLowerCase())) : allC;
@@ -4309,6 +4319,46 @@ function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioSt
     if (m?.msEventId) api.microsoftDeleteEvent(m.msEventId);
     updateProject(code, (p) => ({ ...p, meetings: p.meetings.filter((mm) => mm.id !== id) }));
   }
+  // Pull attendees' calendar responses (Teams meetings) into the portal so the
+  // back end shows Accepted/Declined even when the client responded via the
+  // Outlook invite. Best-effort; only writes when something actually changed.
+  async function syncMeetingResponses(code) {
+    const proj = projects[code];
+    const teams = (proj?.meetings || []).filter((m) => m.msEventId);
+    if (!teams.length) return;
+    const map = (resp) => (resp === "accepted" || resp === "tentativelyAccepted" ? "accepted" : resp === "declined" ? "declined" : null);
+    const results = await Promise.all(teams.map(async (m) => ({ id: m.id, responses: await api.microsoftEventStatus(m.msEventId) })));
+    const byId = {};
+    let anyChange = false;
+    results.forEach((res) => {
+      byId[res.id] = res.responses;
+      const mm = teams.find((t) => t.id === res.id);
+      (res.responses || []).forEach((r) => {
+        const v = map(r.response);
+        if (v && r.email && (mm?.rsvps?.[r.email] || "pending") !== v) anyChange = true;
+      });
+    });
+    if (!anyChange) return;
+    updateProject(code, (p) => ({
+      ...p,
+      meetings: p.meetings.map((mm) => {
+        const resp = byId[mm.id];
+        if (!resp || !resp.length) return mm;
+        const rsvps = { ...(mm.rsvps || {}) };
+        let globalRsvp = mm.rsvp;
+        let changed = false;
+        resp.forEach((r) => {
+          const v = map(r.response);
+          if (v && r.email && rsvps[r.email] !== v) {
+            rsvps[r.email] = v;
+            globalRsvp = v;
+            changed = true;
+          }
+        });
+        return changed ? { ...mm, rsvps, rsvp: globalRsvp } : mm;
+      }),
+    }));
+  }
 
   function setIssuedProposal(code, file) {
     updateProject(code, (p) => ({ ...p, feeProposal: file, notifications: withNotif(p, "fee", "Fee proposal shared") }));
@@ -4681,7 +4731,7 @@ function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioSt
 
             {adminTab === "meetings" && (
             <AdminSection title="Meetings">
-              <AdminMeetings project={project} onAdd={(d) => addMeeting(project.code, d)} onEdit={(id, d) => editMeeting(project.code, id, d)} onDelete={(id) => deleteMeeting(project.code, id)} />
+              <AdminMeetings project={project} onAdd={(d) => addMeeting(project.code, d)} onEdit={(id, d) => editMeeting(project.code, id, d)} onDelete={(id) => deleteMeeting(project.code, id)} onSyncResponses={() => syncMeetingResponses(project.code)} />
             </AdminSection>
             )}
 

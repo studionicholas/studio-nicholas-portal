@@ -3355,7 +3355,10 @@ function AdminMeetings({ project, onAdd, onEdit, onDelete }) {
           </button>
         </div>
         {form.mode === "online" ? (
-          <input value={form.link} onChange={(e) => set("link", e.target.value)} placeholder="Teams meeting link" className="w-full px-3 py-2 rounded-lg border border-stone-300 text-[14px] focus:outline-none focus:ring-2 focus:ring-[#B7453C]" />
+          <div>
+            <input value={form.link} onChange={(e) => set("link", e.target.value)} placeholder="Teams link — or leave blank to auto-create one" className="w-full px-3 py-2 rounded-lg border border-stone-300 text-[14px] focus:outline-none focus:ring-2 focus:ring-[#B7453C]" />
+            <p className="text-[11px] text-stone-400 mt-1">Leave blank and (if Microsoft is connected) we'll create a Teams meeting, add it to your calendar, and invite the client. Or paste your own link.</p>
+          </div>
         ) : (
           <input value={form.location} onChange={(e) => set("location", e.target.value)} placeholder="Address / location" className="w-full px-3 py-2 rounded-lg border border-stone-300 text-[14px] focus:outline-none focus:ring-2 focus:ring-[#B7453C]" />
         )}
@@ -4240,12 +4243,13 @@ function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioSt
 
   function addMeeting(code, data) {
     const instant = zonedToInstant(`${data.date}T${data.time}`, data.timezone);
+    const id = uid();
     updateProject(code, (p) => ({
       ...p,
       meetings: [
         ...p.meetings,
         {
-          id: uid(),
+          id,
           title: data.title,
           mode: data.mode,
           link: data.mode === "online" ? data.link : "",
@@ -4253,11 +4257,30 @@ function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioSt
           timezone: data.timezone,
           instant,
           message: data.message || "",
+          invitees: data.invitees || [],
           rsvp: "pending",
         },
       ],
       notifications: withNotif(p, "meeting", `Meeting invite: ${data.title} — open Meetings to respond`),
     }));
+    // Auto-create a real Teams meeting + calendar invite ONLY when it's online
+    // and no manual link was given (so a pasted link is always respected).
+    if (data.mode === "online" && !(data.link || "").trim()) {
+      const proj = projects[code];
+      const allC = (proj?.clients || []).filter((c) => c.email);
+      const invited =
+        data.invitees && data.invitees.length
+          ? allC.filter((c) => data.invitees.map((e) => (e || "").toLowerCase()).includes((c.email || "").toLowerCase()))
+          : allC;
+      api
+        .microsoftCreateEvent({ title: data.title, instant, message: data.message, attendees: invited.map((c) => ({ email: c.email, name: c.name })) })
+        .then((ev) => {
+          if (ev?.joinUrl) {
+            updateProject(code, (p) => ({ ...p, meetings: p.meetings.map((m) => (m.id === id ? { ...m, link: ev.joinUrl, msEventId: ev.id } : m)) }));
+          }
+        })
+        .catch((e) => console.error("Teams meeting create failed", e));
+    }
   }
   function editMeeting(code, id, data) {
     const instant = zonedToInstant(`${data.date}T${data.time}`, data.timezone);
@@ -4274,13 +4297,17 @@ function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioSt
               timezone: data.timezone,
               instant,
               message: data.message || "",
+              invitees: data.invitees || m.invitees || [],
             }
           : m
       ),
     }));
   }
   function deleteMeeting(code, id) {
-    updateProject(code, (p) => ({ ...p, meetings: p.meetings.filter((m) => m.id !== id) }));
+    // If this meeting was created as a Teams meeting, cancel it in the calendar too.
+    const m = (projects[code]?.meetings || []).find((mm) => mm.id === id);
+    if (m?.msEventId) api.microsoftDeleteEvent(m.msEventId);
+    updateProject(code, (p) => ({ ...p, meetings: p.meetings.filter((mm) => mm.id !== id) }));
   }
 
   function setIssuedProposal(code, file) {

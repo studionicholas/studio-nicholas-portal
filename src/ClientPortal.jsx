@@ -3655,6 +3655,27 @@ function StudioSettingsPanel({ studioStatus, studioStatusColor, onChangeStatus, 
     setPPerm(api.pushPermission());
     setPBusy(false);
   }
+  // Microsoft 365 / Teams connection
+  const [msStatus, setMsStatus] = useState({ connected: false, account: "" });
+  const [msBusy, setMsBusy] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    api.microsoftStatus().then((s) => alive && setMsStatus(s || { connected: false }));
+    return () => {
+      alive = false;
+    };
+  }, []);
+  function connectMicrosoft() {
+    const state = Math.random().toString(36).slice(2);
+    sessionStorage.setItem("ms_oauth_state", state);
+    window.location.href = api.microsoftAuthUrl(state);
+  }
+  async function disconnectMicrosoft() {
+    setMsBusy(true);
+    await api.microsoftDisconnect();
+    setMsStatus({ connected: false, account: "" });
+    setMsBusy(false);
+  }
   const [img, setImg] = useState(loginImage || "");
   const [msg, setMsg] = useState(loginMessage || "");
   const [url, setUrl] = useState("");
@@ -3760,6 +3781,38 @@ function StudioSettingsPanel({ studioStatus, studioStatusColor, onChangeStatus, 
           ) : (
             <p className="text-[12px] text-stone-400 mt-2.5">Tap to register this device. Do it on every device you want alerts on (phone + computer). On iPhone, add it to your home screen first.</p>
           )}
+        </div>
+      </AdminSection>
+
+      <AdminSection title="Microsoft 365 / Teams">
+        <div className="border border-stone-200 rounded-lg bg-white p-4">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-lg bg-[#E6EEF5] flex items-center justify-center shrink-0">
+              <Video className="w-4 h-4 text-[#185FA5]" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-[14px] text-stone-800">Teams &amp; calendar</p>
+              <p className="text-[12px] text-stone-400">
+                {msStatus.connected
+                  ? `Connected${msStatus.account ? " · " + msStatus.account : ""}`
+                  : "Connect to create Teams meetings + calendar invites from the app."}
+              </p>
+            </div>
+            {msStatus.connected ? (
+              <button onClick={disconnectMicrosoft} disabled={msBusy} className="shrink-0 text-[12px] text-stone-500 border border-stone-300 rounded-lg px-3 py-1.5 hover:bg-stone-100 disabled:opacity-50">
+                {msBusy ? "…" : "Disconnect"}
+              </button>
+            ) : (
+              <button onClick={connectMicrosoft} className="shrink-0 bg-stone-900 text-white text-[12px] rounded-lg px-3 py-1.5 hover:bg-stone-800 transition-colors">
+                Connect Microsoft
+              </button>
+            )}
+          </div>
+          <p className="text-[12px] text-stone-400 mt-2.5">
+            {msStatus.connected
+              ? "New online meetings will auto-create a Teams meeting, add it to your Outlook calendar, and email the client a Teams invite."
+              : "Sign in once with your Microsoft 365 account. After that, online meetings you add become real Teams meetings automatically."}
+          </p>
         </div>
       </AdminSection>
 
@@ -4815,6 +4868,22 @@ export default function App() {
     api.getSession().then((s) => setSession(s ?? null));
     const { data } = api.onAuthChange((s) => setSession(s ?? null));
     return () => data?.subscription?.unsubscribe?.();
+  }, []);
+
+  // Handle the Microsoft OAuth redirect (studio connecting Teams/calendar). The
+  // studio returns to the portal with ?code=…&state=…; we only act when the
+  // state matches what we stored, then clean the URL.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get("code");
+    const state = params.get("state");
+    if (code && state && state === sessionStorage.getItem("ms_oauth_state")) {
+      sessionStorage.removeItem("ms_oauth_state");
+      api
+        .microsoftConnect(code)
+        .catch((e) => console.error("Microsoft connect failed", e))
+        .finally(() => window.history.replaceState({}, "", window.location.origin + window.location.pathname));
+    }
   }, []);
 
   // First-visit "add to home screen" prompt — shows for ANY signed-in user

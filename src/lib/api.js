@@ -299,6 +299,59 @@ export async function notifyPush({ toEmails, toStudio, title, body, url }) {
   }
 }
 
+/* ---------- Microsoft 365 / Teams ---------- */
+
+// Public app identifiers (safe in the browser — the secret lives only in the
+// Supabase function). See [[studio-nicholas-teams]].
+const MS_CLIENT_ID = "e56d9dec-7b3f-422c-a424-3bd19533c81b";
+const MS_TENANT_ID = "5a0b4512-351c-4fc1-9389-afba9973b445";
+const MS_REDIRECT = typeof window !== "undefined" ? window.location.origin : "https://portal.studionicholas.com.au";
+
+// The Microsoft sign-in/consent URL the studio is sent to when connecting.
+export function microsoftAuthUrl(state) {
+  const scope = "offline_access Calendars.ReadWrite OnlineMeetings.ReadWrite User.Read";
+  const q = new URLSearchParams({
+    client_id: MS_CLIENT_ID,
+    response_type: "code",
+    redirect_uri: MS_REDIRECT,
+    response_mode: "query",
+    scope,
+    state: state || "",
+  });
+  return `https://login.microsoftonline.com/${MS_TENANT_ID}/oauth2/v2.0/authorize?${q.toString()}`;
+}
+
+export async function microsoftConnect(code) {
+  const { data, error } = await supabase.functions.invoke("microsoft", { body: { action: "connect", code } });
+  if (error) throw error;
+  return data;
+}
+export async function microsoftStatus() {
+  try {
+    const { data } = await supabase.functions.invoke("microsoft", { body: { action: "status" } });
+    return data || { connected: false };
+  } catch (e) {
+    return { connected: false };
+  }
+}
+export async function microsoftDisconnect() {
+  await supabase.functions.invoke("microsoft", { body: { action: "disconnect" } });
+}
+// Create a Teams meeting + calendar event; returns { id, joinUrl, webLink }.
+export async function microsoftCreateEvent({ title, instant, message, attendees }) {
+  const { data, error } = await supabase.functions.invoke("microsoft", { body: { action: "createEvent", title, instant, message, attendees } });
+  if (error) throw error;
+  if (data?.error) throw new Error(data.error);
+  return data;
+}
+export async function microsoftDeleteEvent(id) {
+  try {
+    await supabase.functions.invoke("microsoft", { body: { action: "deleteEvent", id } });
+  } catch (e) {
+    console.error("ms delete event failed", e);
+  }
+}
+
 /* ---------- Fee-proposal e-signature ---------- */
 
 // Ask the server for an authoritative IP + timestamp (and a document id) at the

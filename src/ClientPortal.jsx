@@ -848,6 +848,7 @@ function ClientLogin({ onEnter, onSignUp, loginImage, loginMessage }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [news, setNews] = useState(false);
+  const [showPw, setShowPw] = useState(false);
   const [error, setError] = useState("");
   const [resetMsg, setResetMsg] = useState("");
   const [resetBusy, setResetBusy] = useState(false);
@@ -980,7 +981,7 @@ function ClientLogin({ onEnter, onSignUp, loginImage, loginMessage }) {
               <div className="relative">
                 <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400" />
                 <input
-                  type="password"
+                  type={showPw ? "text" : "password"}
                   value={password}
                   onChange={(e) => {
                     setPassword(e.target.value);
@@ -988,8 +989,16 @@ function ClientLogin({ onEnter, onSignUp, loginImage, loginMessage }) {
                   }}
                   placeholder={isSignUp ? "Choose a password" : "Password"}
                   autoComplete={isSignUp ? "new-password" : "current-password"}
-                  className="w-full pl-11 pr-4 py-3.5 rounded-lg border border-stone-300 bg-white text-stone-900 placeholder-stone-400 text-[15px] focus:outline-none focus:ring-2 focus:ring-[#B7453C] focus:border-transparent"
+                  className="w-full pl-11 pr-16 py-3.5 rounded-lg border border-stone-300 bg-white text-stone-900 placeholder-stone-400 text-[15px] focus:outline-none focus:ring-2 focus:ring-[#B7453C] focus:border-transparent"
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPw((v) => !v)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-stone-400 hover:text-stone-700"
+                  aria-label={showPw ? "Hide password" : "Show password"}
+                >
+                  {showPw ? "Hide" : "Show"}
+                </button>
               </div>
               {isSignUp && (
                 <label className="flex gap-2.5 items-start cursor-pointer pt-1">

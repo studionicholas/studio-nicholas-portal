@@ -41,8 +41,10 @@ export function onAuthChange(callback) {
   return supabase.auth.onAuthStateChange((_event, session) => callback(session));
 }
 
+// Lowercase the email so a phone auto-capitalising the first letter (or any
+// stray case) can't cause a false "invalid credentials".
 export async function signIn(email, password) {
-  return supabase.auth.signInWithPassword({ email: (email || "").trim(), password });
+  return supabase.auth.signInWithPassword({ email: (email || "").trim().toLowerCase(), password });
 }
 
 // Self-service account creation: a client whose email is on a project can set up
@@ -50,13 +52,13 @@ export async function signIn(email, password) {
 // data is still gated by Row Level Security (their email must be on a project),
 // so signing up with an unknown email shows nothing.
 export async function signUp(email, password) {
-  return supabase.auth.signUp({ email: (email || "").trim(), password });
+  return supabase.auth.signUp({ email: (email || "").trim().toLowerCase(), password });
 }
 
 // Send a password-reset email. The link returns to the portal with
 // type=recovery, which routes to the "set a new password" screen.
 export async function resetPassword(email) {
-  return supabase.auth.resetPasswordForEmail((email || "").trim(), {
+  return supabase.auth.resetPasswordForEmail((email || "").trim().toLowerCase(), {
     redirectTo: typeof window !== "undefined" ? window.location.origin : undefined,
   });
 }

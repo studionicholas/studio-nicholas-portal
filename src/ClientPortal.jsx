@@ -975,6 +975,9 @@ function ClientLogin({ onEnter, onSignUp, loginImage, loginMessage }) {
                   }}
                   placeholder="Email address"
                   autoFocus
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
                   className="w-full pl-11 pr-4 py-3.5 rounded-lg border border-stone-300 bg-white text-stone-900 placeholder-stone-400 text-[15px] focus:outline-none focus:ring-2 focus:ring-[#B7453C] focus:border-transparent"
                 />
               </div>

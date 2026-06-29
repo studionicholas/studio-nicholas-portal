@@ -22,6 +22,21 @@ export async function sendSetupEmail(email) {
   }
 }
 
+// Reliable onboarding email (via the welcome-email Edge Function + Resend, NOT
+// Supabase's flaky auth SMTP): tells a newly-added client/builder to go to the
+// portal and "Set up your login". Returns { ok, error } so the UI can show it.
+export async function sendLoginSetupEmail(email, { name, projectName } = {}) {
+  try {
+    const { data, error } = await supabase.functions.invoke("welcome-email", { body: { email: (email || "").trim(), kind: "setup", name, projectName } });
+    if (error) throw error;
+    if (data?.error) throw new Error(data.error);
+    return { ok: true };
+  } catch (e) {
+    console.error("setup email failed", e);
+    return { ok: false, error: e?.message || String(e) };
+  }
+}
+
 /* ----------------------------------------------------------------
    Data + auth layer.
    The UI works with a `projects` object keyed by project code, where

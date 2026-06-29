@@ -3558,6 +3558,29 @@ function AdminImageUpload({ project, onSet }) {
   );
 }
 
+// Sends a newly-added person a reliable "set up your login" email (Resend, not
+// Supabase auth SMTP), with its own little sent/failed feedback.
+function SendLoginBtn({ email, name, projectName }) {
+  const [state, setState] = useState(""); // "" | sending | sent | error
+  async function send() {
+    if (!email || !email.trim()) return;
+    setState("sending");
+    const res = await api.sendLoginSetupEmail(email, { name, projectName });
+    setState(res.ok ? "sent" : "error");
+  }
+  return (
+    <button
+      type="button"
+      onClick={send}
+      disabled={state === "sending" || !email}
+      className="shrink-0 inline-flex items-center gap-1.5 text-[12px] text-stone-600 border border-stone-300 rounded-lg px-2.5 py-1.5 hover:bg-stone-100 disabled:opacity-50"
+    >
+      <Mail className="w-3.5 h-3.5" />
+      {state === "sending" ? "Sending…" : state === "sent" ? "Sent ✓" : state === "error" ? "Failed — retry" : "Email login link"}
+    </button>
+  );
+}
+
 function AdminClients({ project, onChange }) {
   const clients = project.clients && project.clients.length ? project.clients : [];
   const [name, setName] = useState("");
@@ -3603,6 +3626,7 @@ function AdminClients({ project, onChange }) {
             placeholder="Their Programa link (https://app.programa.com/...)"
             className="w-full px-3 py-2 rounded-lg border border-stone-300 text-[14px] focus:outline-none focus:ring-2 focus:ring-[#B7453C]"
           />
+          <SendLoginBtn email={c.email} name={c.name} projectName={project.name} />
           <div>
             <p className="text-[11px] text-stone-400 mb-1.5">Tabs this client can see &amp; access:</p>
             <div className="flex flex-wrap gap-1.5">
@@ -3641,7 +3665,7 @@ function AdminClients({ project, onChange }) {
 
 // Builder participants (name + email). They get a login like clients and take
 // part in the Builder + Group chats. See [[studio-nicholas-portal]].
-function AdminBuilders({ builders, onChange }) {
+function AdminBuilders({ builders, onChange, projectName }) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const update = (i, key, value) => onChange(builders.map((b, idx) => (idx === i ? { ...b, [key]: value } : b)));
@@ -3678,6 +3702,7 @@ function AdminBuilders({ builders, onChange }) {
             spellCheck={false}
             className="w-full px-3 py-2 rounded-lg border border-stone-300 text-[14px] focus:outline-none focus:ring-2 focus:ring-[#B7453C]"
           />
+          <SendLoginBtn email={b.email} name={b.name} projectName={projectName} />
         </div>
       ))}
       <form onSubmit={add} className="border border-dashed border-stone-300 rounded-lg p-3.5 space-y-2">
@@ -4703,7 +4728,7 @@ function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioSt
             </AdminSection>
 
             <AdminSection title="Builder logins">
-              <AdminBuilders builders={project.builderUsers || []} onChange={(b) => setField(project.code, "builderUsers", b)} />
+              <AdminBuilders builders={project.builderUsers || []} onChange={(b) => setField(project.code, "builderUsers", b)} projectName={project.name} />
             </AdminSection>
 
             <AdminSection title="About & details">

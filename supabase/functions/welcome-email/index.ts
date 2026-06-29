@@ -17,8 +17,17 @@ const cors = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-function emailHtml() {
+function emailHtml(o) {
   const accent = "#9BACB6";
+  const setup = o && o.kind === "setup";
+  const hi = o && o.name ? `Hi ${String(o.name)}, ` : "";
+  const proj = o && o.projectName ? ` for ${String(o.projectName)}` : "";
+  const eyebrow = setup ? "Your portal" : "Welcome";
+  const heading = setup ? "Set up your login" : "You're all set";
+  const intro = setup
+    ? `${hi}Studio Nicholas has set up your private portal${proj}. To get in, open the link below, tap "Set up your login", enter this email address (${String((o && o.email) || "")}), and choose a password — that's it.`
+    : "Your password is set and your private portal is ready. Log in any time to follow your project — updates, timeline, meetings, documents and messages, all in one place.";
+  const cta = setup ? "Set up your login &nbsp;→" : "Open your portal &nbsp;→";
   return `
 <table width="100%" cellpadding="0" cellspacing="0" style="background:#F7F0EC;padding:28px 12px;font-family:Georgia,'Times New Roman',serif;">
   <tr><td align="center">
@@ -31,18 +40,18 @@ function emailHtml() {
         <img src="${LOGIN_URL}/logo.png" alt="Studio Nicholas" width="160" style="max-width:160px;height:auto;">
       </td></tr>
       <tr><td style="padding:8px 44px 0;text-align:center;">
-        <p style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:11px;letter-spacing:1.5px;text-transform:uppercase;color:#8a9aa3;">Welcome</p>
+        <p style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:11px;letter-spacing:1.5px;text-transform:uppercase;color:#8a9aa3;">${eyebrow}</p>
       </td></tr>
       <tr><td style="padding:6px 44px 0;text-align:center;">
-        <h1 style="font-size:25px;font-style:italic;color:#1C1A17;margin:0;font-weight:normal;">You're all set</h1>
+        <h1 style="font-size:25px;font-style:italic;color:#1C1A17;margin:0;font-weight:normal;">${heading}</h1>
       </td></tr>
       <tr><td style="padding:14px 44px 0;text-align:center;">
         <p style="font-size:15px;line-height:1.65;color:#57534e;margin:0;font-family:Arial,Helvetica,sans-serif;">
-          Your password is set and your private portal is ready. Log in any time to follow your project — updates, timeline, meetings, documents and messages, all in one place.
+          ${intro}
         </p>
       </td></tr>
       <tr><td style="padding:24px 44px 4px;text-align:center;">
-        <a href="${LOGIN_URL}" style="display:inline-block;background:#1C1A17;color:#ffffff;text-decoration:none;font-family:Arial,Helvetica,sans-serif;font-size:15px;padding:14px 34px;border-radius:9px;">Open your portal &nbsp;→</a>
+        <a href="${LOGIN_URL}" style="display:inline-block;background:#1C1A17;color:#ffffff;text-decoration:none;font-family:Arial,Helvetica,sans-serif;font-size:15px;padding:14px 34px;border-radius:9px;">${cta}</a>
       </td></tr>
       <tr><td style="padding:18px 44px 0;">
         <table width="100%" cellpadding="0" cellspacing="0" style="background:#F7F0EC;border-radius:12px;">
@@ -65,10 +74,11 @@ function emailHtml() {
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   try {
-    const { email } = await req.json();
+    const { email, kind, name, projectName } = await req.json();
     if (!email) {
       return new Response(JSON.stringify({ error: "no email" }), { status: 400, headers: { ...cors, "Content-Type": "application/json" } });
     }
+    const subject = kind === "setup" ? "Set up your Studio Nicholas portal login" : "Your Studio Nicholas portal is ready";
     const r = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: { Authorization: `Bearer ${RESEND}`, "Content-Type": "application/json" },
@@ -76,8 +86,8 @@ Deno.serve(async (req) => {
         from: FROM,
         to: [email],
         reply_to: "info@studionicholas.com.au",
-        subject: "Your Studio Nicholas portal is ready",
-        html: emailHtml(),
+        subject,
+        html: emailHtml({ email, kind, name, projectName }),
       }),
     });
     const data = await r.json();

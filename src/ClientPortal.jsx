@@ -4467,11 +4467,12 @@ function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioSt
         toEmails: emails,
         subject: `Your fee proposal is ready — ${proj?.name || "your project"}`,
         heading: "Your fee proposal is ready to sign",
-        body: "We've shared your fee proposal in your portal — open it to review and sign. First time here? On the login screen, tap “First time here? Set up your login” to create your password, then your proposal will be waiting in the Fee tab.",
+        body: "We've shared your fee proposal in your portal — open it to review and sign. First time here? Use the “Set up your login” button below to create your password, then your proposal will be waiting in the Fee tab.",
         projectName: proj?.name,
         senderName: STUDIO_INFO.contactName || "Studio Nicholas",
         time: emailStamp(),
         kind: "update",
+        setupCta: true,
       });
   }
   function removeIssuedProposal(code) {
@@ -4499,7 +4500,7 @@ function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioSt
       api.notifyEmail({
         toEmails: em,
         subject: `New message from ${studioFirstName()} — ${proj.name || "your project"}`,
-        heading: "New message",
+        heading: STUDIO_INFO.contactName || "Studio Nicholas",
         body: text && text.trim() ? text : "Sent you a photo — open your portal to view it.",
         projectName: proj.name,
         senderName: STUDIO_INFO.contactName || "Studio Nicholas",

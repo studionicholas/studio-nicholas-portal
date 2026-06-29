@@ -20,7 +20,7 @@ function esc(s: string) {
   return String(s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
-function emailHtml(o: { projectName?: string; heading?: string; body?: string; senderName?: string; time?: string; kind?: string; audience?: string }) {
+function emailHtml(o: { projectName?: string; heading?: string; body?: string; senderName?: string; time?: string; kind?: string; audience?: string; setupCta?: boolean }) {
   const accent = "#9BACB6"; // brand aqua
   const isStudio = o.audience === "studio";
   const isUpdate = o.kind === "update";
@@ -57,6 +57,9 @@ function emailHtml(o: { projectName?: string; heading?: string; body?: string; s
       <tr><td style="padding:24px 44px 6px;text-align:center;">
         <a href="${LOGIN_URL}" style="display:inline-block;background:#1C1A17;color:#ffffff;text-decoration:none;font-family:Arial,Helvetica,sans-serif;font-size:15px;padding:13px 34px;border-radius:9px;">Open your portal &nbsp;→</a>
       </td></tr>
+      ${o.setupCta ? `<tr><td style="padding:6px 44px 6px;text-align:center;">
+        <a href="${LOGIN_URL}" style="display:inline-block;background:#ffffff;color:#1C1A17;border:1px solid #9BACB6;text-decoration:none;font-family:Arial,Helvetica,sans-serif;font-size:14px;padding:11px 28px;border-radius:9px;">First time here? Set up your login</a>
+      </td></tr>` : ""}
       <tr><td style="padding:16px 44px 30px;text-align:center;">
         <p style="font-size:11px;line-height:1.6;color:#b4a89d;margin:0;font-family:Arial,Helvetica,sans-serif;">${footer}</p>
       </td></tr>
@@ -69,7 +72,7 @@ function emailHtml(o: { projectName?: string; heading?: string; body?: string; s
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   try {
-    const { toEmails = [], audience, subject, heading, body, projectName, senderName, time, kind } = await req.json();
+    const { toEmails = [], audience, subject, heading, body, projectName, senderName, time, kind, setupCta } = await req.json();
     // Studio alerts go to the studio mailbox (kept server-side); client alerts go
     // to the opted-in recipients passed in.
     const emails =
@@ -79,7 +82,7 @@ Deno.serve(async (req) => {
     if (emails.length === 0) {
       return new Response(JSON.stringify({ sent: 0 }), { headers: { ...cors, "Content-Type": "application/json" } });
     }
-    const html = emailHtml({ projectName, heading, body, senderName, time, kind, audience });
+    const html = emailHtml({ projectName, heading, body, senderName, time, kind, audience, setupCta });
     let sent = 0;
     await Promise.all(
       emails.map(async (to) => {

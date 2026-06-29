@@ -434,10 +434,10 @@ export async function notifyStudioProposalSigned({ clientName, projectName }) {
 }
 
 // Best-effort email to clients who opted in to email updates.
-export async function notifyEmail({ toEmails, subject, heading, body, projectName, senderName, time, kind }) {
+export async function notifyEmail({ toEmails, subject, heading, body, projectName, senderName, time, kind, setupCta }) {
   if (!toEmails || toEmails.length === 0) return;
   try {
-    await supabase.functions.invoke("notify-email", { body: { toEmails, subject, heading, body, projectName, senderName, time, kind } });
+    await supabase.functions.invoke("notify-email", { body: { toEmails, subject, heading, body, projectName, senderName, time, kind, setupCta } });
   } catch (e) {
     console.error("notify-email failed", e);
   }

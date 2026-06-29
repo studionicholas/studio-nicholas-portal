@@ -1044,7 +1044,10 @@ function ClientLogin({ onEnter, onSignUp, loginImage, loginMessage }) {
                 </p>
               </div>
             ) : (
-              <div className="mt-6 rounded-xl border border-[#9BACB6] bg-[#9BACB6]/20 px-4 py-4 text-center">
+              <div className="relative mt-7 rounded-xl border-2 border-[#9BACB6] bg-[#9BACB6]/20 px-4 pt-5 pb-4 text-center">
+                <span className="absolute -top-2.5 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full bg-[#576B45] px-3 py-0.5 text-[10px] tracking-wide text-white uppercase">
+                  Start here if you're new
+                </span>
                 <p className="text-[13.5px] text-stone-700 mb-2.5">First time here? Create your login to access your project.</p>
                 <button
                   type="button"

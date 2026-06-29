@@ -958,7 +958,7 @@ function ClientLogin({ onEnter, onSignUp, loginImage, loginMessage }) {
             ) : (
             <>
             <h1 className="text-[27px] text-stone-900 mb-1.5" style={{ fontFamily: "Selva, Georgia, serif", fontStyle: "italic" }}>
-              {isSignUp ? "Set up your login" : "Welcome back"}
+              {isSignUp ? "Set up your login" : "Welcome"}
             </h1>
             <p className="text-stone-500 text-[14px] mb-7">
               {isSignUp

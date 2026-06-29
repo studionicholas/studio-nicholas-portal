@@ -3584,8 +3584,7 @@ function SendLoginBtn({ email, name, projectName }) {
   );
 }
 
-function AdminClients({ project, onChange }) {
-  const clients = project.clients && project.clients.length ? project.clients : [];
+function AdminClients({ clients = [], projectName, onChange, noun = "client" }) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [programaUrl, setProgramaUrl] = useState("");
@@ -3603,24 +3602,27 @@ function AdminClients({ project, onChange }) {
 
   return (
     <div className="space-y-3">
-      {clients.length === 0 && <p className="text-[13px] text-stone-400">No client logins yet.</p>}
+      {clients.length === 0 && <p className="text-[13px] text-stone-400">No {noun} logins yet.</p>}
       {clients.map((c, i) => (
         <div key={i} className="border border-stone-200 rounded-lg p-3.5 bg-white space-y-2">
           <div className="flex items-center gap-2">
             <input
               value={c.name || ""}
               onChange={(e) => update(i, "name", e.target.value)}
-              placeholder="Name (e.g. Sarah Maddox)"
+              placeholder={noun === "builder" ? "Name / company (e.g. Oasis Construction)" : "Name (e.g. Sarah Maddox)"}
               className="flex-1 px-3 py-2 rounded-lg border border-stone-300 text-[14px] focus:outline-none focus:ring-2 focus:ring-[#B7453C]"
             />
-            <button onClick={() => remove(i)} className="text-stone-300 hover:text-red-600 shrink-0" aria-label="Remove client">
+            <button onClick={() => remove(i)} className="text-stone-300 hover:text-red-600 shrink-0" aria-label={`Remove ${noun}`}>
               <Trash2 className="w-4 h-4" />
             </button>
           </div>
           <input
             value={c.email}
             onChange={(e) => update(i, "email", e.target.value)}
-            placeholder="client@email.com"
+            placeholder={`${noun}@email.com`}
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
             className="w-full px-3 py-2 rounded-lg border border-stone-300 text-[14px] focus:outline-none focus:ring-2 focus:ring-[#B7453C]"
           />
           <input
@@ -3629,9 +3631,9 @@ function AdminClients({ project, onChange }) {
             placeholder="Their Programa link (https://app.programa.com/...)"
             className="w-full px-3 py-2 rounded-lg border border-stone-300 text-[14px] focus:outline-none focus:ring-2 focus:ring-[#B7453C]"
           />
-          <SendLoginBtn email={c.email} name={c.name} projectName={project.name} />
+          <SendLoginBtn email={c.email} name={c.name} projectName={projectName} />
           <div>
-            <p className="text-[11px] text-stone-400 mb-1.5">Tabs this client can see &amp; access:</p>
+            <p className="text-[11px] text-stone-400 mb-1.5">Tabs this {noun} can see &amp; access:</p>
             <div className="flex flex-wrap gap-1.5">
               {[...FEATURE_LIST, { key: "programa", label: "Programa" }].map((f) => {
                 const cf = c.features || {};
@@ -3654,68 +3656,14 @@ function AdminClients({ project, onChange }) {
       ))}
 
       <form onSubmit={add} className="border border-dashed border-stone-300 rounded-lg p-3.5 space-y-2">
-        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Client name…" className="w-full px-3 py-2 rounded-lg border border-stone-300 text-[14px] focus:outline-none focus:ring-2 focus:ring-[#B7453C]" />
-        <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Add a client email…" className="w-full px-3 py-2 rounded-lg border border-stone-300 text-[14px] focus:outline-none focus:ring-2 focus:ring-[#B7453C]" />
+        <input value={name} onChange={(e) => setName(e.target.value)} placeholder={noun === "builder" ? "Builder name / company…" : "Client name…"} className="w-full px-3 py-2 rounded-lg border border-stone-300 text-[14px] focus:outline-none focus:ring-2 focus:ring-[#B7453C]" />
+        <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder={`Add a ${noun} email…`} autoCapitalize="none" autoCorrect="off" spellCheck={false} className="w-full px-3 py-2 rounded-lg border border-stone-300 text-[14px] focus:outline-none focus:ring-2 focus:ring-[#B7453C]" />
         <input value={programaUrl} onChange={(e) => setProgramaUrl(e.target.value)} placeholder="Their Programa link (optional)" className="w-full px-3 py-2 rounded-lg border border-stone-300 text-[14px] focus:outline-none focus:ring-2 focus:ring-[#B7453C]" />
         <button type="submit" className="bg-stone-900 text-white rounded-lg px-4 py-2 text-[13px] hover:bg-stone-800 transition-colors">
-          Add client login
+          Add {noun} login
         </button>
       </form>
-      <p className="text-[11px] text-stone-400">Each email must match a user you created in Supabase → Authentication. Everyone listed can sign in to this project and sees their own Programa link.</p>
-    </div>
-  );
-}
-
-// Builder participants (name + email). They get a login like clients and take
-// part in the Builder + Group chats. See [[studio-nicholas-portal]].
-function AdminBuilders({ builders, onChange, projectName }) {
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const update = (i, key, value) => onChange(builders.map((b, idx) => (idx === i ? { ...b, [key]: value } : b)));
-  const remove = (i) => onChange(builders.filter((_, idx) => idx !== i));
-  function add(e) {
-    e.preventDefault();
-    if (!email.trim()) return;
-    onChange([...builders, { name: name.trim(), email: email.trim() }]);
-    setName("");
-    setEmail("");
-  }
-  return (
-    <div className="space-y-3">
-      {builders.length === 0 && <p className="text-[13px] text-stone-400">No builder logins yet.</p>}
-      {builders.map((b, i) => (
-        <div key={i} className="border border-stone-200 rounded-lg p-3.5 bg-white space-y-2">
-          <div className="flex items-center gap-2">
-            <input
-              value={b.name || ""}
-              onChange={(e) => update(i, "name", e.target.value)}
-              placeholder="Name / company (e.g. Oasis Construction)"
-              className="flex-1 px-3 py-2 rounded-lg border border-stone-300 text-[14px] focus:outline-none focus:ring-2 focus:ring-[#B7453C]"
-            />
-            <button onClick={() => remove(i)} className="text-stone-300 hover:text-red-600 shrink-0" aria-label="Remove builder">
-              <Trash2 className="w-4 h-4" />
-            </button>
-          </div>
-          <input
-            value={b.email || ""}
-            onChange={(e) => update(i, "email", e.target.value)}
-            placeholder="builder@email.com"
-            autoCapitalize="none"
-            autoCorrect="off"
-            spellCheck={false}
-            className="w-full px-3 py-2 rounded-lg border border-stone-300 text-[14px] focus:outline-none focus:ring-2 focus:ring-[#B7453C]"
-          />
-          <SendLoginBtn email={b.email} name={b.name} projectName={projectName} />
-        </div>
-      ))}
-      <form onSubmit={add} className="border border-dashed border-stone-300 rounded-lg p-3.5 space-y-2">
-        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Builder name / company…" className="w-full px-3 py-2 rounded-lg border border-stone-300 text-[14px] focus:outline-none focus:ring-2 focus:ring-[#B7453C]" />
-        <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Add a builder email…" autoCapitalize="none" autoCorrect="off" spellCheck={false} className="w-full px-3 py-2 rounded-lg border border-stone-300 text-[14px] focus:outline-none focus:ring-2 focus:ring-[#B7453C]" />
-        <button type="submit" className="bg-stone-900 text-white rounded-lg px-4 py-2 text-[13px] hover:bg-stone-800 transition-colors">
-          Add builder login
-        </button>
-      </form>
-      <p className="text-[11px] text-stone-400">Builders sign in the same way as clients (they tap "Set up your login" with this email and choose a password). They'll see the Builder chat and the Group chat.</p>
+      <p className="text-[11px] text-stone-400">They sign in by tapping "Set up your login" with this email and choosing a password. You control which tabs each one can see above.</p>
     </div>
   );
 }
@@ -4728,11 +4676,11 @@ function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioSt
             </div>
 
             <AdminSection title="Client logins & Programa links">
-              <AdminClients project={project} onChange={(clients) => setField(project.code, "clients", clients)} />
+              <AdminClients clients={project.clients || []} projectName={project.name} onChange={(clients) => setField(project.code, "clients", clients)} noun="client" />
             </AdminSection>
 
-            <AdminSection title="Builder logins">
-              <AdminBuilders builders={project.builderUsers || []} onChange={(b) => setField(project.code, "builderUsers", b)} projectName={project.name} />
+            <AdminSection title="Builder logins & Programa links">
+              <AdminClients clients={project.builderUsers || []} projectName={project.name} onChange={(b) => setField(project.code, "builderUsers", b)} noun="builder" />
             </AdminSection>
 
             <AdminSection title="About & details">

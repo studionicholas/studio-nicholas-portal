@@ -106,9 +106,13 @@ export async function fetchProjectStamps() {
   return out;
 }
 
-// The list of client login emails on a project (lowercased) — used for access rules.
+// All participant login emails on a project (clients + builders, lowercased) —
+// used for access rules (RLS). Builder logins live in project.builderUsers as an
+// array of { name, email }; the separate project.builders text field (a company
+// name shown on the About tab) is unrelated and left alone.
 function clientEmailsOf(project) {
   const list = (project.clients || []).map((c) => (c.email || "").trim().toLowerCase()).filter(Boolean);
+  list.push(...(project.builderUsers || []).map((b) => (b && b.email ? b.email.trim().toLowerCase() : "")).filter(Boolean));
   if (list.length === 0 && project.clientEmail) list.push(project.clientEmail.trim().toLowerCase());
   return [...new Set(list)];
 }

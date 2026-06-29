@@ -682,10 +682,13 @@ function migrate(projects) {
       messages: [],
       features: {},
       clients: [],
+      builderUsers: [],
+      channels: null,
       showStatus: false,
       customStatus: "",
       ...p,
     };
+    if (!Array.isArray(out[code].builderUsers)) out[code].builderUsers = [];
     // Back-compat: turn an old single client/Programa into the new clients list.
     if ((!out[code].clients || out[code].clients.length === 0) && out[code].clientEmail) {
       out[code].clients = [{ email: out[code].clientEmail, programaUrl: out[code].programaUrl || "" }];
@@ -3636,6 +3639,59 @@ function AdminClients({ project, onChange }) {
   );
 }
 
+// Builder participants (name + email). They get a login like clients and take
+// part in the Builder + Group chats. See [[studio-nicholas-portal]].
+function AdminBuilders({ builders, onChange }) {
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const update = (i, key, value) => onChange(builders.map((b, idx) => (idx === i ? { ...b, [key]: value } : b)));
+  const remove = (i) => onChange(builders.filter((_, idx) => idx !== i));
+  function add(e) {
+    e.preventDefault();
+    if (!email.trim()) return;
+    onChange([...builders, { name: name.trim(), email: email.trim() }]);
+    setName("");
+    setEmail("");
+  }
+  return (
+    <div className="space-y-3">
+      {builders.length === 0 && <p className="text-[13px] text-stone-400">No builder logins yet.</p>}
+      {builders.map((b, i) => (
+        <div key={i} className="border border-stone-200 rounded-lg p-3.5 bg-white space-y-2">
+          <div className="flex items-center gap-2">
+            <input
+              value={b.name || ""}
+              onChange={(e) => update(i, "name", e.target.value)}
+              placeholder="Name / company (e.g. Oasis Construction)"
+              className="flex-1 px-3 py-2 rounded-lg border border-stone-300 text-[14px] focus:outline-none focus:ring-2 focus:ring-[#B7453C]"
+            />
+            <button onClick={() => remove(i)} className="text-stone-300 hover:text-red-600 shrink-0" aria-label="Remove builder">
+              <Trash2 className="w-4 h-4" />
+            </button>
+          </div>
+          <input
+            value={b.email || ""}
+            onChange={(e) => update(i, "email", e.target.value)}
+            placeholder="builder@email.com"
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
+            className="w-full px-3 py-2 rounded-lg border border-stone-300 text-[14px] focus:outline-none focus:ring-2 focus:ring-[#B7453C]"
+          />
+        </div>
+      ))}
+      <form onSubmit={add} className="border border-dashed border-stone-300 rounded-lg p-3.5 space-y-2">
+        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Builder name / company…" className="w-full px-3 py-2 rounded-lg border border-stone-300 text-[14px] focus:outline-none focus:ring-2 focus:ring-[#B7453C]" />
+        <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Add a builder email…" autoCapitalize="none" autoCorrect="off" spellCheck={false} className="w-full px-3 py-2 rounded-lg border border-stone-300 text-[14px] focus:outline-none focus:ring-2 focus:ring-[#B7453C]" />
+        <button type="submit" className="bg-stone-900 text-white rounded-lg px-4 py-2 text-[13px] hover:bg-stone-800 transition-colors">
+          Add builder login
+        </button>
+      </form>
+      <p className="text-[11px] text-stone-400">Builders sign in the same way as clients (they tap "Set up your login" with this email and choose a password). They'll see the Builder chat and the Group chat.</p>
+    </div>
+  );
+}
+
 function AdminFeatures({ project, onToggle }) {
   const features = project.features || {};
   return (
@@ -4644,6 +4700,10 @@ function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioSt
 
             <AdminSection title="Client logins & Programa links">
               <AdminClients project={project} onChange={(clients) => setField(project.code, "clients", clients)} />
+            </AdminSection>
+
+            <AdminSection title="Builder logins">
+              <AdminBuilders builders={project.builderUsers || []} onChange={(b) => setField(project.code, "builderUsers", b)} />
             </AdminSection>
 
             <AdminSection title="About & details">

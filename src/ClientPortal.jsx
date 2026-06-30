@@ -653,6 +653,20 @@ function unreadForStudio(p) {
 function unreadForClient(p) {
   return countUnread(p.messages, "studio", p.lastReadClient);
 }
+// Everything in a project that's waiting on the studio's attention, for the
+// back-end bell: unread client messages, a freshly signed fee proposal the
+// studio hasn't opened yet, and meeting requests where the client made the
+// last move. Each clears itself: messages when the studio opens the thread,
+// the signed proposal when they open the Fee tab, requests when they respond.
+function studioPending(p) {
+  const items = [];
+  const msgs = unreadForStudio(p);
+  if (msgs > 0) items.push({ type: "message", n: msgs, tab: "messages", label: msgs === 1 ? "1 new message" : `${msgs} new messages` });
+  if (p.feeProposalSigned && !p.feeProposalSigned.studioSeen) items.push({ type: "signed", n: 1, tab: "fee", label: "Fee proposal signed" });
+  const reqs = (p.meetingRequests || []).filter((r) => r.lastBy === "client").length;
+  if (reqs > 0) items.push({ type: "request", n: reqs, tab: "meetings", label: reqs === 1 ? "Meeting request" : `${reqs} meeting requests` });
+  return items;
+}
 
 /* ---------------- Data shaping ---------------- */
 
@@ -4239,16 +4253,25 @@ function StudioSettingsPanel({ studioStatus, studioStatusColor, onChangeStatus, 
   );
 }
 
-// Studio notification bell — shows projects with new (unread) client messages.
+// Studio notification bell — surfaces everything waiting on the studio across
+// all projects: new client messages, signed fee proposals, and meeting requests.
 function AdminBell({ projects, onOpen }) {
   const [open, setOpen] = useState(false);
-  const items = Object.values(projects)
-    .map((p) => ({ p, n: unreadForStudio(p) }))
-    .filter((x) => x.n > 0);
-  const total = items.reduce((s, x) => s + x.n, 0);
+  const groups = Object.values(projects)
+    .map((p) => ({ p, items: studioPending(p) }))
+    .filter((g) => g.items.length > 0);
+  const total = groups.reduce((s, g) => s + g.items.reduce((a, i) => a + i.n, 0), 0);
+  const iconFor = (type) =>
+    type === "message" ? (
+      <MessageSquare className="w-3.5 h-3.5 text-[#B7453C] shrink-0" />
+    ) : type === "signed" ? (
+      <FileText className="w-3.5 h-3.5 text-[#576B45] shrink-0" />
+    ) : (
+      <Calendar className="w-3.5 h-3.5 text-[#9BACB6] shrink-0" />
+    );
   return (
     <div className="relative">
-      <button onClick={() => setOpen((o) => !o)} className="relative text-stone-500 hover:text-stone-800 p-1.5" aria-label="New client messages">
+      <button onClick={() => setOpen((o) => !o)} className="relative text-stone-500 hover:text-stone-800 p-1.5" aria-label="Studio notifications">
         <Bell className="w-5 h-5" />
         {total > 0 && (
           <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-[16px] px-1 rounded-full bg-[#B7453C] text-white text-[10px] leading-[16px] text-center">{total}</span>
@@ -4257,25 +4280,31 @@ function AdminBell({ projects, onOpen }) {
       {open && (
         <>
           <div className="fixed inset-0 z-20" onClick={() => setOpen(false)} />
-          <div className="fixed top-14 right-3 sm:absolute sm:top-auto sm:right-0 sm:mt-2 w-64 max-w-[calc(100vw-1.5rem)] bg-white border border-stone-200 rounded-lg shadow-lg z-30 overflow-hidden">
-            <p className="px-3 py-2 text-[11px] text-stone-400 uppercase tracking-wide border-b border-stone-100">New messages</p>
-            {items.length === 0 ? (
-              <p className="px-3 py-3 text-[13px] text-stone-400">No new messages from clients.</p>
+          <div className="fixed top-14 right-3 sm:absolute sm:top-auto sm:right-0 sm:mt-2 w-72 max-w-[calc(100vw-1.5rem)] bg-white border border-stone-200 rounded-lg shadow-lg z-30 overflow-hidden">
+            <p className="px-3 py-2 text-[11px] text-stone-400 uppercase tracking-wide border-b border-stone-100">Notifications</p>
+            {groups.length === 0 ? (
+              <p className="px-3 py-3 text-[13px] text-stone-400">You're all caught up.</p>
             ) : (
-              items.map(({ p, n }) => (
-                <button
-                  key={p.code}
-                  onClick={() => {
-                    onOpen(p.code);
-                    setOpen(false);
-                  }}
-                  className="w-full text-left px-3 py-2.5 flex items-center justify-between gap-2 hover:bg-stone-50"
-                >
-                  <span className="text-[13px] text-stone-800 truncate">{p.name}</span>
-                  <span className="shrink-0 inline-flex items-center gap-1 bg-[#B7453C] text-white text-[10px] rounded-full pl-1.5 pr-2 py-0.5">
-                    <MessageSquare className="w-3 h-3" /> {n}
-                  </span>
-                </button>
+              groups.map(({ p, items }) => (
+                <div key={p.code} className="border-b border-stone-100 last:border-0">
+                  <p className="px-3 pt-2.5 pb-0.5 text-[12px] font-medium text-stone-800 truncate">{p.name}</p>
+                  {items.map((it) => (
+                    <button
+                      key={it.type}
+                      onClick={() => {
+                        onOpen(p.code, it.tab);
+                        setOpen(false);
+                      }}
+                      className="w-full text-left px-3 py-2 flex items-center justify-between gap-2 hover:bg-stone-50"
+                    >
+                      <span className="text-[13px] text-stone-600 flex items-center gap-1.5 min-w-0">
+                        {iconFor(it.type)}
+                        <span className="truncate">{it.label}</span>
+                      </span>
+                      {it.n > 1 && <span className="shrink-0 bg-[#B7453C] text-white text-[10px] rounded-full px-1.5 py-0.5">{it.n}</span>}
+                    </button>
+                  ))}
+                </div>
               ))
             )}
           </div>
@@ -4304,11 +4333,19 @@ function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioSt
   }, []);
 
   const project = selectedCode ? projects[selectedCode] : null;
+  const pendingTab = useRef(null);
 
-  function openProjectMessages(code) {
-    setSelectedCode(code);
+  // Open a project on a specific tab (used by the bell). If it's already the
+  // selected project the tab-reset effect won't fire, so set the tab directly;
+  // otherwise stash it so the effect lands there instead of "details".
+  function openProject(code, tab = "messages") {
     setShowSettings(false);
-    setAdminTab("messages");
+    if (code === selectedCode) {
+      setAdminTab(tab);
+    } else {
+      pendingTab.current = tab;
+      setSelectedCode(code);
+    }
   }
 
   // One-time cleanup: move any photos/PDFs still embedded as base64 into storage,
@@ -4372,8 +4409,20 @@ function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioSt
       return { ...prev, [selectedCode]: { ...p, lastReadStudio: new Date().toISOString() } };
     });
     setShowNewUpdate(false);
-    setAdminTab("details");
+    setAdminTab(pendingTab.current || "details");
+    pendingTab.current = null;
   }, [selectedCode, setProjects]);
+
+  // When the studio opens the Fee tab, mark a client-signed proposal as seen so
+  // it stops showing in the bell.
+  useEffect(() => {
+    if (!selectedCode || adminTab !== "fee") return;
+    setProjects((prev) => {
+      const p = prev[selectedCode];
+      if (!p || !p.feeProposalSigned || p.feeProposalSigned.studioSeen) return prev;
+      return { ...prev, [selectedCode]: { ...p, feeProposalSigned: { ...p.feeProposalSigned, studioSeen: true } } };
+    });
+  }, [selectedCode, adminTab, setProjects]);
 
   function addProject(data) {
     const code = data.code.toUpperCase().replace(/\s+/g, "-");
@@ -4670,7 +4719,8 @@ function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioSt
     updateProject(code, (p) => ({ ...p, feeProposal: null }));
   }
   function setSignedProposal(code, file) {
-    updateProject(code, (p) => ({ ...p, feeProposalSigned: file }));
+    // The studio uploading it themselves shouldn't notify the studio.
+    updateProject(code, (p) => ({ ...p, feeProposalSigned: file ? { ...file, studioSeen: true } : file }));
   }
   function removeSignedProposal(code) {
     updateProject(code, (p) => ({ ...p, feeProposalSigned: null }));
@@ -4799,7 +4849,7 @@ function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioSt
         <div className="px-4 py-3 flex items-center gap-3">
           <Logo />
           <div className="ml-auto flex items-center gap-2">
-            <AdminBell projects={projects} onOpen={openProjectMessages} />
+            <AdminBell projects={projects} onOpen={openProject} />
             <button onClick={() => setShowSettings(true)} className="text-stone-500 hover:text-stone-800 p-1.5" aria-label="Login page settings">
               <Settings className="w-4 h-4" />
             </button>
@@ -4833,7 +4883,7 @@ function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioSt
 
       <div className="flex-1 md:overflow-y-auto">
         <div className="hidden md:flex justify-end items-center px-6 py-2.5 border-b border-stone-200 sticky top-0 bg-[#F7F0EC]/95 backdrop-blur z-10">
-          <AdminBell projects={projects} onOpen={openProjectMessages} />
+          <AdminBell projects={projects} onOpen={openProject} />
         </div>
         {showSettings ? (
           <StudioSettingsPanel

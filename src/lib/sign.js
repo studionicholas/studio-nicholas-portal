@@ -5,9 +5,25 @@
 
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf.mjs";
-import pdfWorkerUrl from "pdfjs-dist/legacy/build/pdf.worker.min.mjs?url";
+import PdfWorker from "pdfjs-dist/legacy/build/pdf.worker.min.mjs?worker";
 
-pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
+// Spin up pdf.js's worker the Vite way: a bundled, classic-format worker that
+// ships inside this chunk. This is far more reliable in the deployed PWA than
+// fetching a separate hashed worker file (?url → workerSrc), which can silently
+// fail to load — and when it does, the in-document signature fill is skipped
+// while the certificate page (pure pdf-lib, no worker) still appends. Lazy +
+// guarded so a worker hiccup never breaks signing; it just falls back to the
+// certificate-only result.
+let _workerSet = false;
+function ensurePdfWorker() {
+  if (_workerSet) return;
+  _workerSet = true;
+  try {
+    pdfjsLib.GlobalWorkerOptions.workerPort = new PdfWorker();
+  } catch (_e) {
+    /* getDocument will surface any real problem; we just won't crash here */
+  }
+}
 
 // Brand palette (see [[studio-nicholas-brand-colours]]).
 const INK = rgb(0.110, 0.102, 0.090); // #1C1A17
@@ -103,6 +119,7 @@ function chunkMono(text, font, size, maxWidth) {
 // template regardless of which page the block lands on. Returns null if absent.
 async function findAcceptance(bytes) {
   try {
+    ensurePdfWorker();
     const doc = await pdfjsLib.getDocument({ data: bytes.slice(0) }).promise;
     for (let n = 1; n <= doc.numPages; n++) {
       const page = await doc.getPage(n);

@@ -1947,24 +1947,38 @@ function MeetingCard({ meeting, onRespond, isPast, myRsvp }) {
 }
 
 // Shared "request a meeting" form (used by both the client and the studio).
-function MeetingRequestForm({ onSubmit, onCancel, submitLabel = "Send request" }) {
-  const [date, setDate] = useState("");
-  const [times, setTimes] = useState("");
-  const [purpose, setPurpose] = useState("");
-  const [notes, setNotes] = useState("");
+// `initial` prefills it (for "Suggest a change").
+function MeetingRequestForm({ onSubmit, onCancel, submitLabel = "Send request", initial }) {
+  const [date, setDate] = useState(initial?.date || "");
+  const [times, setTimes] = useState(initial?.times || "");
+  const [purpose, setPurpose] = useState(initial?.purpose || "");
+  const [notes, setNotes] = useState(initial?.notes || "");
+  const [mode, setMode] = useState(initial?.mode || "online");
+  const [location, setLocation] = useState(initial?.location || "");
   function submit(e) {
     e.preventDefault();
     if (!date && !times.trim() && !purpose.trim()) return;
-    onSubmit({ date, times: times.trim(), purpose: purpose.trim(), notes: notes.trim() });
+    onSubmit({ date, times: times.trim(), purpose: purpose.trim(), notes: notes.trim(), mode, location: mode === "in-person" ? location.trim() : "" });
   }
   return (
     <form onSubmit={submit} className="space-y-2.5">
+      <input value={purpose} onChange={(e) => setPurpose(e.target.value)} placeholder="Purpose (e.g. concept review)" className="w-full px-3 py-2 rounded-lg border border-stone-300 text-[14px] focus:outline-none focus:ring-2 focus:ring-[#B7453C]" />
+      <div className="flex gap-2">
+        <button type="button" onClick={() => setMode("online")} className={`flex-1 inline-flex items-center justify-center gap-1.5 text-[13px] rounded-lg py-2 border transition-colors ${mode === "online" ? "bg-stone-900 text-white border-stone-900" : "border-stone-300 text-stone-600 hover:bg-stone-100"}`}>
+          <Video className="w-3.5 h-3.5" /> Teams (online)
+        </button>
+        <button type="button" onClick={() => setMode("in-person")} className={`flex-1 inline-flex items-center justify-center gap-1.5 text-[13px] rounded-lg py-2 border transition-colors ${mode === "in-person" ? "bg-stone-900 text-white border-stone-900" : "border-stone-300 text-stone-600 hover:bg-stone-100"}`}>
+          <MapPin className="w-3.5 h-3.5" /> In person
+        </button>
+      </div>
+      {mode === "in-person" && (
+        <input value={location} onChange={(e) => setLocation(e.target.value)} placeholder="Location / address" className="w-full px-3 py-2 rounded-lg border border-stone-300 text-[14px] focus:outline-none focus:ring-2 focus:ring-[#B7453C]" />
+      )}
       <label className="block text-[12px] text-stone-500">
         Preferred date (optional)
         <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="mt-1 w-full px-3 py-2 rounded-lg border border-stone-300 text-[14px] focus:outline-none focus:ring-2 focus:ring-[#B7453C]" />
       </label>
       <input value={times} onChange={(e) => setTimes(e.target.value)} placeholder="Times that suit you (e.g. weekday mornings, or Tue 2–4pm)" className="w-full px-3 py-2 rounded-lg border border-stone-300 text-[14px] focus:outline-none focus:ring-2 focus:ring-[#B7453C]" />
-      <input value={purpose} onChange={(e) => setPurpose(e.target.value)} placeholder="Purpose (e.g. concept review)" className="w-full px-3 py-2 rounded-lg border border-stone-300 text-[14px] focus:outline-none focus:ring-2 focus:ring-[#B7453C]" />
       <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} placeholder="Anything else? (optional)" className="w-full px-3 py-2 rounded-lg border border-stone-300 text-[14px] focus:outline-none focus:ring-2 focus:ring-[#B7453C] resize-none" />
       <div className="flex items-center gap-2">
         <button type="submit" className="bg-stone-900 text-white rounded-lg px-4 py-2 text-[13px] hover:bg-stone-800 transition-colors">{submitLabel}</button>
@@ -1976,37 +1990,52 @@ function MeetingRequestForm({ onSubmit, onCancel, submitLabel = "Send request" }
   );
 }
 
-// Display a meeting request (date / times / purpose / notes + who asked).
-function MeetingRequestCard({ req, onDismiss, dismissLabel = "Dismiss", children }) {
+// Display a meeting request + actions. viewerSide = "client" | "studio".
+// onEdit (suggest a change), onAccept (these times work), onSchedule (studio),
+// onDismiss. Shows whose turn it is via req.lastBy.
+function MeetingRequestCard({ req, viewerSide, onEdit, onAccept, onSchedule, onDismiss, dismissLabel = "Dismiss" }) {
+  const [editing, setEditing] = useState(false);
+  if (editing) {
+    return (
+      <div className="border border-stone-200 rounded-xl bg-white p-4">
+        <p className="text-[12px] text-stone-500 mb-2.5">Suggest a change — the other person will be notified.</p>
+        <MeetingRequestForm initial={req} submitLabel="Send updated request" onSubmit={(d) => { onEdit(d); setEditing(false); }} onCancel={() => setEditing(false)} />
+      </div>
+    );
+  }
+  const theyProposed = req.lastBy && req.lastBy !== viewerSide;
+  const online = (req.mode || "online") === "online";
   return (
     <div className="border border-stone-200 rounded-xl bg-[#FBF7F3] p-4">
       <div className="flex items-center justify-between gap-2 mb-1.5">
         <span className="inline-flex items-center gap-1.5 text-[11px] rounded-full px-2.5 py-0.5" style={{ color: "#576B45", backgroundColor: "#D1D2C9" }}>
-          <CalendarPlus className="w-3 h-3" /> Meeting request
+          <CalendarPlus className="w-3 h-3" /> {req.accepted ? "Request — accepted" : "Meeting request"}
         </span>
-        <span className="text-[12px] text-stone-400">from {req.byName || (req.from === "studio" ? "Studio Nicholas" : "Client")}</span>
+        <span className="text-[12px] text-stone-400">
+          {theyProposed ? "for you to review" : "awaiting reply"}
+        </span>
       </div>
       {req.purpose && <p className="text-[14px] text-stone-800">{req.purpose}</p>}
       <div className="text-[13px] text-stone-500 mt-1 space-y-0.5">
+        <p className="flex items-center gap-2">{online ? <Video className="w-3.5 h-3.5 text-stone-400" /> : <MapPin className="w-3.5 h-3.5 text-stone-400" />} {online ? "Teams (online)" : "In person"}{!online && req.location ? ` · ${req.location}` : ""}</p>
         {req.date && <p className="flex items-center gap-2"><Calendar className="w-3.5 h-3.5 text-stone-400" /> Preferred: {formatDate(req.date)}</p>}
         {req.times && <p className="flex items-center gap-2"><Clock className="w-3.5 h-3.5 text-stone-400" /> {req.times}</p>}
         {req.notes && <p className="text-stone-500 leading-relaxed mt-1">{req.notes}</p>}
       </div>
-      {(onDismiss || children) && (
-        <div className="flex flex-wrap items-center gap-2 mt-3">
-          {children}
-          {onDismiss && (
-            <button onClick={onDismiss} className="text-[12px] text-stone-500 border border-stone-300 rounded-lg px-3 py-1.5 hover:bg-stone-100">{dismissLabel}</button>
-          )}
-        </div>
-      )}
+      <p className="text-[11px] text-stone-400 mt-2">Last suggested by {req.lastBy === "studio" ? "Studio Nicholas" : req.byName || "the client"}</p>
+      <div className="flex flex-wrap items-center gap-2 mt-3">
+        {onSchedule && <button onClick={onSchedule} className="text-[12px] text-white bg-stone-900 rounded-lg px-3 py-1.5 hover:bg-stone-800">Schedule this</button>}
+        {onAccept && theyProposed && <button onClick={onAccept} className="text-[12px] text-white rounded-lg px-3 py-1.5" style={{ backgroundColor: "#576B45" }}>These times work</button>}
+        {onEdit && <button onClick={() => setEditing(true)} className="text-[12px] text-stone-700 border border-stone-300 rounded-lg px-3 py-1.5 hover:bg-stone-100">Suggest a change</button>}
+        {onDismiss && <button onClick={onDismiss} className="text-[12px] text-stone-500 border border-stone-300 rounded-lg px-3 py-1.5 hover:bg-stone-100">{dismissLabel}</button>}
+      </div>
     </div>
   );
 }
 
 // Client-side "Request a meeting" — a button that opens the form, plus the list
 // of any existing requests (the client can withdraw their own).
-function ClientMeetingRequests({ requests, viewerEmail, onRequest, onDismiss, noMeetings }) {
+function ClientMeetingRequests({ requests, viewerEmail, onRequest, onEdit, onAccept, onDismiss, noMeetings }) {
   const [open, setOpen] = useState(false);
   const me = (viewerEmail || "").trim().toLowerCase();
   return (
@@ -2030,7 +2059,15 @@ function ClientMeetingRequests({ requests, viewerEmail, onRequest, onDismiss, no
       )}
       <div className="space-y-3">
         {requests.map((r) => (
-          <MeetingRequestCard key={r.id} req={r} dismissLabel="Withdraw" onDismiss={r.from === "client" && (r.byEmail || "") === me ? () => onDismiss(r.id) : undefined} />
+          <MeetingRequestCard
+            key={r.id}
+            req={r}
+            viewerSide="client"
+            onEdit={(d) => onEdit(r.id, d)}
+            onAccept={() => onAccept(r.id)}
+            onDismiss={() => onDismiss(r.id)}
+            dismissLabel={r.from === "client" && (r.byEmail || "") === me ? "Withdraw" : "Decline"}
+          />
         ))}
       </div>
     </div>
@@ -2559,7 +2596,7 @@ function EnablePushBanner({ email }) {
   );
 }
 
-function ClientDashboard({ project, viewerEmail, studioStatus, studioStatusColor, autoStatus, onLogout, onSetEmailNotify, onSendMessage, onReactMessage, onPinMessage, onMarkRead, onMarkNotifs, onDismissNotif, onSeenTab, onUploadSigned, onSignProposal, onRespondMeeting, onRequestMeeting, onDismissRequest, installOpen }) {
+function ClientDashboard({ project, viewerEmail, studioStatus, studioStatusColor, autoStatus, onLogout, onSetEmailNotify, onSendMessage, onReactMessage, onPinMessage, onMarkRead, onMarkNotifs, onDismissNotif, onSeenTab, onUploadSigned, onSignProposal, onRespondMeeting, onRequestMeeting, onEditRequest, onAcceptRequest, onDismissRequest, installOpen }) {
   const [tab, setTab] = useState("about");
   const [lightbox, setLightbox] = useState(null);
   const [prefillMsg, setPrefillMsg] = useState("");
@@ -2824,6 +2861,8 @@ function ClientDashboard({ project, viewerEmail, studioStatus, studioStatusColor
                 requests={project.meetingRequests || []}
                 viewerEmail={viewerEmail}
                 onRequest={onRequestMeeting}
+                onEdit={onEditRequest}
+                onAccept={onAcceptRequest}
                 onDismiss={onDismissRequest}
                 noMeetings={project.meetings.length === 0}
               />
@@ -3338,7 +3377,7 @@ function AdminMilestones({ project, onAdd, onEdit, onSetStatus, onMove, onDelete
   );
 }
 
-function AdminMeetings({ project, onAdd, onEdit, onDelete, onSyncResponses, onRequest, onDismissRequest }) {
+function AdminMeetings({ project, onAdd, onEdit, onDelete, onSyncResponses, onRequest, onEditRequest, onDismissRequest }) {
   const [form, setForm] = useState({ title: "", date: "", time: "", timezone: "Australia/Melbourne", mode: "online", link: "", location: "", message: "", invitees: [] });
   const [editingId, setEditingId] = useState(null);
   const [reqOpen, setReqOpen] = useState(false);
@@ -3349,6 +3388,8 @@ function AdminMeetings({ project, onAdd, onEdit, onDelete, onSyncResponses, onRe
       ...f,
       title: req.purpose || "",
       date: req.date || "",
+      mode: req.mode || "online",
+      location: req.mode === "in-person" ? req.location || "" : "",
       message: [req.times && `Requested times: ${req.times}`, req.notes].filter(Boolean).join("\n"),
     }));
     setEditingId(null);
@@ -3452,9 +3493,14 @@ function AdminMeetings({ project, onAdd, onEdit, onDelete, onSyncResponses, onRe
         </div>
       )}
       {requests.map((r) => (
-        <MeetingRequestCard key={r.id} req={r} onDismiss={() => onDismissRequest && onDismissRequest(r.id)}>
-          <button type="button" onClick={() => scheduleFrom(r)} className="text-[12px] text-white bg-stone-900 rounded-lg px-3 py-1.5 hover:bg-stone-800">Schedule this</button>
-        </MeetingRequestCard>
+        <MeetingRequestCard
+          key={r.id}
+          req={r}
+          viewerSide="studio"
+          onSchedule={() => scheduleFrom(r)}
+          onEdit={(d) => onEditRequest && onEditRequest(r.id, d)}
+          onDismiss={() => onDismissRequest && onDismissRequest(r.id)}
+        />
       ))}
 
       {project.meetings.length === 0 && requests.length === 0 && <p className="text-[13px] text-stone-400 pt-1">No meetings yet.</p>}
@@ -4496,16 +4542,25 @@ function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioSt
     if (m?.msEventId) api.microsoftDeleteEvent(m.msEventId);
     updateProject(code, (p) => ({ ...p, meetings: p.meetings.filter((mm) => mm.id !== id) }));
   }
-  // Studio requests a meeting from the client → saved + the client is alerted.
-  function requestMeetingFromClient(code, req) {
-    const entry = { id: uid(), from: "studio", byName: studioFirstName(), date: req.date || "", times: req.times || "", purpose: req.purpose || "", notes: req.notes || "", createdAt: new Date().toISOString() };
-    updateProject(code, (p) => ({ ...p, meetingRequests: [...(p.meetingRequests || []), entry], notifications: withNotif(p, "meeting", `Meeting request: ${req.purpose || "open Meetings to suggest a time"}`) }));
+  // Notify the client about a studio-side request / change.
+  function notifyClientOfRequest(code, req, verb) {
+    updateProject(code, (p) => ({ ...p, notifications: withNotif(p, "meeting", `${verb}: ${req.purpose || "open Meetings to confirm a time"}`) }));
     const proj = projects[code];
     const emails = (proj?.clients || []).map((c) => (c.email || "").trim().toLowerCase()).filter(Boolean);
     if (emails.length) api.notifyPush({ toEmails: emails, title: `${proj?.name || "Your project"} — meeting request`, body: req.purpose || "Studio Nicholas suggested a meeting", url: "/" });
     const em = optedInEmails(proj);
     if (em.length)
-      api.notifyEmail({ toEmails: em, subject: `Meeting request — ${proj?.name || "your project"}`, heading: "Studio Nicholas would like to meet", body: `${req.purpose || "We'd like to set up a meeting."}${req.date ? ` Preferred date: ${req.date}.` : ""}${req.times ? ` Suggested times: ${req.times}.` : ""}${req.notes ? ` ${req.notes}` : ""} Open your portal to confirm a time.`, projectName: proj?.name, senderName: STUDIO_INFO.contactName || "Studio Nicholas", time: emailStamp(), kind: "update" });
+      api.notifyEmail({ toEmails: em, subject: `Meeting request — ${proj?.name || "your project"}`, heading: "Studio Nicholas would like to meet", body: `${req.purpose || "We'd like to set up a meeting."} ${(req.mode || "online") === "online" ? "Teams (online)." : "In person" + (req.location ? " at " + req.location + "." : ".")}${req.date ? ` Preferred date: ${req.date}.` : ""}${req.times ? ` Suggested times: ${req.times}.` : ""}${req.notes ? ` ${req.notes}` : ""} Open your portal to confirm a time.`, projectName: proj?.name, senderName: STUDIO_INFO.contactName || "Studio Nicholas", time: emailStamp(), kind: "update" });
+  }
+  function requestMeetingFromClient(code, req) {
+    const entry = { id: uid(), from: "studio", lastBy: "studio", byName: studioFirstName(), date: req.date || "", times: req.times || "", purpose: req.purpose || "", notes: req.notes || "", mode: req.mode || "online", location: req.location || "", createdAt: new Date().toISOString() };
+    updateProject(code, (p) => ({ ...p, meetingRequests: [...(p.meetingRequests || []), entry] }));
+    notifyClientOfRequest(code, entry, "Meeting request");
+  }
+  function editRequest(code, id, data) {
+    let updated = null;
+    updateProject(code, (p) => ({ ...p, meetingRequests: (p.meetingRequests || []).map((r) => (r.id === id ? (updated = { ...r, ...data, lastBy: "studio", accepted: false }) : r)) }));
+    if (updated) notifyClientOfRequest(code, updated, "Updated meeting request");
   }
   function dismissRequest(code, id) {
     updateProject(code, (p) => ({ ...p, meetingRequests: (p.meetingRequests || []).filter((r) => r.id !== id) }));
@@ -4927,7 +4982,7 @@ function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioSt
 
             {adminTab === "meetings" && (
             <AdminSection title="Meetings">
-              <AdminMeetings project={project} onAdd={(d) => addMeeting(project.code, d)} onEdit={(id, d) => editMeeting(project.code, id, d)} onDelete={(id) => deleteMeeting(project.code, id)} onSyncResponses={() => syncMeetingResponses(project.code)} onRequest={(r) => requestMeetingFromClient(project.code, r)} onDismissRequest={(id) => dismissRequest(project.code, id)} />
+              <AdminMeetings project={project} onAdd={(d) => addMeeting(project.code, d)} onEdit={(id, d) => editMeeting(project.code, id, d)} onDelete={(id) => deleteMeeting(project.code, id)} onSyncResponses={() => syncMeetingResponses(project.code)} onRequest={(r) => requestMeetingFromClient(project.code, r)} onEditRequest={(id, r) => editRequest(project.code, id, r)} onDismissRequest={(id) => dismissRequest(project.code, id)} />
             </AdminSection>
             )}
 
@@ -5669,15 +5724,52 @@ export default function App() {
         (p?.clients || []).find((c) => (c.email || "").trim().toLowerCase() === me.toLowerCase()) ||
         (p?.builderUsers || []).find((b) => (b.email || "").trim().toLowerCase() === me.toLowerCase());
       const byName = mine?.name || me;
-      const entry = { id: uid(), from: "client", byName, byEmail: me.toLowerCase(), date: req.date || "", times: req.times || "", purpose: req.purpose || "", notes: req.notes || "", createdAt: new Date().toISOString() };
+      const entry = { id: uid(), from: "client", lastBy: "client", byName, byEmail: me.toLowerCase(), date: req.date || "", times: req.times || "", purpose: req.purpose || "", notes: req.notes || "", mode: req.mode || "online", location: req.location || "", createdAt: new Date().toISOString() };
       setProjects((prev) => ({ ...prev, [activeCode]: { ...prev[activeCode], meetingRequests: [...(prev[activeCode].meetingRequests || []), entry] } }));
-      api.notifyPush({ toStudio: true, title: "Meeting request", body: `${byName} requested a meeting`, url: "/" });
-      api.notifyStudioEmail({
-        subject: `Meeting request — ${p?.name || "a client"}`,
-        heading: "New meeting request",
-        body: `${byName} requested a meeting.${req.purpose ? ` Purpose: ${req.purpose}.` : ""}${req.date ? ` Preferred date: ${req.date}.` : ""}${req.times ? ` Times: ${req.times}.` : ""}${req.notes ? ` Notes: ${req.notes}` : ""}`,
-        projectName: p?.name,
-      });
+      notifyStudioOfRequest(p, byName, entry, "requested a meeting");
+    },
+    [activeCode, session, projects]
+  );
+  // Shared: alert the studio about a client-side request/change/acceptance.
+  function notifyStudioOfRequest(p, byName, req, verb) {
+    api.notifyPush({ toStudio: true, title: "Meeting request", body: `${byName} ${verb}`, url: "/" });
+    api.notifyStudioEmail({
+      subject: `Meeting request — ${p?.name || "a client"}`,
+      heading: req.accepted ? "Client accepted a meeting time" : "Meeting request",
+      body: `${byName} ${verb}.${req.purpose ? ` Purpose: ${req.purpose}.` : ""} ${(req.mode || "online") === "online" ? "Teams (online)." : "In person" + (req.location ? " at " + req.location + "." : ".")}${req.date ? ` Preferred date: ${req.date}.` : ""}${req.times ? ` Times: ${req.times}.` : ""}${req.notes ? ` Notes: ${req.notes}` : ""}`,
+      projectName: p?.name,
+    });
+  }
+  const handleEditRequest = useCallback(
+    (id, data) => {
+      const me = (session?.user?.email || "").trim();
+      const p = projects[activeCode];
+      const mine = (p?.clients || []).find((c) => (c.email || "").trim().toLowerCase() === me.toLowerCase()) || (p?.builderUsers || []).find((b) => (b.email || "").trim().toLowerCase() === me.toLowerCase());
+      const byName = mine?.name || me;
+      let updated = null;
+      setProjects((prev) => ({
+        ...prev,
+        [activeCode]: {
+          ...prev[activeCode],
+          meetingRequests: (prev[activeCode].meetingRequests || []).map((r) => (r.id === id ? (updated = { ...r, ...data, lastBy: "client", accepted: false }) : r)),
+        },
+      }));
+      if (updated) notifyStudioOfRequest(p, byName, updated, "suggested a change to a meeting");
+    },
+    [activeCode, session, projects]
+  );
+  const handleAcceptRequest = useCallback(
+    (id) => {
+      const me = (session?.user?.email || "").trim();
+      const p = projects[activeCode];
+      const mine = (p?.clients || []).find((c) => (c.email || "").trim().toLowerCase() === me.toLowerCase()) || (p?.builderUsers || []).find((b) => (b.email || "").trim().toLowerCase() === me.toLowerCase());
+      const byName = mine?.name || me;
+      let updated = null;
+      setProjects((prev) => ({
+        ...prev,
+        [activeCode]: { ...prev[activeCode], meetingRequests: (prev[activeCode].meetingRequests || []).map((r) => (r.id === id ? (updated = { ...r, accepted: true, lastBy: "client" }) : r)) },
+      }));
+      if (updated) notifyStudioOfRequest(p, byName, updated, "accepted the proposed meeting — ready to schedule");
     },
     [activeCode, session, projects]
   );
@@ -5734,6 +5826,8 @@ export default function App() {
         onSignProposal={handleSignProposal}
         onRespondMeeting={handleRespondMeeting}
         onRequestMeeting={handleRequestMeeting}
+        onEditRequest={handleEditRequest}
+        onAcceptRequest={handleAcceptRequest}
         onDismissRequest={handleDismissRequest}
         installOpen={installOpen}
       />

@@ -3894,6 +3894,24 @@ function StudioSettingsPanel({ studioStatus, studioStatusColor, onChangeStatus, 
     setPPerm(api.pushPermission());
     setPBusy(false);
   }
+  // Fire a test push to the studio (all registered admin devices) and report
+  // back exactly what the server did — so we can see if it's actually sending.
+  const [tBusy, setTBusy] = useState(false);
+  const [tMsg, setTMsg] = useState("");
+  async function sendTestPush() {
+    setTBusy(true);
+    setTMsg("");
+    try {
+      const r = await api.notifyPush({ toStudio: true, title: "Test notification ✓", body: "If you can see this, studio push is working.", url: "/" });
+      if (r?.error) setTMsg("Server error: " + r.error);
+      else if ((r?.attempted ?? 0) === 0) setTMsg("No registered devices found for the studio. Tap “Allow” above on this device first.");
+      else if ((r?.sent ?? 0) === 0) setTMsg(`Tried ${r.attempted} device(s) but none accepted it. ${r?.errors?.length ? "Reason: " + r.errors.join("; ") : "(likely a VAPID key mismatch)"}`);
+      else setTMsg(`Sent to ${r.sent} of ${r.attempted} device(s) — watch for the pop-up.`);
+    } catch (e) {
+      setTMsg("Error: " + (e?.message || String(e)));
+    }
+    setTBusy(false);
+  }
   // Microsoft 365 / Teams connection
   const [msStatus, setMsStatus] = useState({ connected: false, account: "" });
   const [msBusy, setMsBusy] = useState(false);
@@ -4013,6 +4031,16 @@ function StudioSettingsPanel({ studioStatus, studioStatusColor, onChangeStatus, 
             ) : null}
           </div>
           {pErr && <p className="text-[12px] text-red-600 mt-2.5">{pErr}</p>}
+          <div className="mt-3 pt-3 border-t border-stone-100 flex items-center gap-3 flex-wrap">
+            <button
+              onClick={sendTestPush}
+              disabled={tBusy}
+              className="shrink-0 border border-stone-300 text-stone-700 text-[12px] rounded-lg px-3 py-1.5 hover:bg-stone-50 transition-colors disabled:opacity-50"
+            >
+              {tBusy ? "Sending…" : "Send test notification"}
+            </button>
+            {tMsg && <span className="text-[12px] text-stone-500">{tMsg}</span>}
+          </div>
           {pPerm === "denied" ? (
             <p className="text-[12px] text-stone-400 mt-2.5">Notifications are blocked on this device — switch them back on in your browser's site settings, then come back here.</p>
           ) : !api.pushSupported() ? (

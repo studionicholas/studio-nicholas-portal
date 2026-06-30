@@ -36,14 +36,18 @@ Deno.serve(async (req) => {
       emails = emails.concat((admins || []).map((a: { email: string }) => (a.email || "").toLowerCase()));
     }
     emails = [...new Set(emails.filter(Boolean))];
+    console.log("notify: resolving for emails", JSON.stringify(emails), "toStudio", toStudio);
     if (emails.length === 0) {
-      return new Response(JSON.stringify({ sent: 0 }), { headers: { ...cors, "Content-Type": "application/json" } });
+      console.log("notify: no recipient emails — nothing to send");
+      return new Response(JSON.stringify({ sent: 0, reason: "no-recipients" }), { headers: { ...cors, "Content-Type": "application/json" } });
     }
 
     const { data: subs } = await admin.from("push_subscriptions").select("endpoint, subscription").in("email", emails);
+    console.log("notify: found", (subs || []).length, "subscription(s) for those emails");
     const payload = JSON.stringify({ title: title || "Studio Nicholas", body: body || "", url: url || "/" });
 
     let sent = 0;
+    const errors: string[] = [];
     await Promise.all(
       (subs || []).map(async (s: { endpoint: string; subscription: unknown }) => {
         try {
@@ -51,6 +55,9 @@ Deno.serve(async (req) => {
           sent++;
         } catch (err) {
           const code = (err as { statusCode?: number })?.statusCode;
+          const msg = (err as { body?: string; message?: string })?.body || (err as { message?: string })?.message || String(err);
+          console.error("notify: push send failed — status", code, "—", msg);
+          errors.push(`${code}: ${msg}`);
           if (code === 404 || code === 410) {
             await admin.from("push_subscriptions").delete().eq("endpoint", s.endpoint);
           }
@@ -58,7 +65,8 @@ Deno.serve(async (req) => {
       })
     );
 
-    return new Response(JSON.stringify({ sent }), { headers: { ...cors, "Content-Type": "application/json" } });
+    console.log("notify: done — sent", sent, "of", (subs || []).length, errors.length ? `| errors: ${JSON.stringify(errors)}` : "");
+    return new Response(JSON.stringify({ sent, attempted: (subs || []).length, errors }), { headers: { ...cors, "Content-Type": "application/json" } });
   } catch (e) {
     return new Response(JSON.stringify({ error: String(e) }), { status: 400, headers: { ...cors, "Content-Type": "application/json" } });
   }

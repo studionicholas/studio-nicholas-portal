@@ -314,9 +314,12 @@ export async function notifyStudioClientReady(email) {
 // Never throws to the UI — if the function isn't deployed yet it just logs.
 export async function notifyPush({ toEmails, toStudio, title, body, url }) {
   try {
-    await supabase.functions.invoke("Notify", { body: { toEmails: toEmails || [], toStudio: !!toStudio, title, body, url: url || "/" } });
+    const { data, error } = await supabase.functions.invoke("Notify", { body: { toEmails: toEmails || [], toStudio: !!toStudio, title, body, url: url || "/" } });
+    if (error) return { error: error.message || String(error) };
+    return data || {};
   } catch (e) {
     console.error("notify failed", e);
+    return { error: e?.message || String(e) };
   }
 }
 

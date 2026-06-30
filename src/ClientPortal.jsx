@@ -3762,7 +3762,7 @@ function SendLoginBtn({ email, name, projectName }) {
   );
 }
 
-function AdminClients({ clients = [], projectName, onChange, noun = "client" }) {
+function AdminClients({ clients = [], projectName, onChange, noun = "client", bounced }) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [programaUrl, setProgramaUrl] = useState("");
@@ -3801,8 +3801,11 @@ function AdminClients({ clients = [], projectName, onChange, noun = "client" }) 
             autoCapitalize="none"
             autoCorrect="off"
             spellCheck={false}
-            className="w-full px-3 py-2 rounded-lg border border-stone-300 text-[14px] focus:outline-none focus:ring-2 focus:ring-[#B7453C]"
+            className={`w-full px-3 py-2 rounded-lg border text-[14px] focus:outline-none focus:ring-2 focus:ring-[#B7453C] ${bounced && c.email && bounced.has((c.email || "").trim().toLowerCase()) ? "border-red-400 bg-red-50" : "border-stone-300"}`}
           />
+          {bounced && c.email && bounced.has((c.email || "").trim().toLowerCase()) && (
+            <p className="text-[12px] text-red-600 flex items-center gap-1.5">⚠️ Emails to this address bounced — check it's spelled correctly.</p>
+          )}
           <input
             value={c.programaUrl || ""}
             onChange={(e) => update(i, "programaUrl", e.target.value)}
@@ -4263,6 +4266,14 @@ function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioSt
   const [editingUpdate, setEditingUpdate] = useState(null);
   const [optimizing, setOptimizing] = useState(false);
   const [optimizeMsg, setOptimizeMsg] = useState("");
+  const [bounced, setBounced] = useState(() => new Set());
+  useEffect(() => {
+    let alive = true;
+    api.fetchBouncedEmails().then((s) => alive && setBounced(s));
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   const project = selectedCode ? projects[selectedCode] : null;
 
@@ -4877,11 +4888,11 @@ function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioSt
             </div>
 
             <AdminSection title="Client logins & Programa links">
-              <AdminClients clients={project.clients || []} projectName={project.name} onChange={(clients) => setField(project.code, "clients", clients)} noun="client" />
+              <AdminClients clients={project.clients || []} projectName={project.name} onChange={(clients) => setField(project.code, "clients", clients)} noun="client" bounced={bounced} />
             </AdminSection>
 
             <AdminSection title="Builder logins & Programa links">
-              <AdminClients clients={project.builderUsers || []} projectName={project.name} onChange={(b) => setField(project.code, "builderUsers", b)} noun="builder" />
+              <AdminClients clients={project.builderUsers || []} projectName={project.name} onChange={(b) => setField(project.code, "builderUsers", b)} noun="builder" bounced={bounced} />
             </AdminSection>
 
             <AdminSection title="About & details">

@@ -320,6 +320,18 @@ export async function notifyPush({ toEmails, toStudio, title, body, url }) {
   }
 }
 
+// Addresses that have bounced (recorded by the email-webhook function). The
+// back end flags these so a bad email is obvious. Returns a Set of lowercased emails.
+export async function fetchBouncedEmails() {
+  try {
+    const { data, error } = await supabase.from("bounced_emails").select("email");
+    if (error) throw error;
+    return new Set((data || []).map((r) => (r.email || "").toLowerCase()));
+  } catch (e) {
+    return new Set();
+  }
+}
+
 /* ---------- Microsoft 365 / Teams ---------- */
 
 // Public app identifiers (safe in the browser — the secret lives only in the

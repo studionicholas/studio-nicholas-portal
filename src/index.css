@@ -1,5 +1,19 @@
 @font-face {
   font-family: "Selva";
+  src: url("/fonts/selva-light-pro.ttf") format("truetype");
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Selva";
+  src: url("/fonts/selva-light-italic-pro.ttf") format("truetype");
+  font-weight: 300;
+  font-style: italic;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Selva";
   src: url("/fonts/selva-regular-pro.ttf") format("truetype");
   font-weight: 400;
   font-style: normal;
@@ -44,3 +58,37 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* ---- Login redesign (design handoff: client portal login) ---- */
+@keyframes snFadeUp {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes snKen {
+  0% { transform: scale(1.02) translate(0, 0); }
+  100% { transform: scale(1.12) translate(-1.5%, -1%); }
+}
+@keyframes snCurtainFade {
+  to { opacity: 0; visibility: hidden; }
+}
+.sn-field input::placeholder { color: #a89d95; }
+.sn-field input:-webkit-autofill { -webkit-box-shadow: 0 0 0 40px #fffdfb inset; }
+.sn-btn { transition: transform 0.12s cubic-bezier(0.2, 0.7, 0.2, 1), box-shadow 0.2s, background-color 0.2s; }
+.sn-forgot {
+  font-size: 14px;
+  color: #811618;
+  text-decoration: none;
+  border-bottom: 1px solid rgba(129, 22, 25, 0.35);
+  padding-bottom: 1px;
+  transition: color 0.15s, border-color 0.15s;
+}
+.sn-forgot:hover { color: #5e0f11; border-color: #5e0f11; }
+.sn-foot {
+  font-size: 12.5px;
+  color: #2a221c;
+  text-decoration: none;
+  border-bottom: 1px solid rgba(42, 34, 28, 0.3);
+  padding-bottom: 1px;
+  transition: opacity 0.15s;
+}
+.sn-foot:hover { opacity: 0.7; }

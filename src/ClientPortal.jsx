@@ -861,6 +861,72 @@ function Lightbox({ photos, index, onClose, onIndex }) {
 
 /* ---------------- Client Login ---------------- */
 
+// Branded entry sequence (design 2A/3A): an aqua curtain on which the script
+// wordmark draws itself in cream via a 72-frame sprite sheet, then fades out.
+// Desktop shows the wordmark on one line; mobile stacks "Studio" / "Nicholas".
+function EntryCurtain() {
+  const deskRef = useRef(null);
+  const studioRef = useRef(null);
+  const nickRef = useRef(null);
+  useEffect(() => {
+    let alive = true;
+    const img = new Image();
+    img.src = "/sn-entry-sheet.png";
+    img.onload = () => {
+      if (!alive) return;
+      const N = 72; // frames in the sheet
+      const FH = 163; // frame height
+      const DUR = 2880; // draw-on duration (ms)
+      const targets = [
+        [deskRef.current, 0, 1008], // full wordmark
+        [studioRef.current, 0, 445], // "Studio"
+        [nickRef.current, 445, 563], // "Nicholas"
+      ].filter(([c]) => c);
+      const start = performance.now();
+      let prev = -1;
+      const tick = (t) => {
+        const f = Math.min(N - 1, Math.floor(((t - start) / DUR) * N));
+        if (f !== prev) {
+          prev = f;
+          targets.forEach(([c, sx, sw]) => {
+            const ctx = c.getContext("2d");
+            ctx.clearRect(0, 0, c.width, c.height);
+            ctx.drawImage(img, sx, f * FH, sw, FH, 0, 0, c.width, c.height);
+          });
+        }
+        if (f < N - 1 && alive) requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+    };
+    return () => {
+      alive = false;
+    };
+  }, []);
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden"
+      style={{ background: "#7aa2aa", animation: "snCurtainFade 1.7s ease 3.6s forwards" }}
+    >
+      <canvas ref={deskRef} width={1008} height={163} className="hidden md:block" style={{ width: 440, maxWidth: "60%", height: "auto", aspectRatio: "1008 / 163" }} />
+      <div className="flex md:hidden flex-col items-center gap-2">
+        <canvas ref={studioRef} width={445} height={163} style={{ width: 131, height: 48, display: "block" }} />
+        <canvas ref={nickRef} width={563} height={163} style={{ width: 166, height: 48, display: "block" }} />
+      </div>
+    </div>
+  );
+}
+
+// Input field per the handoff: warm white, 1.5px border, 3px radius, rust
+// focus ring, 19px stroke icon.
+function SnField({ icon: FieldIcon, children }) {
+  return (
+    <label className="sn-field relative flex items-center bg-[#fffdfb] border-[1.5px] border-[#e6d8cf] rounded-[3px] px-4 h-[50px] shrink-0 transition-[border-color,box-shadow] duration-200 focus-within:border-[#b26f52] focus-within:shadow-[0_0_0_4px_rgba(178,111,82,0.12)]">
+      <FieldIcon className="w-[19px] h-[19px] shrink-0" style={{ color: "#b09f95" }} strokeWidth={1.5} />
+      {children}
+    </label>
+  );
+}
+
 function ClientLogin({ onEnter, onSignUp, loginImage, loginMessage }) {
   const [mode, setMode] = useState("signin"); // "signin" | "signup"
   const [email, setEmail] = useState("");
@@ -874,6 +940,38 @@ function ClientLogin({ onEnter, onSignUp, loginImage, loginMessage }) {
   const [confirmSentTo, setConfirmSentTo] = useState(null); // email awaiting confirmation
   const heroSrc = loginImage || LOGIN_HERO;
   const isSignUp = mode === "signup";
+
+  // Entry curtain: play once per session.
+  const [entry, setEntry] = useState(() => {
+    try {
+      return !sessionStorage.getItem("snEntrySeen");
+    } catch (_e) {
+      return true;
+    }
+  });
+  // Whether the entrance stagger delays account for the curtain (frozen at mount
+  // so re-renders never restart finished animations with long delays).
+  const [withEntry] = useState(entry);
+  const [animsOn, setAnimsOn] = useState(true);
+  useEffect(() => {
+    if (!entry) return;
+    try {
+      sessionStorage.setItem("snEntrySeen", "1");
+    } catch (_e) {
+      /* private browsing */
+    }
+    const t = setTimeout(() => setEntry(false), 5400); // 3.6s hold + 1.7s fade
+    return () => clearTimeout(t);
+  }, [entry]);
+  useEffect(() => {
+    // Once the stagger has fully played, stop applying entrance animations so
+    // later re-renders (mode switches, typing) never replay them.
+    const t = setTimeout(() => setAnimsOn(false), withEntry ? 5500 : 1600);
+    return () => clearTimeout(t);
+  }, [withEntry]);
+  // Stagger: with the curtain, blocks land at 4.0s…4.7s; without it, quickly.
+  const fadeUp = (i) =>
+    animsOn ? { animation: `snFadeUp .7s cubic-bezier(.2,.7,.2,1) ${(withEntry ? 4 + i * 0.1 : 0.05 + i * 0.07).toFixed(2)}s both` } : undefined;
 
   async function handleResend() {
     setBusy(true);
@@ -914,180 +1012,196 @@ function ClientLogin({ onEnter, onSignUp, loginImage, loginMessage }) {
   }
 
   return (
-    <div className="min-h-screen bg-[#F7F0EC] flex flex-col md:flex-row">
-      {/* Brand panel — top banner on mobile, left half on desktop */}
-      <div className="relative h-56 md:h-auto md:w-1/2 overflow-hidden" style={{ backgroundColor: "#1C1A17" }}>
-        <img src={heroSrc} alt="" className="absolute inset-0 w-full h-full object-cover opacity-95 md:opacity-90" />
-        {/* Mobile: logo centered on the image */}
-        <div className="md:hidden absolute inset-0 flex items-center justify-center" style={{ filter: "drop-shadow(0 2px 10px rgba(0,0,0,0.45))" }}>
-          <Logo light large />
+    <div className="min-h-screen md:h-screen flex flex-col md:flex-row" style={{ background: "#f7f2ef", fontFamily: "Selva, Georgia, serif" }}>
+      {entry && <EntryCurtain />}
+
+      {/* Mobile top banner — photo with Ken Burns + cream wordmark */}
+      <div className="md:hidden relative w-full h-[208px] shrink-0 overflow-hidden" style={{ background: "#e6d8cf" }}>
+        <div className="absolute inset-0" style={{ animation: "snKen 22s ease-in-out infinite alternate", willChange: "transform" }}>
+          <img src={heroSrc} alt="" className="w-full h-full object-cover" />
+        </div>
+        <div className="absolute inset-0 pointer-events-none" style={{ background: "linear-gradient(180deg, rgba(20,15,11,0.28) 0%, rgba(20,15,11,0.12) 45%, rgba(20,15,11,0.32) 100%)" }} />
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none" style={fadeUp(0)}>
+          <img src="/sn-wordmark-cream.png" alt="Studio Nicholas" style={{ width: 250, height: "auto", filter: "drop-shadow(0 2px 10px rgba(20,15,11,0.35))" }} />
         </div>
       </div>
 
-      {/* Form panel */}
-      <div className="flex-1 flex flex-col">
-        <div className="flex-1 flex items-center justify-center px-6 py-12">
-          <div className="w-full max-w-sm">
-            <div className="mb-8 hidden md:block">
-              <Logo large />
-            </div>
+      {/* Desktop image column — 42% width, photo with Ken Burns */}
+      <div className="hidden md:block relative w-[42%] h-full overflow-hidden shrink-0" style={{ background: "#e6d8cf" }}>
+        <div className="absolute inset-0" style={{ animation: "snKen 22s ease-in-out infinite alternate", willChange: "transform" }}>
+          <img src={heroSrc} alt="" className="w-full h-full object-cover" />
+        </div>
+        <div className="absolute inset-0 pointer-events-none" style={{ background: "linear-gradient(180deg, rgba(20,15,11,0.32) 0%, rgba(20,15,11,0) 34%, rgba(20,15,11,0.42) 100%)" }} />
+      </div>
 
-            {confirmSentTo ? (
-              <div>
-                <div className="w-12 h-12 rounded-xl bg-[#9BACB6]/25 flex items-center justify-center mb-5">
-                  <Mail className="w-6 h-6 text-[#576B45]" />
-                </div>
-                <h1 className="text-[27px] text-stone-900 mb-2" style={{ fontFamily: "Selva, Georgia, serif", fontStyle: "italic" }}>
-                  Check your email
-                </h1>
-                <p className="text-stone-600 text-[14px] leading-relaxed mb-2">
-                  We've sent a confirmation link to <strong className="text-stone-900">{confirmSentTo}</strong>. Click it to finish setting up, and you'll go straight to your project.
-                </p>
-                <p className="text-stone-400 text-[13px] mb-6">Can't find it? Check your spam/junk folder — it can take a minute to arrive.</p>
-                {error && <p className="text-[13px] text-red-600 mb-3">{error}</p>}
-                {resetMsg && <p className="text-[13px] text-[#576B45] mb-3">{resetMsg}</p>}
-                <button
-                  onClick={handleResend}
-                  disabled={busy}
-                  className="w-full bg-stone-900 text-white rounded-lg py-3.5 text-[14px] hover:bg-stone-800 transition-colors disabled:opacity-60"
-                >
-                  {busy ? "Sending…" : "Resend the confirmation email"}
-                </button>
-                <button
-                  onClick={() => {
-                    setConfirmSentTo(null);
-                    setMode("signin");
-                    setError("");
-                    setResetMsg("");
-                  }}
-                  className="w-full text-stone-500 hover:text-stone-800 text-[13px] py-3 mt-1"
-                >
-                  Back to sign in
-                </button>
-                <div className="mt-4 text-center">
-                  <a href={`mailto:${STUDIO_INFO.email}?subject=Trouble%20signing%20in`} className="inline-flex items-center gap-1.5 text-[13px] text-stone-500 hover:text-stone-800">
-                    <Mail className="w-3.5 h-3.5" /> Still stuck? Contact us
-                  </a>
-                </div>
+      {/* Form column */}
+      <div className="flex-1 flex flex-col min-h-0 px-[26px] pt-[22px] pb-5 md:px-12 md:py-[34px] md:justify-center md:overflow-y-auto">
+        <div className="w-full md:max-w-[460px] md:mx-auto flex-1 flex flex-col min-h-0">
+          {confirmSentTo ? (
+            <div className="my-auto py-6">
+              <div className="w-12 h-12 rounded-[3px] flex items-center justify-center mb-5" style={{ background: "rgba(122,162,170,0.25)" }}>
+                <Mail className="w-6 h-6" style={{ color: "#576b45" }} />
               </div>
-            ) : (
-            <>
-            <h1 className="text-[27px] text-stone-900 mb-1.5" style={{ fontFamily: "Selva, Georgia, serif", fontStyle: "italic" }}>
-              {isSignUp ? "Set up your login" : "Welcome"}
-            </h1>
-            <p className="text-stone-500 text-[14px] mb-7">
-              {isSignUp
-                ? "First time here? Enter the email Studio Nicholas has on file and choose a password to access your project."
-                : "Sign in to view your project updates, files, and messages."}
-            </p>
-
-            <form onSubmit={submit} className="space-y-3">
-              <div className="relative">
-                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400" />
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => {
-                    setEmail(e.target.value);
-                    setError("");
-                  }}
-                  placeholder="Email address"
-                  autoFocus
-                  autoCapitalize="none"
-                  autoCorrect="off"
-                  spellCheck={false}
-                  className="w-full pl-11 pr-4 py-3.5 rounded-lg border border-stone-300 bg-white text-stone-900 placeholder-stone-400 text-[15px] focus:outline-none focus:ring-2 focus:ring-[#B7453C] focus:border-transparent"
-                />
-              </div>
-              <div className="relative">
-                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400" />
-                <input
-                  type={showPw ? "text" : "password"}
-                  value={password}
-                  onChange={(e) => {
-                    setPassword(e.target.value);
-                    setError("");
-                  }}
-                  placeholder={isSignUp ? "Choose a password" : "Password"}
-                  autoComplete={isSignUp ? "new-password" : "current-password"}
-                  className="w-full pl-11 pr-16 py-3.5 rounded-lg border border-stone-300 bg-white text-stone-900 placeholder-stone-400 text-[15px] focus:outline-none focus:ring-2 focus:ring-[#B7453C] focus:border-transparent"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPw((v) => !v)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-stone-400 hover:text-stone-700"
-                  aria-label={showPw ? "Hide password" : "Show password"}
-                >
-                  {showPw ? "Hide" : "Show"}
-                </button>
-              </div>
-              {isSignUp && (
-                <label className="flex gap-2.5 items-start cursor-pointer pt-1">
-                  <input type="checkbox" checked={news} onChange={(e) => setNews(e.target.checked)} className="mt-0.5 w-4 h-4 accent-[#576B45]" />
-                  <span className="text-[12.5px] text-stone-500 leading-relaxed">Keep me updated with the latest news, projects and journal from Studio Nicholas.</span>
-                </label>
-              )}
-              {error && <p className="text-[13px] text-red-600">{error}</p>}
-              {resetMsg && <p className="text-[13px] text-[#576B45]">{resetMsg}</p>}
-              <button type="submit" disabled={busy} className="w-full bg-stone-900 text-white rounded-lg py-3.5 text-[14px] tracking-wide hover:bg-stone-800 transition-colors disabled:opacity-60">
-                {busy ? (isSignUp ? "Setting up…" : "Signing in…") : isSignUp ? "Set up my login" : "Sign in"}
+              <h1 className="text-[28px] md:text-[34px] leading-none mb-3" style={{ fontStyle: "italic", fontWeight: 300, color: "#2a221c" }}>
+                Check your email
+              </h1>
+              <p className="text-[14.5px] md:text-[15px] leading-relaxed mb-2" style={{ color: "#7a6f66" }}>
+                We've sent a confirmation link to <strong style={{ color: "#2a221c" }}>{confirmSentTo}</strong>. Click it to finish setting up, and you'll go straight to your project.
+              </p>
+              <p className="text-[13px] mb-6" style={{ color: "#a89d95" }}>Can't find it? Check your spam/junk folder — it can take a minute to arrive.</p>
+              {error && <p className="text-[13px] mb-3" style={{ color: "#811618" }}>{error}</p>}
+              {resetMsg && <p className="text-[13px] mb-3" style={{ color: "#576b45" }}>{resetMsg}</p>}
+              <button
+                onClick={handleResend}
+                disabled={busy}
+                className="sn-btn w-full h-[52px] rounded-[3px] text-[16px] font-medium disabled:opacity-60 hover:bg-[#47583a] hover:-translate-y-[2px] hover:shadow-[0_20px_36px_-14px_rgba(87,107,69,0.8)] active:translate-y-0 active:shadow-[0_8px_18px_-12px_rgba(36,29,23,0.7)]"
+                style={{ background: "#576b45", color: "#efefec", boxShadow: "0 14px 30px -14px rgba(87,107,69,0.75)" }}
+              >
+                {busy ? "Sending…" : "Resend the confirmation email"}
               </button>
+              <button
+                onClick={() => {
+                  setConfirmSentTo(null);
+                  setMode("signin");
+                  setError("");
+                  setResetMsg("");
+                }}
+                className="w-full text-[13px] py-3 mt-1 hover:opacity-70 transition-opacity"
+                style={{ color: "#7a6f66" }}
+              >
+                Back to sign in
+              </button>
+              <div className="mt-4 text-center">
+                <a href={`mailto:${STUDIO_INFO.email}?subject=Trouble%20signing%20in`} className="sn-foot">Still stuck? Contact us</a>
+              </div>
+            </div>
+          ) : (
+            <>
+              {/* Wordmark (desktop form column only — mobile has it on the banner) */}
+              <div className="hidden md:flex items-center justify-center mt-auto" style={fadeUp(0)}>
+                <img src="/sn-wordmark-static.png" alt="Studio Nicholas" style={{ width: 272, height: "auto" }} />
+              </div>
+
+              <h1 className="text-[28px] md:text-[34px] leading-none text-center md:text-left mt-[10px] md:mt-[18px] shrink-0" style={{ fontStyle: "italic", fontWeight: 300, color: "#2a221c", ...fadeUp(1) }}>
+                {isSignUp ? "Set up your login" : "Welcome"}
+              </h1>
+              <p className="text-[14.5px] md:text-[15px] text-center md:text-left mt-[7px] md:mt-2 leading-normal shrink-0" style={{ color: "#7a6f66", ...fadeUp(2) }}>
+                {isSignUp
+                  ? "First time here? Enter the email Studio Nicholas has on file and choose a password."
+                  : "Sign in to view your client dashboard."}
+              </p>
+
+              <form onSubmit={submit} className="contents">
+                <div className="mt-[18px] md:mt-5 flex flex-col gap-[10px] shrink-0" style={fadeUp(3)}>
+                  <SnField icon={Mail}>
+                    <input
+                      type="email"
+                      value={email}
+                      onChange={(e) => {
+                        setEmail(e.target.value);
+                        setError("");
+                      }}
+                      placeholder="Email address"
+                      autoComplete="email"
+                      autoCapitalize="none"
+                      autoCorrect="off"
+                      spellCheck={false}
+                      className="flex-1 h-full ml-3 min-w-0 bg-transparent border-none outline-none text-[15.5px]"
+                      style={{ fontFamily: "Selva, Georgia, serif", color: "#2a221c" }}
+                    />
+                  </SnField>
+                  <SnField icon={Lock}>
+                    <input
+                      type={showPw ? "text" : "password"}
+                      value={password}
+                      onChange={(e) => {
+                        setPassword(e.target.value);
+                        setError("");
+                      }}
+                      placeholder={isSignUp ? "Choose a password" : "Password"}
+                      autoComplete={isSignUp ? "new-password" : "current-password"}
+                      className="flex-1 h-full ml-3 min-w-0 bg-transparent border-none outline-none text-[15.5px]"
+                      style={{ fontFamily: "Selva, Georgia, serif", color: "#2a221c" }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPw((v) => !v)}
+                      className="text-[13px] font-medium px-1 py-1.5 transition-colors hover:text-[#94573e]"
+                      style={{ color: "#b26f52", letterSpacing: "0.02em" }}
+                      aria-label={showPw ? "Hide password" : "Show password"}
+                    >
+                      {showPw ? "Hide" : "Show"}
+                    </button>
+                  </SnField>
+                  {isSignUp && (
+                    <label className="flex gap-2.5 items-start cursor-pointer pt-1">
+                      <input type="checkbox" checked={news} onChange={(e) => setNews(e.target.checked)} className="mt-0.5 w-4 h-4 accent-[#576b45]" />
+                      <span className="text-[12.5px] leading-relaxed" style={{ color: "#7a6f66" }}>Keep me updated with the latest news, projects and journal from Studio Nicholas.</span>
+                    </label>
+                  )}
+                </div>
+
+                {error && <p className="text-[13px] mt-2.5 shrink-0" style={{ color: "#811618" }}>{error}</p>}
+                {resetMsg && <p className="text-[13px] mt-2.5 shrink-0" style={{ color: "#576b45" }}>{resetMsg}</p>}
+
+                <button
+                  type="submit"
+                  disabled={busy}
+                  className="sn-btn mt-[14px] h-[52px] w-full rounded-[3px] text-[16px] font-medium shrink-0 disabled:opacity-60 hover:bg-[#47583a] hover:-translate-y-[2px] hover:shadow-[0_20px_36px_-14px_rgba(87,107,69,0.8)] active:translate-y-0 active:shadow-[0_8px_18px_-12px_rgba(36,29,23,0.7)]"
+                  style={{ background: "#576b45", color: "#efefec", boxShadow: "0 14px 30px -14px rgba(87,107,69,0.75)", ...fadeUp(4) }}
+                >
+                  {busy ? (isSignUp ? "Setting up…" : "Signing in…") : isSignUp ? "Set up my login" : "Sign in"}
+                </button>
+              </form>
+
               {!isSignUp && (
-                <div className="text-center">
-                  <button type="button" onClick={handleReset} disabled={resetBusy} className="text-[13px] text-stone-500 hover:text-stone-800 underline disabled:opacity-50">
+                <div className="flex items-center justify-center mt-3 shrink-0" style={fadeUp(5)}>
+                  <button type="button" onClick={handleReset} disabled={resetBusy} className="sn-forgot disabled:opacity-50">
                     {resetBusy ? "Sending…" : "Forgot your password?"}
                   </button>
                 </div>
               )}
-            </form>
 
-            {isSignUp ? (
-              <div className="mt-6 pt-5 border-t border-stone-200 text-center">
-                <p className="text-[13px] text-stone-500">
-                  Already have a login?{" "}
+              <div className="mt-4 md:mt-[18px] pt-4 md:pt-[18px] text-center shrink-0" style={{ borderTop: "1px solid #e0d2c8", ...fadeUp(6) }}>
+                {isSignUp ? (
+                  <p className="text-[13.5px]" style={{ color: "#7a6f66" }}>
+                    Already have a login?{" "}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMode("signin");
+                        setError("");
+                        setResetMsg("");
+                      }}
+                      className="sn-forgot"
+                      style={{ fontSize: "13.5px" }}
+                    >
+                      Sign in
+                    </button>
+                  </p>
+                ) : (
                   <button
                     type="button"
                     onClick={() => {
-                      setMode("signin");
+                      setMode("signup");
                       setError("");
                       setResetMsg("");
                     }}
-                    className="text-stone-900 underline hover:text-stone-700"
+                    className="sn-btn block w-full h-11 rounded-[3px] text-[14.5px] font-medium hover:bg-[#c49a26] hover:-translate-y-[2px] active:translate-y-0"
+                    style={{ background: "#d5a933", color: "#3b2f0c", boxShadow: "0 10px 22px -14px rgba(213,169,51,0.9)" }}
                   >
-                    Sign in
+                    New here? Set up your login
                   </button>
-                </p>
+                )}
               </div>
-            ) : (
-              <div className="relative mt-7 rounded-xl border-2 border-[#9BACB6] bg-[#9BACB6]/20 px-4 pt-5 pb-4 text-center">
-                <span className="absolute -top-2.5 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full bg-[#576B45] px-3 py-0.5 text-[10px] tracking-wide text-white uppercase">
-                  Start here if you're new
-                </span>
-                <p className="text-[13.5px] text-stone-700 mb-2.5">First time here? Create your login to access your project.</p>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setMode("signup");
-                    setError("");
-                    setResetMsg("");
-                  }}
-                  className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-[#9BACB6] px-5 py-2.5 text-[14px] text-[#1C1A17] hover:opacity-90 transition-opacity"
-                >
-                  Set up your login
-                </button>
+
+              <div className="text-center mt-auto pt-3 shrink-0" style={fadeUp(7)}>
+                <a href={`mailto:${STUDIO_INFO.email}?subject=Trouble%20signing%20in`} className="sn-foot">Contact us</a>
+                <span className="inline-block rounded-full align-middle" style={{ width: 3, height: 3, background: "#c9b9ae", margin: "2px 14px" }} />
+                <a href="https://www.studionicholas.com.au" target="_blank" rel="noreferrer" className="sn-foot">studionicholas.com.au</a>
               </div>
-            )}
-
-            <div className="mt-4 text-center">
-              <a href={`mailto:${STUDIO_INFO.email}?subject=Trouble%20signing%20in`} className="inline-flex items-center gap-1.5 text-[13px] text-stone-500 hover:text-stone-800">
-                <Mail className="w-3.5 h-3.5" /> Trouble signing in? Contact us
-              </a>
-            </div>
-
-            <p className="text-center text-stone-400 text-[12px] mt-6">Use the email address Studio Nicholas has on file for your project.</p>
             </>
-            )}
-          </div>
+          )}
         </div>
       </div>
     </div>

@@ -20,7 +20,7 @@ function esc(s: string) {
   return String(s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
-function emailHtml(o: { projectName?: string; heading?: string; body?: string; senderName?: string; time?: string; kind?: string; audience?: string; setupCta?: boolean; imageUrl?: string }) {
+function emailHtml(o: { projectName?: string; heading?: string; body?: string; senderName?: string; time?: string; kind?: string; audience?: string; setupCta?: boolean; imageUrl?: string; programaUrl?: string }) {
   const accent = "#9BACB6"; // brand aqua
   const isStudio = o.audience === "studio";
   const isUpdate = o.kind === "update";
@@ -69,8 +69,11 @@ function emailHtml(o: { projectName?: string; heading?: string; body?: string; s
         <h1 style="font-size:24px;font-style:italic;color:#1C1A17;margin:0;font-weight:normal;">${esc(o.heading || (isUpdate ? "New update" : "New message"))}</h1>
       </td></tr>
       ${bodyBlock}
-      <tr><td style="padding:24px 44px 6px;text-align:center;">
-        <a href="${LOGIN_URL}" style="display:inline-block;background:#1C1A17;color:#ffffff;text-decoration:none;font-family:Arial,Helvetica,sans-serif;font-size:15px;padding:13px 34px;border-radius:9px;">Open your portal &nbsp;→</a>
+      ${isNotice && o.programaUrl && /^https?:/.test(o.programaUrl) ? `<tr><td style="padding:24px 44px 0;text-align:center;">
+        <a href="${o.programaUrl}" style="display:inline-block;background:#9BACB6;color:#1C1A17;text-decoration:none;font-family:Arial,Helvetica,sans-serif;font-size:15px;padding:13px 34px;border-radius:9px;">Open Programa &nbsp;→</a>
+      </td></tr>` : ""}
+      <tr><td style="padding:${isNotice && o.programaUrl ? "10px" : "24px"} 44px 6px;text-align:center;">
+        <a href="${LOGIN_URL}" style="display:inline-block;background:#1C1A17;color:#ffffff;text-decoration:none;font-family:Arial,Helvetica,sans-serif;font-size:15px;padding:13px 34px;border-radius:9px;">${isNotice ? "Reply in your portal" : "Open your portal"} &nbsp;→</a>
       </td></tr>
       ${o.setupCta ? `<tr><td style="padding:6px 44px 6px;text-align:center;">
         <a href="${LOGIN_URL}" style="display:inline-block;background:#ffffff;color:#1C1A17;border:1px solid #9BACB6;text-decoration:none;font-family:Arial,Helvetica,sans-serif;font-size:14px;padding:11px 28px;border-radius:9px;">First time here? Set up your login</a>
@@ -87,27 +90,34 @@ function emailHtml(o: { projectName?: string; heading?: string; body?: string; s
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   try {
-    const { toEmails = [], audience, subject, heading, body, projectName, senderName, time, kind, setupCta, imageUrl } = await req.json();
+    const { toEmails = [], audience, subject, heading, body, projectName, senderName, time, kind, setupCta, imageUrl, recipients } = await req.json();
     // Studio alerts go to the studio mailbox (kept server-side); client alerts go
-    // to the opted-in recipients passed in.
-    const emails =
+    // to the recipients passed in. `recipients` may carry per-person extras
+    // (e.g. each client's own Programa link) — falls back to plain toEmails.
+    const recips: { email: string; programaUrl?: string }[] =
       audience === "studio"
-        ? [STUDIO_EMAIL.toLowerCase()]
-        : [...new Set((toEmails || []).map((e: string) => (e || "").toLowerCase()).filter(Boolean))];
-    if (emails.length === 0) {
+        ? [{ email: STUDIO_EMAIL.toLowerCase() }]
+        : Array.isArray(recipients) && recipients.length
+          ? recipients
+              .map((r: { email?: string; programaUrl?: string }) => ({ email: (r?.email || "").toLowerCase(), programaUrl: r?.programaUrl || "" }))
+              .filter((r: { email: string }) => r.email)
+          : [...new Set((toEmails || []).map((e: string) => (e || "").toLowerCase()).filter(Boolean))].map((e) => ({ email: e as string }));
+    const seen = new Set<string>();
+    const unique = recips.filter((r) => (seen.has(r.email) ? false : (seen.add(r.email), true)));
+    if (unique.length === 0) {
       return new Response(JSON.stringify({ sent: 0 }), { headers: { ...cors, "Content-Type": "application/json" } });
     }
-    const html = emailHtml({ projectName, heading, body, senderName, time, kind, audience, setupCta, imageUrl });
     let sent = 0;
     await Promise.all(
-      emails.map(async (to) => {
+      unique.map(async (r) => {
         try {
-          const r = await fetch("https://api.resend.com/emails", {
+          const html = emailHtml({ projectName, heading, body, senderName, time, kind, audience, setupCta, imageUrl, programaUrl: r.programaUrl });
+          const res = await fetch("https://api.resend.com/emails", {
             method: "POST",
             headers: { Authorization: `Bearer ${RESEND}`, "Content-Type": "application/json" },
-            body: JSON.stringify({ from: FROM, to: [to], reply_to: "info@studionicholas.com.au", subject: subject || "New activity on your project", html }),
+            body: JSON.stringify({ from: FROM, to: [r.email], reply_to: "info@studionicholas.com.au", subject: subject || "New activity on your project", html }),
           });
-          if (r.ok) sent++;
+          if (res.ok) sent++;
         } catch (_e) {
           // ignore individual failures
         }

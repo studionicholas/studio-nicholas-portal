@@ -1296,43 +1296,40 @@ function Toggle({ on, onChange }) {
 
 // Studio-only composer for a formal notice — a branded card in the thread that
 // is ALWAYS emailed to every client on the project (plus push), regardless of
-// their email-updates preference. Ships with selectable default templates.
-const NOTICE_PRESETS = [
+// their email-updates preference. Templates are editable in studio Settings;
+// these defaults seed the list until the studio saves their own.
+const DEFAULT_NOTICE_TEMPLATES = [
   {
-    key: "presentation",
     label: "Presentation",
     title: "Your presentation is on its way",
     text: "We've prepared your design presentation and can't wait to share it with you. A link from Programa will arrive in your email shortly — keep an eye on your inbox (and your spam folder, just in case). You can also click the blue Programa button below to take you straight there. Once you've had a look, we'd love to hear your thoughts.",
     programaCta: true,
   },
   {
-    key: "programa",
     label: "New in Programa",
     title: "New items in your Programa dashboard",
     text: "We've added new items to your Programa dashboard — schedules, documents or selections ready for your review. Click the blue Programa button below to take you straight there. Any questions, just send us a message.",
     programaCta: true,
   },
-  {
-    key: "custom",
-    label: "Custom",
-    title: "",
-    text: "",
-    programaCta: false,
-  },
 ];
-function NoticeComposer({ onSend, onCancel, hasPrograma }) {
-  const [preset, setPreset] = useState("presentation");
-  const [title, setTitle] = useState(NOTICE_PRESETS[0].title);
-  const [text, setText] = useState(NOTICE_PRESETS[0].text);
-  const [programaCta, setProgramaCta] = useState(NOTICE_PRESETS[0].programaCta && hasPrograma);
+// The studio's saved templates, or the defaults until they've saved their own.
+function noticeTemplatesOrDefault(saved) {
+  return Array.isArray(saved) && saved.length > 0 ? saved : DEFAULT_NOTICE_TEMPLATES;
+}
+function NoticeComposer({ onSend, onCancel, hasPrograma, templates }) {
+  const list = noticeTemplatesOrDefault(templates);
+  const [preset, setPreset] = useState(0); // index into list, or "custom"
+  const [title, setTitle] = useState(list[0]?.title || "");
+  const [text, setText] = useState(list[0]?.text || "");
+  const [programaCta, setProgramaCta] = useState(!!list[0]?.programaCta && hasPrograma);
   const [photo, setPhoto] = useState(null);
   const [uploading, setUploading] = useState(false);
   const fileRef = useRef(null);
-  function applyPreset(p) {
-    setPreset(p.key);
-    setTitle(p.title);
-    setText(p.text);
-    setProgramaCta(p.programaCta && hasPrograma);
+  function applyPreset(p, key) {
+    setPreset(key);
+    setTitle(p.title || "");
+    setText(p.text || "");
+    setProgramaCta(!!p.programaCta && hasPrograma);
   }
   async function pick(files) {
     const file = files && files[0];
@@ -1357,16 +1354,23 @@ function NoticeComposer({ onSend, onCancel, hasPrograma }) {
       </div>
       <div className="flex flex-wrap items-center gap-1.5 mb-3">
         <span className="text-[11px] text-stone-400 uppercase tracking-wide mr-1">Template</span>
-        {NOTICE_PRESETS.map((p) => (
+        {list.map((p, i) => (
           <button
-            key={p.key}
+            key={i}
             type="button"
-            onClick={() => applyPreset(p)}
-            className={`text-[12px] rounded-full px-3 py-1 border transition-colors ${preset === p.key ? "border-stone-900 bg-stone-900 text-white" : "border-stone-300 bg-white text-stone-500 hover:bg-stone-50"}`}
+            onClick={() => applyPreset(p, i)}
+            className={`text-[12px] rounded-full px-3 py-1 border transition-colors ${preset === i ? "border-stone-900 bg-stone-900 text-white" : "border-stone-300 bg-white text-stone-500 hover:bg-stone-50"}`}
           >
-            {p.label}
+            {p.label || `Template ${i + 1}`}
           </button>
         ))}
+        <button
+          type="button"
+          onClick={() => applyPreset({ title: "", text: "", programaCta: false }, "custom")}
+          className={`text-[12px] rounded-full px-3 py-1 border transition-colors ${preset === "custom" ? "border-stone-900 bg-stone-900 text-white" : "border-stone-300 bg-white text-stone-500 hover:bg-stone-50"}`}
+        >
+          Custom
+        </button>
       </div>
       <input
         value={title}
@@ -1424,7 +1428,7 @@ function NoticeComposer({ onSend, onCancel, hasPrograma }) {
   );
 }
 
-function MessagesPanel({ messages, meRole, onSend, onSendNotice, onReact, onPin, onLabel, onTagPhoto, onEdit, onDelete, seenSince, showReceipts, showStatus, onToggleStatus, customStatus, onSetCustomStatus, studioStatus, studioStatusColor, autoStatus, prefill, onPrefillUsed, draftKey, clients, myEmail, fallbackClientName, programaUrl }) {
+function MessagesPanel({ messages, meRole, onSend, onSendNotice, onReact, onPin, onLabel, onTagPhoto, onEdit, onDelete, seenSince, showReceipts, showStatus, onToggleStatus, customStatus, onSetCustomStatus, studioStatus, studioStatusColor, autoStatus, prefill, onPrefillUsed, draftKey, clients, myEmail, fallbackClientName, programaUrl, noticeTemplates }) {
   // The automatic out-of-office note shows (to everyone) during its active hours,
   // unless this project has its own custom status note set.
   const autoNote = customStatus ? null : activeAutoNote(autoStatus);
@@ -1475,6 +1479,7 @@ function MessagesPanel({ messages, meRole, onSend, onSendNotice, onReact, onPin,
   const [lb, setLb] = useState(null); // {photos, index} for the in-message lightbox
   const fileRef = useRef(null);
   const listRef = useRef(null);
+  const composerRef = useRef(null); // the message input, so a notice's Reply button can jump to it
   const stickRef = useRef(true); // keep pinned to the newest message unless the user scrolls up
   function onListScroll() {
     const el = listRef.current;
@@ -1771,16 +1776,32 @@ function MessagesPanel({ messages, meRole, onSend, onSendNotice, onReact, onPin,
                     )}
                   </>
                 )}
-                {isNotice && m.programaCta && programaUrl && (
-                  <a
-                    href={programaUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 rounded-lg px-5 py-2.5 text-[13.5px] mt-3.5 transition-opacity hover:opacity-90"
-                    style={{ backgroundColor: "#9BACB6", color: "#1C1A17" }}
-                  >
-                    Open Programa <ChevronRight className="w-3.5 h-3.5" />
-                  </a>
+                {isNotice && (
+                  <div className="flex flex-wrap items-center justify-center gap-2 mt-3.5">
+                    {m.programaCta && programaUrl && (
+                      <a
+                        href={programaUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 rounded-lg px-5 py-2.5 text-[13.5px] transition-opacity hover:opacity-90"
+                        style={{ backgroundColor: "#9BACB6", color: "#1C1A17" }}
+                      >
+                        Open Programa <ChevronRight className="w-3.5 h-3.5" />
+                      </a>
+                    )}
+                    {meRole === "client" && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          composerRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+                          composerRef.current?.focus({ preventScroll: true });
+                        }}
+                        className="inline-flex items-center gap-1.5 rounded-lg px-5 py-2.5 text-[13.5px] bg-stone-900 text-white transition-colors hover:bg-stone-800"
+                      >
+                        <Reply className="w-3.5 h-3.5" /> Reply to the studio
+                      </button>
+                    )}
+                  </div>
                 )}
                 <p className={`text-[11px] mt-1 ${isNotice ? "mt-3 text-stone-400" : mine ? "text-white/50" : "text-stone-400"}`}>
                   {senderLabel(m)} · {formatDate(m.date)} · {formatTime(m.date)}
@@ -1938,6 +1959,7 @@ function MessagesPanel({ messages, meRole, onSend, onSendNotice, onReact, onPin,
       {meRole === "studio" && onSendNotice && noticeOpen && (
         <NoticeComposer
           hasPrograma={!!programaUrl}
+          templates={noticeTemplates}
           onCancel={() => setNoticeOpen(false)}
           onSend={(n) => {
             onSendNotice(n);
@@ -1995,6 +2017,7 @@ function MessagesPanel({ messages, meRole, onSend, onSendNotice, onReact, onPin,
           <Camera className="w-4 h-4" />
         </button>
         <input
+          ref={composerRef}
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           placeholder={meRole === "client" ? `Send a message to ${studioFirstName()}…` : "Reply to client…"}
@@ -4195,7 +4218,82 @@ function AdminFeatures({ project, onToggle }) {
   );
 }
 
-function StudioSettingsPanel({ studioStatus, studioStatusColor, onChangeStatus, onChangeStatusColor, onSaveStatus, loginImage, loginMessage, studioInfo, onSaveInfo, autoReply, onSaveAutoReply, viewerEmail, onSave }) {
+// Settings editor for the formal-notice templates that appear in the
+// Messages → "Formal notice" composer. Saved studio-wide.
+function NoticeTemplatesEditor({ templates, onSaveTemplates }) {
+  const [list, setList] = useState(() => noticeTemplatesOrDefault(templates).map((t) => ({ ...t })));
+  const [savedMsg, setSavedMsg] = useState("");
+  function update(i, field, value) {
+    setList((arr) => arr.map((t, j) => (j === i ? { ...t, [field]: value } : t)));
+    setSavedMsg("");
+  }
+  function remove(i) {
+    setList((arr) => arr.filter((_, j) => j !== i));
+    setSavedMsg("");
+  }
+  function add() {
+    setList((arr) => [...arr, { label: "", title: "", text: "", programaCta: false }]);
+    setSavedMsg("");
+  }
+  async function save() {
+    const cleaned = list.filter((t) => (t.label || t.title || t.text || "").trim());
+    setList(cleaned.length ? cleaned : []);
+    try {
+      await onSaveTemplates(cleaned);
+      setSavedMsg("Saved ✓");
+    } catch (e) {
+      setSavedMsg("Couldn't save — try again.");
+    }
+  }
+  return (
+    <div className="space-y-3">
+      {list.map((t, i) => (
+        <div key={i} className="border border-stone-200 rounded-lg bg-white p-3.5">
+          <div className="flex items-center gap-2 mb-2">
+            <input
+              value={t.label || ""}
+              onChange={(e) => update(i, "label", e.target.value)}
+              placeholder="Button name (e.g. Presentation)"
+              className="flex-1 min-w-0 px-3 py-2 rounded-lg border border-stone-300 text-[13px] focus:outline-none focus:ring-2 focus:ring-[#B7453C]"
+            />
+            <button onClick={() => remove(i)} className="shrink-0 text-stone-300 hover:text-red-600 p-1" aria-label="Delete template">
+              <Trash2 className="w-4 h-4" />
+            </button>
+          </div>
+          <input
+            value={t.title || ""}
+            onChange={(e) => update(i, "title", e.target.value)}
+            placeholder="Notice heading"
+            className="w-full px-3 py-2 rounded-lg border border-stone-300 text-[13px] mb-2 focus:outline-none focus:ring-2 focus:ring-[#B7453C]"
+          />
+          <textarea
+            value={t.text || ""}
+            onChange={(e) => update(i, "text", e.target.value)}
+            rows={3}
+            placeholder="Notice message"
+            className="w-full px-3 py-2 rounded-lg border border-stone-300 text-[13px] mb-2 resize-none focus:outline-none focus:ring-2 focus:ring-[#B7453C]"
+          />
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" checked={!!t.programaCta} onChange={(e) => update(i, "programaCta", e.target.checked)} className="w-3.5 h-3.5 accent-[#576B45]" />
+            <span className="text-[12px] text-stone-500">Include the blue Programa button by default</span>
+          </label>
+        </div>
+      ))}
+      <div className="flex items-center gap-3">
+        <button onClick={add} className="inline-flex items-center gap-1.5 text-[13px] text-stone-600 border border-stone-300 rounded-lg px-3.5 py-2 hover:bg-stone-100">
+          <Plus className="w-3.5 h-3.5" /> Add template
+        </button>
+        <button onClick={save} className="bg-stone-900 text-white text-[13px] rounded-lg px-5 py-2 hover:bg-stone-800 transition-colors">
+          Save templates
+        </button>
+        {savedMsg && <span className="text-[12px] text-[#576B45]">{savedMsg}</span>}
+      </div>
+      <p className="text-[11.5px] text-stone-400 leading-relaxed">These appear as one-tap templates in a project's Messages tab under "Formal notice". You can still edit the words before each send.</p>
+    </div>
+  );
+}
+
+function StudioSettingsPanel({ studioStatus, studioStatusColor, onChangeStatus, onChangeStatusColor, onSaveStatus, loginImage, loginMessage, studioInfo, onSaveInfo, autoReply, onSaveAutoReply, noticeTemplates, onSaveNoticeTemplates, viewerEmail, onSave }) {
   const [pPerm, setPPerm] = useState(() => (api.pushSupported() ? api.pushPermission() : "unsupported"));
   const [pBusy, setPBusy] = useState(false);
   const [pErr, setPErr] = useState("");
@@ -4369,6 +4467,10 @@ function StudioSettingsPanel({ studioStatus, studioStatusColor, onChangeStatus, 
             <p className="text-[12px] text-stone-400 mt-2.5">Tap to register this device. Do it on every device you want alerts on (phone + computer). On iPhone, add it to your home screen first.</p>
           )}
         </div>
+      </AdminSection>
+
+      <AdminSection title="Formal notice templates">
+        <NoticeTemplatesEditor templates={noticeTemplates} onSaveTemplates={onSaveNoticeTemplates} />
       </AdminSection>
 
       <AdminSection title="Microsoft 365 / Teams">
@@ -4620,7 +4722,7 @@ function AdminBell({ projects, onOpen }) {
   );
 }
 
-function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioStatusColor, onChangeStatus, onChangeStatusColor, onSaveStatus, loginImage, loginMessage, studioInfo, onSaveInfo, autoReply, onSaveAutoReply, onSaveLogin, onLogout }) {
+function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioStatusColor, onChangeStatus, onChangeStatusColor, onSaveStatus, loginImage, loginMessage, studioInfo, onSaveInfo, autoReply, onSaveAutoReply, noticeTemplates, onSaveNoticeTemplates, onSaveLogin, onLogout }) {
   const [selectedCode, setSelectedCode] = useState(Object.keys(projects)[0] || null);
   const [showNewProject, setShowNewProject] = useState(false);
   const [showNewUpdate, setShowNewUpdate] = useState(false);
@@ -5046,11 +5148,15 @@ function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioSt
       notifications: withNotif(p, "message", `A note from the studio: ${notice.title || truncate(notice.text, 50)}`),
     }));
     const proj = projects[code];
-    const emails = (proj?.clients || []).map((c) => (c.email || "").trim().toLowerCase()).filter(Boolean);
-    if (emails.length) {
-      api.notifyPush({ toEmails: emails, title: `${proj?.name || "Your project"} — a note from the studio`, body: notice.title || truncate(notice.text, 60), url: "/" });
+    // Per-recipient Programa links: each client's email carries THEIR link.
+    const recipients = (proj?.clients || [])
+      .map((c) => ({ email: (c.email || "").trim().toLowerCase(), programaUrl: notice.programaCta ? c.programaUrl || proj?.programaUrl || "" : "" }))
+      .filter((r) => r.email);
+    if (recipients.length) {
+      api.notifyPush({ toEmails: recipients.map((r) => r.email), title: `${proj?.name || "Your project"} — a note from the studio`, body: notice.title || truncate(notice.text, 60), url: "/" });
       api.notifyEmail({
-        toEmails: emails,
+        toEmails: recipients.map((r) => r.email),
+        recipients,
         subject: `${notice.title || "A note from the studio"} — ${proj?.name || "your project"}`,
         heading: notice.title || "A note from the studio",
         body: notice.text,
@@ -5235,6 +5341,8 @@ function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioSt
             onSaveInfo={onSaveInfo}
             autoReply={autoReply}
             onSaveAutoReply={onSaveAutoReply}
+            noticeTemplates={noticeTemplates}
+            onSaveNoticeTemplates={onSaveNoticeTemplates}
             viewerEmail={viewerEmail}
             onSave={onSaveLogin}
           />
@@ -5446,6 +5554,7 @@ function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioSt
                 fallbackClientName={project.clientName}
                 onSend={(text, replyTo, photos) => replyMessage(project.code, text, replyTo, photos)}
                 onSendNotice={(n) => sendNotice(project.code, n)}
+                noticeTemplates={noticeTemplates}
                 onReact={(id, emoji) => reactMessage(project.code, id, emoji)}
                 onPin={(id) => pinMessage(project.code, id)}
                 onLabel={(id, label) => labelMessage(project.code, id, label)}
@@ -5607,6 +5716,7 @@ export default function App() {
   const [loginMessage, setLoginMessage] = useState("");
   const [studioInfo, setStudioInfo] = useState(null);
   const [autoReply, setAutoReply] = useState(null);
+  const [noticeTemplates, setNoticeTemplates] = useState(null);
   const [activeCode, setActiveCode] = useState(null);
   const [saveError, setSaveError] = useState("");
   const [passwordDone, setPasswordDone] = useState(false);
@@ -5665,6 +5775,7 @@ export default function App() {
       setStudioInfo(s.studioInfo);
       applyStudioInfo(s.studioInfo);
       setAutoReply(s.autoReply);
+      setNoticeTemplates(s.noticeTemplates);
     });
   }, []);
 
@@ -5685,6 +5796,7 @@ export default function App() {
       setStudioInfo(status.studioInfo);
       applyStudioInfo(status.studioInfo);
       setAutoReply(status.autoReply);
+      setNoticeTemplates(status.noticeTemplates);
       setProjects(migrate(raw));
     } catch (e) {
       console.error("refetch failed", e);
@@ -5900,6 +6012,15 @@ export default function App() {
     setStudioInfo(info);
     try {
       await api.saveStudioInfo(info);
+    } catch (e) {
+      setSaveError(e?.message || String(e));
+    }
+  }, []);
+
+  const handleSaveNoticeTemplates = useCallback(async (list) => {
+    setNoticeTemplates(list);
+    try {
+      await api.saveNoticeTemplates(list);
     } catch (e) {
       setSaveError(e?.message || String(e));
     }
@@ -6228,6 +6349,8 @@ export default function App() {
         onSaveInfo={handleSaveInfo}
         autoReply={autoReply}
         onSaveAutoReply={handleSaveAutoReply}
+        noticeTemplates={noticeTemplates}
+        onSaveNoticeTemplates={handleSaveNoticeTemplates}
         onSaveLogin={handleSaveLogin}
         onLogout={handleSignOut}
       />

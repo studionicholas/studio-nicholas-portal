@@ -181,14 +181,16 @@ export async function deleteProject(code) {
 // All studio-wide settings (status note + login-page photo/message). Publicly
 // readable so the login page can show the photo/message before anyone signs in.
 export async function fetchSettings() {
+  // Select * so a not-yet-added optional column (e.g. notice_templates before
+  // its SQL has run) can never break loading the settings.
   const { data, error } = await supabase
     .from("studio_settings")
-    .select("status, status_color, login_image, login_message, studio_info, autoreply")
+    .select("*")
     .eq("id", 1)
     .maybeSingle();
   if (error) {
     console.error("fetchSettings failed", error);
-    return { text: "", color: "", loginImage: "", loginMessage: "", studioInfo: null, autoReply: null };
+    return { text: "", color: "", loginImage: "", loginMessage: "", studioInfo: null, autoReply: null, noticeTemplates: null };
   }
   return {
     text: data?.status || "",
@@ -197,7 +199,14 @@ export async function fetchSettings() {
     loginMessage: data?.login_message || "",
     studioInfo: data?.studio_info || null,
     autoReply: data?.autoreply || null,
+    noticeTemplates: data?.notice_templates || null,
   };
+}
+
+// The studio's own formal-notice templates (label/title/text/programaCta).
+export async function saveNoticeTemplates(list) {
+  const { error } = await supabase.from("studio_settings").upsert({ id: 1, notice_templates: list });
+  if (error) throw error;
 }
 
 export async function saveAutoReply(config) {
@@ -449,10 +458,10 @@ export async function notifyStudioProposalSigned({ clientName, projectName }) {
 }
 
 // Best-effort email to clients who opted in to email updates.
-export async function notifyEmail({ toEmails, subject, heading, body, projectName, senderName, time, kind, setupCta, imageUrl }) {
-  if (!toEmails || toEmails.length === 0) return;
+export async function notifyEmail({ toEmails, subject, heading, body, projectName, senderName, time, kind, setupCta, imageUrl, recipients }) {
+  if ((!toEmails || toEmails.length === 0) && (!recipients || recipients.length === 0)) return;
   try {
-    await supabase.functions.invoke("notify-email", { body: { toEmails, subject, heading, body, projectName, senderName, time, kind, setupCta, imageUrl } });
+    await supabase.functions.invoke("notify-email", { body: { toEmails, subject, heading, body, projectName, senderName, time, kind, setupCta, imageUrl, recipients } });
   } catch (e) {
     console.error("notify-email failed", e);
   }

@@ -1450,6 +1450,11 @@ function MessagesPanel({ messages, meRole, onSend, onSendNotice, onReact, onPin,
     const mine = meRole === "client" && (!m.fromEmail || (m.fromEmail || "").toLowerCase() === (myEmail || "").toLowerCase());
     return mine ? "You" : senderName(m);
   }
+  // Friendly name for an email address (for per-person read receipts).
+  function personName(email) {
+    const c = (clients || []).find((x) => (x.email || "").toLowerCase() === (email || "").toLowerCase());
+    return (c && (c.name || "").trim()) || (email || "").split("@")[0];
+  }
   const storeKey = draftKey ? `sn_draft_${draftKey}` : null;
   const [draft, setDraft] = useState(() => {
     try {
@@ -1705,6 +1710,13 @@ function MessagesPanel({ messages, meRole, onSend, onSendNotice, onReact, onPin,
           const ref = m.replyTo ? byId[m.replyTo] : null;
           const reacts = aggregateReactions(m.reactions);
           const seen = showReceipts && m.from === "studio" && seenSince && new Date(seenSince) >= new Date(m.date);
+          // Per-person receipts (studio view of its own messages): who has
+          // personally opened the thread since this was sent, and who hasn't.
+          const seenPeople = meRole === "studio" && m.from === "studio" ? Object.entries(m.seenBy || {}).sort((a, b) => new Date(a[1]) - new Date(b[1])) : [];
+          const awaiting =
+            meRole === "studio" && m.from === "studio"
+              ? (clients || []).map((c) => (c.email || "").trim().toLowerCase()).filter((e) => e && !(m.seenBy && m.seenBy[e]))
+              : [];
           // Formal notices sit apart from the chat: a full-width branded card
           // (wordmark, drawn rule, italic heading) rather than a side bubble.
           const isNotice = m.kind === "notice";
@@ -1806,8 +1818,20 @@ function MessagesPanel({ messages, meRole, onSend, onSendNotice, onReact, onPin,
                 <p className={`text-[11px] mt-1 ${isNotice ? "mt-3 text-stone-400" : mine ? "text-white/50" : "text-stone-400"}`}>
                   {senderLabel(m)} · {formatDate(m.date)} · {formatTime(m.date)}
                   {m.edited && " · edited"}
-                  {showReceipts && m.from === "studio" && (seen ? " · Seen" : " · Sent")}
+                  {showReceipts && m.from === "studio" && !isNotice && (seenPeople.length > 0 ? ` · Seen by ${seenPeople.map(([e]) => personName(e)).join(", ")}` : seen ? " · Seen" : " · Sent")}
                 </p>
+                {isNotice && meRole === "studio" && showReceipts && (
+                  <p className="text-[11px] mt-1.5">
+                    {seenPeople.length > 0 ? (
+                      <span style={{ color: "#576B45" }}>
+                        ✓ Seen by {seenPeople.map(([e, at]) => `${personName(e)} (${formatDate(at)}, ${formatTime(at)})`).join(" · ")}
+                      </span>
+                    ) : (
+                      <span className="text-stone-400">Not seen yet</span>
+                    )}
+                    {awaiting.length > 0 && <span className="text-stone-400">{seenPeople.length > 0 ? " · " : " — "}Awaiting {awaiting.map(personName).join(", ")}</span>}
+                  </p>
+                )}
               </div>
 
               {m.label && (
@@ -3030,11 +3054,16 @@ function ClientDashboard({ project, viewerEmail, studioStatus, studioStatusColor
   // (via realtime) while you're already on that tab still clears itself instead
   // of sticking until you switch away and back.
   const unreadHere = activeTab === "messages" ? unreadForClient(project) : activeTab ? newForTab(activeTab) : 0;
+  // Whether THIS viewer still needs to leave their personal "seen" stamp on any
+  // studio message — independent of the shared unread count, so a second client
+  // opening the thread later still records that they've seen it.
+  const me = (viewerEmail || "").trim().toLowerCase();
+  const needsSeenStamp = activeTab === "messages" && !!me && (project.messages || []).some((m) => m.from === "studio" && !(m.seenBy && m.seenBy[me]));
   useEffect(() => {
-    if (!activeTab || unreadHere === 0) return;
+    if (!activeTab || (unreadHere === 0 && !needsSeenStamp)) return;
     if (activeTab === "messages") onMarkRead();
-    else onSeenTab(activeTab);
-  }, [activeTab, unreadHere, onMarkRead, onSeenTab]);
+    else if (unreadHere > 0) onSeenTab(activeTab);
+  }, [activeTab, unreadHere, needsSeenStamp, onMarkRead, onSeenTab]);
 
   return (
     <div className="min-h-screen bg-[#F7F0EC] overflow-x-hidden">
@@ -6084,12 +6113,22 @@ export default function App() {
   );
 
   const handleMarkClientRead = useCallback(() => {
+    const me = (session?.user?.email || "").trim().toLowerCase();
     setProjects((prev) => {
       const p = prev[activeCode];
-      if (!p || unreadForClient(p) === 0) return prev;
-      return { ...prev, [activeCode]: { ...p, lastReadClient: new Date().toISOString() } };
+      if (!p) return prev;
+      // Personal read receipt: stamp this viewer's email + time onto every
+      // studio message they haven't seen yet, so the back end can show WHO has
+      // seen a message/notice — not just that someone opened the thread.
+      const needStamp = me && (p.messages || []).some((m) => m.from === "studio" && !(m.seenBy && m.seenBy[me]));
+      if (unreadForClient(p) === 0 && !needStamp) return prev;
+      const now = new Date().toISOString();
+      const messages = needStamp
+        ? p.messages.map((m) => (m.from === "studio" && !(m.seenBy && m.seenBy[me]) ? { ...m, seenBy: { ...(m.seenBy || {}), [me]: now } } : m))
+        : p.messages;
+      return { ...prev, [activeCode]: { ...p, lastReadClient: now, messages } };
     });
-  }, [activeCode]);
+  }, [activeCode, session]);
 
   const handleMarkNotifs = useCallback(() => {
     setProjects((prev) => {

@@ -1296,17 +1296,44 @@ function Toggle({ on, onChange }) {
 
 // Studio-only composer for a formal notice — a branded card in the thread that
 // is ALWAYS emailed to every client on the project (plus push), regardless of
-// their email-updates preference. Prefilled for the Programa-presentation case.
-const NOTICE_PRESET = {
-  title: "Your presentation is on its way",
-  text: "We've prepared your design presentation and can't wait to share it with you. A link from Programa will arrive in your email shortly — keep an eye on your inbox (and your spam folder, just in case). Once you've had a look, we'd love to hear your thoughts.",
-};
-function NoticeComposer({ onSend, onCancel }) {
-  const [title, setTitle] = useState(NOTICE_PRESET.title);
-  const [text, setText] = useState(NOTICE_PRESET.text);
+// their email-updates preference. Ships with selectable default templates.
+const NOTICE_PRESETS = [
+  {
+    key: "presentation",
+    label: "Presentation",
+    title: "Your presentation is on its way",
+    text: "We've prepared your design presentation and can't wait to share it with you. A link from Programa will arrive in your email shortly — keep an eye on your inbox (and your spam folder, just in case). You can also click the blue Programa button below to take you straight there. Once you've had a look, we'd love to hear your thoughts.",
+    programaCta: true,
+  },
+  {
+    key: "programa",
+    label: "New in Programa",
+    title: "New items in your Programa dashboard",
+    text: "We've added new items to your Programa dashboard — schedules, documents or selections ready for your review. Click the blue Programa button below to take you straight there. Any questions, just send us a message.",
+    programaCta: true,
+  },
+  {
+    key: "custom",
+    label: "Custom",
+    title: "",
+    text: "",
+    programaCta: false,
+  },
+];
+function NoticeComposer({ onSend, onCancel, hasPrograma }) {
+  const [preset, setPreset] = useState("presentation");
+  const [title, setTitle] = useState(NOTICE_PRESETS[0].title);
+  const [text, setText] = useState(NOTICE_PRESETS[0].text);
+  const [programaCta, setProgramaCta] = useState(NOTICE_PRESETS[0].programaCta && hasPrograma);
   const [photo, setPhoto] = useState(null);
   const [uploading, setUploading] = useState(false);
   const fileRef = useRef(null);
+  function applyPreset(p) {
+    setPreset(p.key);
+    setTitle(p.title);
+    setText(p.text);
+    setProgramaCta(p.programaCta && hasPrograma);
+  }
   async function pick(files) {
     const file = files && files[0];
     if (!file) return;
@@ -1327,6 +1354,19 @@ function NoticeComposer({ onSend, onCancel }) {
         <button onClick={onCancel} className="text-stone-400 hover:text-stone-700" aria-label="Close">
           <X className="w-4 h-4" />
         </button>
+      </div>
+      <div className="flex flex-wrap items-center gap-1.5 mb-3">
+        <span className="text-[11px] text-stone-400 uppercase tracking-wide mr-1">Template</span>
+        {NOTICE_PRESETS.map((p) => (
+          <button
+            key={p.key}
+            type="button"
+            onClick={() => applyPreset(p)}
+            className={`text-[12px] rounded-full px-3 py-1 border transition-colors ${preset === p.key ? "border-stone-900 bg-stone-900 text-white" : "border-stone-300 bg-white text-stone-500 hover:bg-stone-50"}`}
+          >
+            {p.label}
+          </button>
+        ))}
       </div>
       <input
         value={title}
@@ -1360,21 +1400,17 @@ function NoticeComposer({ onSend, onCancel }) {
             <Camera className="w-3.5 h-3.5" /> {uploading ? "Uploading…" : "Add an image (optional)"}
           </button>
         )}
-        <button
-          type="button"
-          onClick={() => {
-            setTitle(NOTICE_PRESET.title);
-            setText(NOTICE_PRESET.text);
-          }}
-          className="text-[12px] text-stone-400 hover:text-stone-700 ml-auto"
-        >
-          Reset to presentation template
-        </button>
+        {hasPrograma && (
+          <label className="flex items-center gap-1.5 cursor-pointer ml-auto">
+            <input type="checkbox" checked={programaCta} onChange={(e) => setProgramaCta(e.target.checked)} className="w-3.5 h-3.5 accent-[#576B45]" />
+            <span className="text-[12px] text-stone-500">Blue Programa button</span>
+          </label>
+        )}
       </div>
       <button
         onClick={() => {
           if (!title.trim() && !text.trim()) return;
-          onSend({ title: title.trim(), text: text.trim(), photos: photo ? [photo] : [] });
+          onSend({ title: title.trim(), text: text.trim(), photos: photo ? [photo] : [], programaCta: programaCta && hasPrograma });
         }}
         disabled={uploading}
         className="w-full bg-stone-900 text-white rounded-lg py-3 text-[14px] hover:bg-stone-800 transition-colors disabled:opacity-50"
@@ -1388,7 +1424,7 @@ function NoticeComposer({ onSend, onCancel }) {
   );
 }
 
-function MessagesPanel({ messages, meRole, onSend, onSendNotice, onReact, onPin, onLabel, onTagPhoto, onEdit, onDelete, seenSince, showReceipts, showStatus, onToggleStatus, customStatus, onSetCustomStatus, studioStatus, studioStatusColor, autoStatus, prefill, onPrefillUsed, draftKey, clients, myEmail, fallbackClientName }) {
+function MessagesPanel({ messages, meRole, onSend, onSendNotice, onReact, onPin, onLabel, onTagPhoto, onEdit, onDelete, seenSince, showReceipts, showStatus, onToggleStatus, customStatus, onSetCustomStatus, studioStatus, studioStatusColor, autoStatus, prefill, onPrefillUsed, draftKey, clients, myEmail, fallbackClientName, programaUrl }) {
   // The automatic out-of-office note shows (to everyone) during its active hours,
   // unless this project has its own custom status note set.
   const autoNote = customStatus ? null : activeAutoNote(autoStatus);
@@ -1735,6 +1771,17 @@ function MessagesPanel({ messages, meRole, onSend, onSendNotice, onReact, onPin,
                     )}
                   </>
                 )}
+                {isNotice && m.programaCta && programaUrl && (
+                  <a
+                    href={programaUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 rounded-lg px-5 py-2.5 text-[13.5px] mt-3.5 transition-opacity hover:opacity-90"
+                    style={{ backgroundColor: "#9BACB6", color: "#1C1A17" }}
+                  >
+                    Open Programa <ChevronRight className="w-3.5 h-3.5" />
+                  </a>
+                )}
                 <p className={`text-[11px] mt-1 ${isNotice ? "mt-3 text-stone-400" : mine ? "text-white/50" : "text-stone-400"}`}>
                   {senderLabel(m)} · {formatDate(m.date)} · {formatTime(m.date)}
                   {m.edited && " · edited"}
@@ -1890,6 +1937,7 @@ function MessagesPanel({ messages, meRole, onSend, onSendNotice, onReact, onPin,
       )}
       {meRole === "studio" && onSendNotice && noticeOpen && (
         <NoticeComposer
+          hasPrograma={!!programaUrl}
           onCancel={() => setNoticeOpen(false)}
           onSend={(n) => {
             onSendNotice(n);
@@ -3219,6 +3267,7 @@ function ClientDashboard({ project, viewerEmail, studioStatus, studioStatusColor
               draftKey={`client_${project.code}`}
               clients={project.clients}
               myEmail={viewerEmail}
+              programaUrl={programaUrl}
               fallbackClientName={project.clientName}
               onSend={onSendMessage}
               onReact={onReactMessage}
@@ -4992,7 +5041,7 @@ function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioSt
       lastReadStudio: new Date().toISOString(),
       messages: [
         ...p.messages,
-        { id: uid(), from: "studio", kind: "notice", title: notice.title, text: notice.text, photos: notice.photos || [], date: new Date().toISOString(), replyTo: null, reactions: [], pinned: false },
+        { id: uid(), from: "studio", kind: "notice", title: notice.title, text: notice.text, photos: notice.photos || [], programaCta: !!notice.programaCta, date: new Date().toISOString(), replyTo: null, reactions: [], pinned: false },
       ],
       notifications: withNotif(p, "message", `A note from the studio: ${notice.title || truncate(notice.text, 50)}`),
     }));
@@ -5393,6 +5442,7 @@ function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioSt
                 meRole="studio"
                 draftKey={`studio_${project.code}`}
                 clients={project.clients}
+                programaUrl={programaForViewer(project, "") || (project.clients || []).map((c) => c.programaUrl).find(Boolean) || ""}
                 fallbackClientName={project.clientName}
                 onSend={(text, replyTo, photos) => replyMessage(project.code, text, replyTo, photos)}
                 onSendNotice={(n) => sendNotice(project.code, n)}

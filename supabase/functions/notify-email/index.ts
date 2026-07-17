@@ -75,11 +75,9 @@ function emailHtml(o: { projectName?: string; heading?: string; body?: string; s
         <h1 style="font-size:24px;font-style:italic;color:#1C1A17;margin:0;font-weight:normal;">${esc(o.heading || (isUpdate ? "New update" : "New message"))}</h1>
       </td></tr>
       ${bodyBlock}
-      ${isNotice && o.programaUrl && /^https?:/.test(o.programaUrl) ? `<tr><td style="padding:24px 44px 0;text-align:center;">
-        <a href="${o.programaUrl}" style="display:inline-block;background:#9BACB6;color:#1C1A17;text-decoration:none;font-family:Arial,Helvetica,sans-serif;font-size:15px;padding:13px 34px;border-radius:9px;">Open Programa &nbsp;→</a>
-      </td></tr>` : ""}
-      <tr><td style="padding:${isNotice && o.programaUrl ? "10px" : "24px"} 44px 6px;text-align:center;">
-        <a href="${LOGIN_URL}" style="display:inline-block;background:#1C1A17;color:#ffffff;text-decoration:none;font-family:Arial,Helvetica,sans-serif;font-size:15px;padding:13px 34px;border-radius:9px;">${isNotice ? "Reply in your portal" : "Open your portal"} &nbsp;→</a>
+      <tr><td style="padding:24px 44px 6px;text-align:center;">
+        ${isNotice && o.programaUrl && /^https?:/.test(o.programaUrl) ? `<a href="${o.programaUrl}" style="display:inline-block;background:#9BACB6;color:#1C1A17;text-decoration:none;font-family:Arial,Helvetica,sans-serif;font-size:14px;padding:13px 24px;border-radius:9px;margin:0 4px 8px;">Open Programa &nbsp;→</a>` : ""}
+        <a href="${LOGIN_URL}" style="display:inline-block;background:#1C1A17;color:#ffffff;text-decoration:none;font-family:Arial,Helvetica,sans-serif;font-size:14px;padding:13px 24px;border-radius:9px;margin:0 4px 8px;">${isNotice ? "Reply in your portal" : "Open your portal"} &nbsp;→</a>
       </td></tr>
       ${o.setupCta ? `<tr><td style="padding:6px 44px 6px;text-align:center;">
         <a href="${LOGIN_URL}" style="display:inline-block;background:#ffffff;color:#1C1A17;border:1px solid #9BACB6;text-decoration:none;font-family:Arial,Helvetica,sans-serif;font-size:14px;padding:11px 28px;border-radius:9px;">First time here? Set up your login</a>

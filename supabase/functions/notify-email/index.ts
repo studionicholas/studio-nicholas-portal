@@ -20,16 +20,40 @@ function esc(s: string) {
   return String(s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
-function emailHtml(o: { projectName?: string; heading?: string; body?: string; senderName?: string; time?: string; kind?: string; audience?: string; setupCta?: boolean }) {
+function emailHtml(o: { projectName?: string; heading?: string; body?: string; senderName?: string; time?: string; kind?: string; audience?: string; setupCta?: boolean; imageUrl?: string }) {
   const accent = "#9BACB6"; // brand aqua
   const isStudio = o.audience === "studio";
   const isUpdate = o.kind === "update";
+  const isNotice = o.kind === "notice"; // formal studio notice — always emailed
   const eyebrow = isStudio
     ? `${esc(o.projectName || "Studio Nicholas")} &nbsp;·&nbsp; Studio alert`
-    : `${esc(o.projectName || "Your project")} &nbsp;·&nbsp; ${isUpdate ? "New update" : "New message"}`;
+    : `${esc(o.projectName || "Your project")} &nbsp;·&nbsp; ${isNotice ? "A note from the studio" : isUpdate ? "New update" : "New message"}`;
   const footer = isStudio
     ? "Automated alert from your Studio Nicholas portal."
-    : "You're getting this because you asked for email updates on your project. Reply to this email or message us in your portal.";
+    : isNotice
+      ? "An important note about your project from Studio Nicholas. Reply to this email or message us in your portal."
+      : "You're getting this because you asked for email updates on your project. Reply to this email or message us in your portal.";
+  const showImage = o.imageUrl && /^https?:/.test(o.imageUrl);
+  // Formal notices read as a letter: centred body, thin rule, optional image —
+  // no quote box.
+  const bodyBlock = isNotice
+    ? `${showImage ? `<tr><td style="padding:20px 44px 0;"><img src="${o.imageUrl}" alt="" width="432" style="width:100%;max-width:432px;height:auto;border-radius:12px;display:block;margin:0 auto;"></td></tr>` : ""}
+      <tr><td style="padding:18px 60px 0;text-align:center;">
+        <p style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.75;color:#44403c;">${esc(o.body || "")}</p>
+        <div style="width:46px;height:2px;background:${accent};margin:20px auto 0;"></div>
+        <p style="margin:14px 0 0;font-family:Georgia,serif;font-style:italic;font-size:14px;color:#576b45;">${esc(o.senderName || "Studio Nicholas")}</p>
+        ${o.time ? `<p style="margin:2px 0 0;font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#a8a29e;">${esc(o.time)}</p>` : ""}
+      </td></tr>`
+    : `<tr><td style="padding:18px 44px 0;">
+        <table width="100%" cellpadding="0" cellspacing="0" style="background:#F7F0EC;border-radius:12px;">
+          <tr><td style="padding:16px 18px;border-left:3px solid ${accent};border-top-left-radius:12px;border-bottom-left-radius:12px;">
+            <p style="margin:0 0 12px;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.65;color:#44403c;">${esc(o.body || "")}</p>
+            <p style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#a8a29e;">
+              <strong style="color:#576b45;">${esc(o.senderName || "Studio Nicholas")}</strong>${o.time ? " &nbsp;·&nbsp; " + esc(o.time) : ""}
+            </p>
+          </td></tr>
+        </table>
+      </td></tr>`;
   return `
 <table width="100%" cellpadding="0" cellspacing="0" style="background:#F7F0EC;padding:28px 12px;font-family:Georgia,'Times New Roman',serif;">
   <tr><td align="center">
@@ -44,16 +68,7 @@ function emailHtml(o: { projectName?: string; heading?: string; body?: string; s
       <tr><td style="padding:6px 44px 0;text-align:center;">
         <h1 style="font-size:24px;font-style:italic;color:#1C1A17;margin:0;font-weight:normal;">${esc(o.heading || (isUpdate ? "New update" : "New message"))}</h1>
       </td></tr>
-      <tr><td style="padding:18px 44px 0;">
-        <table width="100%" cellpadding="0" cellspacing="0" style="background:#F7F0EC;border-radius:12px;">
-          <tr><td style="padding:16px 18px;border-left:3px solid ${accent};border-top-left-radius:12px;border-bottom-left-radius:12px;">
-            <p style="margin:0 0 12px;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.65;color:#44403c;">${esc(o.body || "")}</p>
-            <p style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#a8a29e;">
-              <strong style="color:#576b45;">${esc(o.senderName || "Studio Nicholas")}</strong>${o.time ? " &nbsp;·&nbsp; " + esc(o.time) : ""}
-            </p>
-          </td></tr>
-        </table>
-      </td></tr>
+      ${bodyBlock}
       <tr><td style="padding:24px 44px 6px;text-align:center;">
         <a href="${LOGIN_URL}" style="display:inline-block;background:#1C1A17;color:#ffffff;text-decoration:none;font-family:Arial,Helvetica,sans-serif;font-size:15px;padding:13px 34px;border-radius:9px;">Open your portal &nbsp;→</a>
       </td></tr>
@@ -72,7 +87,7 @@ function emailHtml(o: { projectName?: string; heading?: string; body?: string; s
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   try {
-    const { toEmails = [], audience, subject, heading, body, projectName, senderName, time, kind, setupCta } = await req.json();
+    const { toEmails = [], audience, subject, heading, body, projectName, senderName, time, kind, setupCta, imageUrl } = await req.json();
     // Studio alerts go to the studio mailbox (kept server-side); client alerts go
     // to the opted-in recipients passed in.
     const emails =
@@ -82,7 +97,7 @@ Deno.serve(async (req) => {
     if (emails.length === 0) {
       return new Response(JSON.stringify({ sent: 0 }), { headers: { ...cors, "Content-Type": "application/json" } });
     }
-    const html = emailHtml({ projectName, heading, body, senderName, time, kind, audience, setupCta });
+    const html = emailHtml({ projectName, heading, body, senderName, time, kind, audience, setupCta, imageUrl });
     let sent = 0;
     await Promise.all(
       emails.map(async (to) => {

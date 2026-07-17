@@ -1294,7 +1294,101 @@ function Toggle({ on, onChange }) {
   );
 }
 
-function MessagesPanel({ messages, meRole, onSend, onReact, onPin, onLabel, onTagPhoto, onEdit, onDelete, seenSince, showReceipts, showStatus, onToggleStatus, customStatus, onSetCustomStatus, studioStatus, studioStatusColor, autoStatus, prefill, onPrefillUsed, draftKey, clients, myEmail, fallbackClientName }) {
+// Studio-only composer for a formal notice — a branded card in the thread that
+// is ALWAYS emailed to every client on the project (plus push), regardless of
+// their email-updates preference. Prefilled for the Programa-presentation case.
+const NOTICE_PRESET = {
+  title: "Your presentation is on its way",
+  text: "We've prepared your design presentation and can't wait to share it with you. A link from Programa will arrive in your email shortly — keep an eye on your inbox (and your spam folder, just in case). Once you've had a look, we'd love to hear your thoughts.",
+};
+function NoticeComposer({ onSend, onCancel }) {
+  const [title, setTitle] = useState(NOTICE_PRESET.title);
+  const [text, setText] = useState(NOTICE_PRESET.text);
+  const [photo, setPhoto] = useState(null);
+  const [uploading, setUploading] = useState(false);
+  const fileRef = useRef(null);
+  async function pick(files) {
+    const file = files && files[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      setPhoto(await uploadImageOrData(file));
+    } catch (e) {
+      console.error(e);
+    }
+    setUploading(false);
+  }
+  return (
+    <div className="mb-2 rounded-xl border border-[#e2d8cd] bg-[#F7F0EC] p-4">
+      <div className="flex items-center justify-between mb-3">
+        <p className="text-[15px] text-stone-900" style={{ fontFamily: "Selva, Georgia, serif", fontStyle: "italic" }}>
+          Send a formal notice
+        </p>
+        <button onClick={onCancel} className="text-stone-400 hover:text-stone-700" aria-label="Close">
+          <X className="w-4 h-4" />
+        </button>
+      </div>
+      <input
+        value={title}
+        onChange={(e) => setTitle(e.target.value)}
+        placeholder="Heading — e.g. Your presentation is on its way"
+        className="w-full px-3.5 py-2.5 rounded-lg border border-stone-300 bg-white text-[14px] mb-2 focus:outline-none focus:ring-2 focus:ring-[#B7453C]"
+      />
+      <textarea
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        rows={4}
+        placeholder="Your message…"
+        className="w-full px-3.5 py-2.5 rounded-lg border border-stone-300 bg-white text-[14px] mb-2 resize-none focus:outline-none focus:ring-2 focus:ring-[#B7453C]"
+      />
+      <div className="flex items-center gap-2 mb-3">
+        <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={(e) => pick(e.target.files)} />
+        {photo ? (
+          <div className="relative w-16 h-16 rounded-lg overflow-hidden border border-stone-200">
+            <img src={photo} alt="" className="w-full h-full object-cover" />
+            <button onClick={() => setPhoto(null)} className="absolute top-0.5 right-0.5 bg-black/60 text-white rounded-full p-0.5" aria-label="Remove image">
+              <X className="w-3 h-3" />
+            </button>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => fileRef.current?.click()}
+            disabled={uploading}
+            className="inline-flex items-center gap-1.5 text-[12px] text-stone-500 border border-stone-300 rounded-lg px-3 py-2 hover:bg-white disabled:opacity-50"
+          >
+            <Camera className="w-3.5 h-3.5" /> {uploading ? "Uploading…" : "Add an image (optional)"}
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={() => {
+            setTitle(NOTICE_PRESET.title);
+            setText(NOTICE_PRESET.text);
+          }}
+          className="text-[12px] text-stone-400 hover:text-stone-700 ml-auto"
+        >
+          Reset to presentation template
+        </button>
+      </div>
+      <button
+        onClick={() => {
+          if (!title.trim() && !text.trim()) return;
+          onSend({ title: title.trim(), text: text.trim(), photos: photo ? [photo] : [] });
+        }}
+        disabled={uploading}
+        className="w-full bg-stone-900 text-white rounded-lg py-3 text-[14px] hover:bg-stone-800 transition-colors disabled:opacity-50"
+      >
+        Send notice — portal, email & push
+      </button>
+      <p className="text-[11.5px] text-stone-400 mt-2 leading-relaxed">
+        Appears as a branded card in Messages and is emailed to <strong className="text-stone-500">every client on this project</strong> (even those without email updates on), plus a push notification.
+      </p>
+    </div>
+  );
+}
+
+function MessagesPanel({ messages, meRole, onSend, onSendNotice, onReact, onPin, onLabel, onTagPhoto, onEdit, onDelete, seenSince, showReceipts, showStatus, onToggleStatus, customStatus, onSetCustomStatus, studioStatus, studioStatusColor, autoStatus, prefill, onPrefillUsed, draftKey, clients, myEmail, fallbackClientName }) {
   // The automatic out-of-office note shows (to everyone) during its active hours,
   // unless this project has its own custom status note set.
   const autoNote = customStatus ? null : activeAutoNote(autoStatus);
@@ -1354,6 +1448,8 @@ function MessagesPanel({ messages, meRole, onSend, onReact, onPin, onLabel, onTa
   const [labelingFor, setLabelingFor] = useState(null);
   const [editingFor, setEditingFor] = useState(null);
   const [editText, setEditText] = useState("");
+  const [noticeOpen, setNoticeOpen] = useState(false);
+  const [noticeSent, setNoticeSent] = useState(false);
   const [query, setQuery] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
   const [labelFilter, setLabelFilter] = useState(null);
@@ -1568,9 +1664,30 @@ function MessagesPanel({ messages, meRole, onSend, onReact, onPin, onLabel, onTa
           const ref = m.replyTo ? byId[m.replyTo] : null;
           const reacts = aggregateReactions(m.reactions);
           const seen = showReceipts && m.from === "studio" && seenSince && new Date(seenSince) >= new Date(m.date);
+          // Formal notices sit apart from the chat: a full-width branded card
+          // (wordmark, drawn rule, italic heading) rather than a side bubble.
+          const isNotice = m.kind === "notice";
           return (
-            <div key={m.id} className={`flex flex-col ${mine ? "items-end" : "items-start"}`}>
-              <div className={`max-w-[80%] rounded-xl px-4 py-2.5 text-[14px] ${mine ? "bg-stone-900 text-white" : "bg-white border border-stone-200 text-stone-800"}`}>
+            <div key={m.id} className={`flex flex-col ${isNotice ? "items-stretch" : mine ? "items-end" : "items-start"}`}>
+              <div
+                className={
+                  isNotice
+                    ? "w-full rounded-xl border border-[#e2d8cd] bg-[#F7F0EC] px-5 py-6 text-[14px] text-stone-800 text-center"
+                    : `max-w-[80%] rounded-xl px-4 py-2.5 text-[14px] ${mine ? "bg-stone-900 text-white" : "bg-white border border-stone-200 text-stone-800"}`
+                }
+                style={isNotice ? { animation: "snFadeUp .6s cubic-bezier(.2,.7,.2,1) both" } : undefined}
+              >
+                {isNotice && (
+                  <div className="mb-3.5">
+                    <img src="/sn-wordmark-static.png" alt="Studio Nicholas" className="mx-auto" style={{ width: 148, height: "auto" }} />
+                    <div className="mx-auto mt-3 mb-3.5" style={{ width: 46, height: 2, background: "#9BACB6", transformOrigin: "center", animation: "snRule .9s cubic-bezier(.2,.7,.2,1) .3s both" }} />
+                    {m.title && (
+                      <p className="text-[19px] leading-snug text-stone-900" style={{ fontFamily: "Selva, Georgia, serif", fontStyle: "italic" }}>
+                        {m.title}
+                      </p>
+                    )}
+                  </div>
+                )}
                 {ref && (
                   <div className={`text-[12px] mb-1.5 pl-2 border-l-2 ${mine ? "border-white/40 text-white/70" : "border-stone-300 text-stone-400"}`}>
                     {truncate(ref.text, 60)}
@@ -1602,14 +1719,14 @@ function MessagesPanel({ messages, meRole, onSend, onReact, onPin, onLabel, onTa
                   </div>
                 ) : (
                   <>
-                    {m.text && <p className="leading-relaxed break-words whitespace-pre-wrap">{m.text}</p>}
+                    {m.text && <p className={`leading-relaxed break-words whitespace-pre-wrap ${isNotice ? "text-stone-700 max-w-[440px] mx-auto" : ""}`}>{m.text}</p>}
                     {m.photos?.length > 0 && (
-                      <div className={`grid gap-1.5 ${m.photos.length === 1 ? "grid-cols-1" : "grid-cols-2"} ${m.text ? "mt-2" : ""}`}>
+                      <div className={`grid gap-1.5 ${m.photos.length === 1 ? "grid-cols-1" : "grid-cols-2"} ${m.text ? (isNotice ? "mt-3.5" : "mt-2") : ""} ${isNotice ? "justify-items-center" : ""}`}>
                         {m.photos.map((p, i) => (
                           <button
                             key={i}
                             onClick={() => setLb({ photos: m.photos, index: i })}
-                            className={`overflow-hidden rounded-lg bg-stone-100 ${m.photos.length === 1 ? "max-w-[220px]" : "aspect-square"}`}
+                            className={`overflow-hidden rounded-lg bg-stone-100 ${m.photos.length === 1 ? (isNotice ? "max-w-[300px] mx-auto" : "max-w-[220px]") : "aspect-square"}`}
                           >
                             <img src={p} alt="" className="w-full h-full object-cover hover:opacity-90 transition-opacity" />
                           </button>
@@ -1618,7 +1735,7 @@ function MessagesPanel({ messages, meRole, onSend, onReact, onPin, onLabel, onTa
                     )}
                   </>
                 )}
-                <p className={`text-[11px] mt-1 ${mine ? "text-white/50" : "text-stone-400"}`}>
+                <p className={`text-[11px] mt-1 ${isNotice ? "mt-3 text-stone-400" : mine ? "text-white/50" : "text-stone-400"}`}>
                   {senderLabel(m)} · {formatDate(m.date)} · {formatTime(m.date)}
                   {m.edited && " · edited"}
                   {showReceipts && m.from === "studio" && (seen ? " · Seen" : " · Sent")}
@@ -1755,6 +1872,32 @@ function MessagesPanel({ messages, meRole, onSend, onReact, onPin, onLabel, onTa
           );
         })}
       </div>
+
+      {meRole === "studio" && onSendNotice && !noticeOpen && (
+        <div className="flex items-center justify-end gap-2 mb-2">
+          {noticeSent && <span className="text-[12px] text-[#576B45]">Notice sent — emailed to your clients ✓</span>}
+          <button
+            type="button"
+            onClick={() => {
+              setNoticeOpen(true);
+              setNoticeSent(false);
+            }}
+            className="inline-flex items-center gap-1.5 text-[12px] text-stone-500 border border-stone-300 rounded-lg px-3 py-1.5 hover:bg-stone-100"
+          >
+            <FileText className="w-3.5 h-3.5" /> Formal notice
+          </button>
+        </div>
+      )}
+      {meRole === "studio" && onSendNotice && noticeOpen && (
+        <NoticeComposer
+          onCancel={() => setNoticeOpen(false)}
+          onSend={(n) => {
+            onSendNotice(n);
+            setNoticeOpen(false);
+            setNoticeSent(true);
+          }}
+        />
+      )}
 
       {replyTo && (
         <div className="flex items-center justify-between gap-2 mb-2 text-[12px] text-stone-500 bg-stone-100 rounded-lg px-3 py-2">
@@ -4840,6 +4983,37 @@ function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioSt
     updateProject(code, (p) => ({ ...p, feeProposalSigned: null }));
   }
 
+  // Formal notice: branded card in the thread + email to EVERY client on the
+  // project (transactional, like the fee proposal) + push. Used e.g. to tell
+  // clients their Programa presentation link is on its way.
+  function sendNotice(code, notice) {
+    updateProject(code, (p) => ({
+      ...p,
+      lastReadStudio: new Date().toISOString(),
+      messages: [
+        ...p.messages,
+        { id: uid(), from: "studio", kind: "notice", title: notice.title, text: notice.text, photos: notice.photos || [], date: new Date().toISOString(), replyTo: null, reactions: [], pinned: false },
+      ],
+      notifications: withNotif(p, "message", `A note from the studio: ${notice.title || truncate(notice.text, 50)}`),
+    }));
+    const proj = projects[code];
+    const emails = (proj?.clients || []).map((c) => (c.email || "").trim().toLowerCase()).filter(Boolean);
+    if (emails.length) {
+      api.notifyPush({ toEmails: emails, title: `${proj?.name || "Your project"} — a note from the studio`, body: notice.title || truncate(notice.text, 60), url: "/" });
+      api.notifyEmail({
+        toEmails: emails,
+        subject: `${notice.title || "A note from the studio"} — ${proj?.name || "your project"}`,
+        heading: notice.title || "A note from the studio",
+        body: notice.text,
+        projectName: proj?.name,
+        senderName: "Studio Nicholas",
+        time: new Date().toLocaleString("en-AU", { timeZone: "Australia/Melbourne", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" }),
+        kind: "notice",
+        imageUrl: (notice.photos || [])[0],
+      });
+    }
+  }
+
   function replyMessage(code, text, replyTo, photos) {
     updateProject(code, (p) => ({
       ...p,
@@ -5221,6 +5395,7 @@ function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioSt
                 clients={project.clients}
                 fallbackClientName={project.clientName}
                 onSend={(text, replyTo, photos) => replyMessage(project.code, text, replyTo, photos)}
+                onSendNotice={(n) => sendNotice(project.code, n)}
                 onReact={(id, emoji) => reactMessage(project.code, id, emoji)}
                 onPin={(id) => pinMessage(project.code, id)}
                 onLabel={(id, label) => labelMessage(project.code, id, label)}

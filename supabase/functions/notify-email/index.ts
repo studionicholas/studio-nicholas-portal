@@ -20,6 +20,12 @@ function esc(s: string) {
   return String(s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
+// Escape AND keep the sender's line breaks, so the entire message renders in
+// the email exactly as it was written (multi-paragraph messages included).
+function escBody(s: string) {
+  return esc(s).replace(/\n/g, "<br>");
+}
+
 function emailHtml(o: { projectName?: string; heading?: string; body?: string; senderName?: string; time?: string; kind?: string; audience?: string; setupCta?: boolean; imageUrl?: string; programaUrl?: string }) {
   const accent = "#9BACB6"; // brand aqua
   const isStudio = o.audience === "studio";
@@ -39,7 +45,7 @@ function emailHtml(o: { projectName?: string; heading?: string; body?: string; s
   const bodyBlock = isNotice
     ? `${showImage ? `<tr><td style="padding:20px 44px 0;"><img src="${o.imageUrl}" alt="" width="432" style="width:100%;max-width:432px;height:auto;border-radius:12px;display:block;margin:0 auto;"></td></tr>` : ""}
       <tr><td style="padding:18px 60px 0;text-align:center;">
-        <p style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.75;color:#44403c;">${esc(o.body || "")}</p>
+        <p style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.75;color:#44403c;">${escBody(o.body || "")}</p>
         <div style="width:46px;height:2px;background:${accent};margin:20px auto 0;"></div>
         <p style="margin:14px 0 0;font-family:Georgia,serif;font-style:italic;font-size:14px;color:#576b45;">${esc(o.senderName || "Studio Nicholas")}</p>
         ${o.time ? `<p style="margin:2px 0 0;font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#a8a29e;">${esc(o.time)}</p>` : ""}
@@ -47,7 +53,7 @@ function emailHtml(o: { projectName?: string; heading?: string; body?: string; s
     : `<tr><td style="padding:18px 44px 0;">
         <table width="100%" cellpadding="0" cellspacing="0" style="background:#F7F0EC;border-radius:12px;">
           <tr><td style="padding:16px 18px;border-left:3px solid ${accent};border-top-left-radius:12px;border-bottom-left-radius:12px;">
-            <p style="margin:0 0 12px;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.65;color:#44403c;">${esc(o.body || "")}</p>
+            <p style="margin:0 0 12px;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.65;color:#44403c;">${escBody(o.body || "")}</p>
             <p style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#a8a29e;">
               <strong style="color:#576b45;">${esc(o.senderName || "Studio Nicholas")}</strong>${o.time ? " &nbsp;·&nbsp; " + esc(o.time) : ""}
             </p>

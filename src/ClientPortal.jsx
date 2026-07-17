@@ -45,6 +45,8 @@ import {
   Tag,
   Images,
   Camera,
+  List,
+  Activity,
 } from "lucide-react";
 
 /* ----------------------------------------------------------------
@@ -732,13 +734,25 @@ const FEATURE_LIST = [
 
 // Tabs in the studio admin project view (mirrors the client side).
 const ADMIN_TABS = [
-  { id: "details", label: "Details" },
-  { id: "updates", label: "Updates" },
-  { id: "timeline", label: "Timeline" },
-  { id: "meetings", label: "Meetings" },
-  { id: "fee", label: "Fee proposal" },
-  { id: "messages", label: "Messages" },
+  { id: "details", label: "Details", icon: List },
+  { id: "updates", label: "Updates", icon: ImageIcon },
+  { id: "timeline", label: "Timeline", icon: Activity },
+  { id: "meetings", label: "Meetings", icon: Calendar },
+  { id: "fee", label: "Fee", icon: FileText },
+  { id: "messages", label: "Messages", icon: MessageSquare },
 ];
+
+// Stage chip colours for the admin redesign (tint background / text). A custom
+// per-project stageColor (set on the Details tab) wins over these defaults.
+const STAGE_CHIP = {
+  "Pre Sign-up": { c: "#576B45", t: "#D1D2C9" },
+  "Concept Development": { c: "#8a6d1d", t: "#F5EED9" },
+  "Design Development": { c: "#811618", t: "#D7C1B6" },
+};
+function stageChipFor(p) {
+  if (p?.stageColor?.bg) return { t: p.stageColor.bg, c: textOn(p.stageColor.bg) };
+  return STAGE_CHIP[p?.stage] || { c: "#7a6f66", t: "#ece3dc" };
+}
 
 /* ---------------- Shared UI bits ---------------- */
 
@@ -1428,7 +1442,7 @@ function NoticeComposer({ onSend, onCancel, hasPrograma, templates }) {
   );
 }
 
-function MessagesPanel({ messages, meRole, onSend, onSendNotice, onReact, onPin, onLabel, onTagPhoto, onEdit, onDelete, seenSince, showReceipts, showStatus, onToggleStatus, customStatus, onSetCustomStatus, studioStatus, studioStatusColor, autoStatus, prefill, onPrefillUsed, draftKey, clients, myEmail, fallbackClientName, programaUrl, noticeTemplates }) {
+function MessagesPanel({ messages, meRole, onSend, onSendNotice, onReact, onPin, onLabel, onTagPhoto, onEdit, onDelete, seenSince, showReceipts, showStatus, onToggleStatus, customStatus, onSetCustomStatus, studioStatus, studioStatusColor, autoStatus, prefill, onPrefillUsed, draftKey, clients, myEmail, fallbackClientName, programaUrl, noticeTemplates, fill }) {
   // The automatic out-of-office note shows (to everyone) during its active hours,
   // unless this project has its own custom status note set.
   const autoNote = customStatus ? null : activeAutoNote(autoStatus);
@@ -1697,7 +1711,12 @@ function MessagesPanel({ messages, meRole, onSend, onSendNotice, onReact, onPin,
         </div>
       )}
 
-      <div ref={listRef} onScroll={onListScroll} className="space-y-2 mb-4 max-h-[420px] overflow-y-auto overflow-x-hidden rounded-2xl border border-stone-200 bg-stone-50/70 p-3.5 shadow-inner">
+      <div
+        ref={listRef}
+        onScroll={onListScroll}
+        className={`space-y-2 mb-4 overflow-y-auto overflow-x-hidden rounded-[3px] p-3.5 ${fill ? "h-[52vh] md:h-[58vh]" : "max-h-[420px]"}`}
+        style={{ border: "1px solid #e6d8cf", background: "#fbf7f3" }}
+      >
         {messages.length === 0 && <EmptyState text="No messages yet." />}
         {messages.length > 0 && filtered.length === 0 && <EmptyState text="No messages match your search." />}
         {filtered.map((m) => {
@@ -3445,10 +3464,10 @@ function AdminLogin({ onEnter, onBack }) {
   );
 }
 
-function AdminSection({ title, children, last }) {
+function AdminSection({ title, children, last, fill }) {
   return (
-    <div className={last ? "" : "mb-8"}>
-      <h3 className="text-[13px] text-stone-400 uppercase tracking-wide mb-3">{title}</h3>
+    <div className={`${last ? "" : "mb-[22px]"}${fill ? " min-h-0 flex-1 flex flex-col" : ""}`}>
+      <h3 className="text-[11px] uppercase mb-2.5 shrink-0" style={{ letterSpacing: "0.12em", color: "#a89d95" }}>{title}</h3>
       {children}
     </div>
   );
@@ -3614,6 +3633,7 @@ function AdminMilestones({ project, onAdd, onEdit, onSetStatus, onMove, onDelete
   const [note, setNote] = useState("");
   const [deliverables, setDeliverables] = useState("");
   const [editingId, setEditingId] = useState(null);
+  const [showForm, setShowForm] = useState(false);
 
   const list = project.milestones;
   const resetForm = () => {
@@ -3624,6 +3644,7 @@ function AdminMilestones({ project, onAdd, onEdit, onSetStatus, onMove, onDelete
     setNote("");
     setDeliverables("");
     setEditingId(null);
+    setShowForm(false);
   };
   const startEdit = (m) => {
     setTitle(m.title);
@@ -3633,50 +3654,88 @@ function AdminMilestones({ project, onAdd, onEdit, onSetStatus, onMove, onDelete
     setNote(m.note || "");
     setDeliverables((m.deliverables || []).join("\n"));
     setEditingId(m.id);
+    setShowForm(true);
+  };
+  // "Mark done" completes this phase and promotes the next upcoming one to
+  // current, so the client's timeline visibly moves on one tap.
+  const markDone = (m) => {
+    onSetStatus(m.id, "done");
+    const i = list.findIndex((x) => x.id === m.id);
+    const next = list.slice(i + 1).find((x) => x.status === "upcoming");
+    if (next) onSetStatus(next.id, "current");
   };
 
   return (
-    <div className="space-y-3">
-      {list.length === 0 && <p className="text-[13px] text-stone-400">No phases yet.</p>}
+    <div>
+      <div className="flex justify-end mb-3.5">
+        <button
+          onClick={() => (showForm ? resetForm() : setShowForm(true))}
+          className="rounded-[3px] px-3.5 py-2 text-[12.5px]"
+          style={{ border: "1px solid #e6d8cf", background: "#fffdfb", color: "#811618" }}
+        >
+          {showForm ? "Close" : "+ Phase"}
+        </button>
+      </div>
+      {list.length === 0 && <p className="text-[13px] text-stone-400 mb-3">No phases yet — add the first with "+ Phase".</p>}
       {list.map((m, i) => {
-        const s = milestoneStatus(m.status);
+        const done = m.status === "done";
+        const cur = m.status === "current";
         return (
-          <div key={m.id} className="border border-stone-200 rounded-lg p-3 bg-white flex items-center gap-2">
-            <div className="flex flex-col shrink-0">
-              <button onClick={() => onMove(i, -1)} disabled={i === 0} className="text-stone-300 hover:text-stone-700 disabled:opacity-25" aria-label="Move up">
-                <ChevronUp className="w-4 h-4" />
-              </button>
-              <button onClick={() => onMove(i, 1)} disabled={i === list.length - 1} className="text-stone-300 hover:text-stone-700 disabled:opacity-25" aria-label="Move down">
-                <ChevronDown className="w-4 h-4" />
-              </button>
+          <div key={m.id} className="flex gap-3.5">
+            <div className="flex flex-col items-center shrink-0">
+              <span className="shrink-0" style={{ width: 14, height: 14, borderRadius: 7, marginTop: 3, boxSizing: "border-box", background: done ? "#576b45" : cur ? "#fffdfb" : "#e6d8cf", border: `2px solid ${done ? "#576b45" : cur ? "#b26f52" : "#e6d8cf"}` }} />
+              {i < list.length - 1 && <span style={{ width: 1.5, flex: 1, background: done ? "#576b45" : "#e6d8cf" }} />}
             </div>
-            <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: s.color }} />
-            <div className="min-w-0 flex-1">
-              <p className="text-[14px] text-stone-800 truncate">{m.title}</p>
-              <p className="text-[12px] text-stone-400">
-                {formatDate(m.date)}
-                {m.endDate ? ` – ${formatDate(m.endDate)}` : ""}
-              </p>
+            <div className="flex-1 min-w-0 pb-[18px]">
+              <div className="flex justify-between items-baseline gap-2.5">
+                <p className="text-[16px] truncate" style={{ color: done || cur ? "#2a221c" : "#55483e", fontWeight: cur ? 500 : 400 }}>{m.title}</p>
+                <span className="text-[12px] whitespace-nowrap shrink-0" style={{ color: done ? "#576b45" : cur ? "#b26f52" : "#a89d95" }}>
+                  {done ? "Done · " : cur ? "Now · " : ""}
+                  {formatDate(m.date)}
+                  {m.endDate ? ` – ${formatDate(m.endDate)}` : ""}
+                </span>
+              </div>
+              {m.note && <p className="text-[12.5px] mt-0.5" style={{ color: "#7a6f66" }}>{m.note}</p>}
+              {(m.deliverables || []).length > 0 && (
+                <p className="text-[11.5px] mt-0.5" style={{ color: "#a89d95" }}>
+                  {m.deliverables.length} deliverable{m.deliverables.length === 1 ? "" : "s"} shown to the client
+                </p>
+              )}
+              <div className="flex items-center gap-2 mt-2 flex-wrap">
+                {cur && (
+                  <button onClick={() => markDone(m)} className="rounded-[3px] px-3 py-1.5 text-[12px]" style={{ border: "1px solid #e6d8cf", background: "#fffdfb", color: "#811618" }}>
+                    Mark done
+                  </button>
+                )}
+                <select
+                  value={m.status}
+                  onChange={(e) => onSetStatus(m.id, e.target.value)}
+                  className="text-[12px] rounded-[3px] px-2 py-1.5 focus:outline-none"
+                  style={{ border: "1px solid #e6d8cf", background: "#fffdfb", color: "#7a6f66" }}
+                >
+                  <option value="upcoming">Upcoming</option>
+                  <option value="current">In progress</option>
+                  <option value="done">Complete</option>
+                </select>
+                <button onClick={() => onMove(i, -1)} disabled={i === 0} className="disabled:opacity-25 p-1" style={{ color: "#c9b9ae" }} aria-label="Move up">
+                  <ChevronUp className="w-4 h-4" />
+                </button>
+                <button onClick={() => onMove(i, 1)} disabled={i === list.length - 1} className="disabled:opacity-25 p-1" style={{ color: "#c9b9ae" }} aria-label="Move down">
+                  <ChevronDown className="w-4 h-4" />
+                </button>
+                <button onClick={() => startEdit(m)} className="p-1 hover:opacity-70" style={{ color: "#c9b9ae" }} aria-label="Edit phase">
+                  <Pencil className="w-4 h-4" />
+                </button>
+                <button onClick={() => onDelete(m.id)} className="p-1 hover:opacity-70" style={{ color: "#c9b9ae" }} aria-label="Delete phase">
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
             </div>
-            <select
-              value={m.status}
-              onChange={(e) => onSetStatus(m.id, e.target.value)}
-              className="text-[12px] border border-stone-300 rounded-lg px-2 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-[#B7453C]"
-            >
-              <option value="upcoming">Upcoming</option>
-              <option value="current">In progress</option>
-              <option value="done">Complete</option>
-            </select>
-            <button onClick={() => startEdit(m)} className="text-stone-300 hover:text-stone-700 shrink-0" aria-label="Edit phase">
-              <Pencil className="w-4 h-4" />
-            </button>
-            <button onClick={() => onDelete(m.id)} className="text-stone-300 hover:text-red-600 shrink-0" aria-label="Delete phase">
-              <Trash2 className="w-4 h-4" />
-            </button>
           </div>
         );
       })}
 
+      {showForm && (
       <form
         onSubmit={(e) => {
           e.preventDefault();
@@ -3745,6 +3804,7 @@ function AdminMilestones({ project, onAdd, onEdit, onSetStatus, onMove, onDelete
           )}
         </div>
       </form>
+      )}
     </div>
   );
 }
@@ -4322,7 +4382,7 @@ function NoticeTemplatesEditor({ templates, onSaveTemplates }) {
   );
 }
 
-function StudioSettingsPanel({ studioStatus, studioStatusColor, onChangeStatus, onChangeStatusColor, onSaveStatus, loginImage, loginMessage, studioInfo, onSaveInfo, autoReply, onSaveAutoReply, noticeTemplates, onSaveNoticeTemplates, viewerEmail, onSave }) {
+function StudioSettingsPanel({ studioStatus, studioStatusColor, onChangeStatus, onChangeStatusColor, onSaveStatus, loginImage, loginMessage, studioInfo, onSaveInfo, autoReply, onSaveAutoReply, noticeTemplates, onSaveNoticeTemplates, viewerEmail, onSave, page, onOpenPage, onBack, onOptimize, optimizing, optimizeMsg, onLogout }) {
   const [pPerm, setPPerm] = useState(() => (api.pushSupported() ? api.pushPermission() : "unsupported"));
   const [pBusy, setPBusy] = useState(false);
   const [pErr, setPErr] = useState("");
@@ -4448,14 +4508,71 @@ function StudioSettingsPanel({ studioStatus, studioStatusColor, onChangeStatus, 
     setBusy(false);
   }
 
-  return (
-    <div className="max-w-2xl mx-auto px-5 sm:px-8 py-8 sm:py-10">
-      <h1 className="text-[26px] text-stone-900 mb-1" style={{ fontFamily: "Selva, Georgia, serif", fontStyle: "italic" }}>
-        Studio settings
-      </h1>
-      <p className="text-stone-500 text-[13px] mb-8">Studio-wide settings: your details, status note and the login page.</p>
+  // Six short grouped pages instead of one long scroll (admin redesign). The
+  // index shows a live status line for each group.
+  const activeNote = activeAutoNote(notes);
+  const SETTINGS_PAGES = [
+    {
+      id: "notif",
+      title: "Notifications",
+      sub: pPerm === "granted" ? "Push on for this device · test any time" : pPerm === "denied" ? "Push blocked on this device" : "Push not set up on this device",
+      subColor: pPerm === "granted" ? "#576b45" : "#a89d95",
+    },
+    { id: "notice", title: "Formal notice templates", sub: `${noticeTemplatesOrDefault(noticeTemplates).length} template${noticeTemplatesOrDefault(noticeTemplates).length === 1 ? "" : "s"}`, subColor: "#a89d95" },
+    {
+      id: "ms",
+      title: "Microsoft 365 & Teams",
+      sub: msStatus.connected ? `Connected${msStatus.account ? " · " + msStatus.account : ""}` : "Not connected — meetings need a manual link",
+      subColor: msStatus.connected ? "#576b45" : "#a89d95",
+    },
+    { id: "you", title: "Your details", sub: "Name, role, contact — shown to clients", subColor: "#a89d95" },
+    {
+      id: "status",
+      title: "Status & auto-replies",
+      sub: activeNote && (activeNote.text || "").trim() ? "Auto-note showing to clients right now" : `${notes.length} automatic note${notes.length === 1 ? "" : "s"}`,
+      subColor: activeNote && (activeNote.text || "").trim() ? "#8a6d1d" : "#a89d95",
+    },
+    { id: "login", title: "Login page", sub: "Photo & welcome message", subColor: "#a89d95" },
+  ];
+  const pageDef = SETTINGS_PAGES.find((x) => x.id === page);
 
-      <AdminSection title="Your notifications">
+  return (
+    <>
+      <div className="flex items-center gap-2.5 pl-3 pr-[18px] pt-3.5 pb-3" style={{ borderBottom: "1px solid #e6d8cf" }}>
+        <button onClick={onBack} className="p-1.5 flex" style={{ color: "#7a6f66" }} aria-label="Back">
+          <ChevronLeft className="w-[18px] h-[18px]" />
+        </button>
+        <p className="flex-1 truncate text-[20px] leading-none" style={{ fontStyle: "italic", fontWeight: 300 }}>
+          {pageDef ? pageDef.title : "Studio settings"}
+        </p>
+      </div>
+      <div className="flex-1 overflow-y-auto p-5 pb-10">
+        <div className="max-w-[640px] mx-auto">
+          {!page && (
+            <>
+              <div className="flex flex-col gap-2">
+                {SETTINGS_PAGES.map((sp) => (
+                  <button key={sp.id} onClick={() => onOpenPage(sp.id)} className="flex items-center gap-3 rounded-[3px] px-3.5 py-3.5 text-left" style={{ background: "#fffdfb", border: "1px solid #e6d8cf" }}>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[15px]">{sp.title}</p>
+                      <p className="text-[12px] mt-px" style={{ color: sp.subColor }}>{sp.sub}</p>
+                    </div>
+                    <ChevronRight className="w-4 h-4 shrink-0" style={{ color: "#c9b9ae" }} />
+                  </button>
+                ))}
+              </div>
+              <button onClick={onOptimize} disabled={optimizing} className="w-full h-11 mt-4 rounded-[3px] text-[13px] disabled:opacity-50" style={{ border: "1px solid #e6d8cf", background: "#fffdfb", color: "#7a6f66" }}>
+                {optimizing ? "Optimising…" : "Speed up (optimise photos)"}
+              </button>
+              {optimizeMsg && <p className="text-[11px] mt-1.5 text-center" style={{ color: "#a89d95" }}>{optimizeMsg}</p>}
+              <button onClick={onLogout} className="w-full text-[12.5px] mt-3" style={{ color: "#a89d95" }}>
+                Log out
+              </button>
+            </>
+          )}
+
+          {page === "notif" && (
+            <div>
         <div className="border border-stone-200 rounded-lg bg-white p-4">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-lg bg-[#F3E7E2] flex items-center justify-center shrink-0">
@@ -4496,13 +4613,14 @@ function StudioSettingsPanel({ studioStatus, studioStatusColor, onChangeStatus, 
             <p className="text-[12px] text-stone-400 mt-2.5">Tap to register this device. Do it on every device you want alerts on (phone + computer). On iPhone, add it to your home screen first.</p>
           )}
         </div>
-      </AdminSection>
+              <p className="text-[12.5px] mt-3.5 leading-relaxed" style={{ color: "#a89d95" }}>Pushes cover new messages, signed proposals, meeting requests and account setups. Register every device you want them on.</p>
+            </div>
+          )}
 
-      <AdminSection title="Formal notice templates">
-        <NoticeTemplatesEditor templates={noticeTemplates} onSaveTemplates={onSaveNoticeTemplates} />
-      </AdminSection>
+          {page === "notice" && <NoticeTemplatesEditor templates={noticeTemplates} onSaveTemplates={onSaveNoticeTemplates} />}
 
-      <AdminSection title="Microsoft 365 / Teams">
+          {page === "ms" && (
+            <div>
         <div className="border border-stone-200 rounded-lg bg-white p-4">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-lg bg-[#E6EEF5] flex items-center justify-center shrink-0">
@@ -4532,9 +4650,11 @@ function StudioSettingsPanel({ studioStatus, studioStatusColor, onChangeStatus, 
               : "Sign in once with your Microsoft 365 account. After that, online meetings you add become real Teams meetings automatically."}
           </p>
         </div>
-      </AdminSection>
+            </div>
+          )}
 
-      <AdminSection title="Your details">
+          {page === "you" && (
+            <div>
         <p className="text-[12px] text-stone-400 mb-3">Shown to clients — contact info, the About tab and the login help link.</p>
         <div className="space-y-2.5">
           {[
@@ -4562,9 +4682,12 @@ function StudioSettingsPanel({ studioStatus, studioStatusColor, onChangeStatus, 
             {infoSaved && <span className="text-[12px] text-[#576B45]">Saved ✓</span>}
           </div>
         </div>
-      </AdminSection>
+            </div>
+          )}
 
-      <AdminSection title="Automatic status notes">
+          {page === "status" && (
+            <div>
+        <p className="text-[11px] uppercase mb-2.5" style={{ letterSpacing: "0.12em", color: "#a89d95" }}>Automatic status notes</p>
         <p className="text-[12px] text-stone-400 mb-3">Add as many as you like. Each one shows the status bar at the top of every client's Messages during its hours, and turns itself on/off. A per-project custom note (on its Messages tab) overrides these.</p>
         <div className="space-y-3">
           {notes.length === 0 && <p className="text-[13px] text-stone-400">No automatic notes yet.</p>}
@@ -4625,14 +4748,15 @@ function StudioSettingsPanel({ studioStatus, studioStatusColor, onChangeStatus, 
           </div>
           <p className="text-[11px] text-stone-400">Times are your local (Melbourne) time. e.g. 4:00 PM → 8:00 AM covers overnight; set both the same for 24/7. If two notes overlap, the first one listed wins.</p>
         </div>
-      </AdminSection>
-
-      <AdminSection title="Status note for messages">
+        <p className="text-[11px] uppercase mt-6 mb-2.5" style={{ letterSpacing: "0.12em", color: "#a89d95" }}>Status note for messages</p>
         <StudioStatusEditor value={studioStatus} color={studioStatusColor} onSave={onSaveStatus} />
         <p className="text-[11px] text-stone-400 mt-2">Set it here once, then on each project's Messages tab toggle whether it shows for that client.</p>
-      </AdminSection>
+            </div>
+          )}
 
-      <AdminSection title="Login photo">
+          {page === "login" && (
+            <div>
+        <p className="text-[11px] uppercase mb-2.5" style={{ letterSpacing: "0.12em", color: "#a89d95" }}>Login photo</p>
         <div className="space-y-3">
           {img ? (
             <img src={img} alt="" className="w-full h-48 object-cover rounded-lg border border-stone-200" />
@@ -4673,9 +4797,7 @@ function StudioSettingsPanel({ studioStatus, studioStatusColor, onChangeStatus, 
           {error && <p className="text-[12px] text-red-600">{error}</p>}
           <p className="text-[11px] text-stone-400">Up to {formatBytes(MAX_FILE_BYTES)}. A tall (portrait) photo looks best, since it fills the side panel on desktop and the top banner on phones.</p>
         </div>
-      </AdminSection>
-
-      <AdminSection title="Welcome message" last>
+        <p className="text-[11px] uppercase mt-6 mb-2.5" style={{ letterSpacing: "0.12em", color: "#a89d95" }}>Welcome message</p>
         <textarea
           value={msg}
           onChange={(e) => setMsg(e.target.value)}
@@ -4685,14 +4807,17 @@ function StudioSettingsPanel({ studioStatus, studioStatusColor, onChangeStatus, 
           className="w-full px-3.5 py-2.5 rounded-lg border border-stone-300 text-[14px] bg-white focus:outline-none focus:ring-2 focus:ring-[#B7453C] resize-none"
         />
         <p className="text-[11px] text-stone-400 mt-1">Shown over the photo on the login screen. Saves when you click away.</p>
-      </AdminSection>
-    </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </>
   );
 }
 
 // Studio notification bell — surfaces everything waiting on the studio across
 // all projects: new client messages, signed fee proposals, and meeting requests.
-function AdminBell({ projects, onOpen }) {
+function AdminBell({ projects, onOpen, boxed }) {
   const [open, setOpen] = useState(false);
   const groups = Object.values(projects)
     .map((p) => ({ p, items: studioPending(p) }))
@@ -4708,10 +4833,15 @@ function AdminBell({ projects, onOpen }) {
     );
   return (
     <div className="relative">
-      <button onClick={() => setOpen((o) => !o)} className="relative text-stone-500 hover:text-stone-800 p-1.5" aria-label="Studio notifications">
-        <Bell className="w-5 h-5" />
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className={boxed ? "relative w-10 h-10 rounded-[3px] flex items-center justify-center" : "relative p-1.5"}
+        style={boxed ? { border: "1px solid #e6d8cf", background: "#fffdfb", color: "#7a6f66" } : { color: "#7a6f66" }}
+        aria-label="Studio notifications"
+      >
+        <Bell className={boxed ? "w-[17px] h-[17px]" : "w-5 h-5"} strokeWidth={1.8} />
         {total > 0 && (
-          <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-[16px] px-1 rounded-full bg-[#B7453C] text-white text-[10px] leading-[16px] text-center">{total}</span>
+          <span className="absolute -top-1 -right-1 min-w-[17px] h-[17px] px-1 rounded-full text-[10px] flex items-center justify-center" style={{ background: "#811618", color: "#fffdfb" }}>{total}</span>
         )}
       </button>
       {open && (
@@ -4752,14 +4882,31 @@ function AdminBell({ projects, onOpen }) {
 }
 
 function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioStatusColor, onChangeStatus, onChangeStatusColor, onSaveStatus, loginImage, loginMessage, studioInfo, onSaveInfo, autoReply, onSaveAutoReply, noticeTemplates, onSaveNoticeTemplates, onSaveLogin, onLogout }) {
-  const [selectedCode, setSelectedCode] = useState(Object.keys(projects)[0] || null);
+  // "Rooms" navigation (admin redesign): a view machine (home | project |
+  // settings) that reopens exactly where you left off — the location is
+  // persisted per device and restored on every open.
+  const SESSION_KEY = "sn-admin-session";
+  const savedSession = useRef(
+    (() => {
+      try {
+        return JSON.parse(localStorage.getItem(SESSION_KEY) || "null");
+      } catch (_e) {
+        return null;
+      }
+    })()
+  ).current;
+  const [selectedCode, setSelectedCode] = useState(() => (savedSession?.code && projects[savedSession.code] ? savedSession.code : Object.keys(projects)[0] || null));
+  const [view, setView] = useState(() => (["home", "project", "settings"].includes(savedSession?.view) ? savedSession.view : "home"));
+  const [adminTab, setAdminTab] = useState(() => (ADMIN_TABS.some((t) => t.id === savedSession?.tab) ? savedSession.tab : "details"));
+  const [settingsPage, setSettingsPage] = useState(savedSession?.settingsPage || null);
+  const [isDesktop, setIsDesktop] = useState(() => typeof window !== "undefined" && window.innerWidth >= 900);
   const [showNewProject, setShowNewProject] = useState(false);
   const [showNewUpdate, setShowNewUpdate] = useState(false);
-  const [adminTab, setAdminTab] = useState("details");
-  const [showSettings, setShowSettings] = useState(false);
   const [editingUpdate, setEditingUpdate] = useState(null);
   const [optimizing, setOptimizing] = useState(false);
   const [optimizeMsg, setOptimizeMsg] = useState("");
+  const [toast, setToast] = useState(null);
+  const toastTimer = useRef(null);
   const [bounced, setBounced] = useState(() => new Set());
   useEffect(() => {
     let alive = true;
@@ -4768,21 +4915,47 @@ function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioSt
       alive = false;
     };
   }, []);
+  useEffect(() => {
+    const onR = () => setIsDesktop(window.innerWidth >= 900);
+    window.addEventListener("resize", onR);
+    return () => window.removeEventListener("resize", onR);
+  }, []);
+  // Persist the location on every navigation.
+  useEffect(() => {
+    try {
+      localStorage.setItem(SESSION_KEY, JSON.stringify({ view, code: selectedCode, tab: adminTab, settingsPage }));
+    } catch (_e) {}
+  }, [view, selectedCode, adminTab, settingsPage]);
+  function showToast(t) {
+    clearTimeout(toastTimer.current);
+    setToast(t);
+    toastTimer.current = setTimeout(() => setToast(null), 2200);
+  }
 
   const project = selectedCode ? projects[selectedCode] : null;
   const pendingTab = useRef(null);
+  // On desktop there is no home screen — the sidebar is always there and the
+  // last project stays open.
+  const effView = isDesktop && view === "home" ? "project" : view;
 
-  // Open a project on a specific tab (used by the bell). If it's already the
-  // selected project the tab-reset effect won't fire, so set the tab directly;
-  // otherwise stash it so the effect lands there instead of "details".
-  function openProject(code, tab = "messages") {
-    setShowSettings(false);
+  // Open a project on a specific tab (bell, Waiting-on-you, sidebar). Without a
+  // tab, the project opens on its last-viewed tab. If it's already the selected
+  // project the tab-change effect won't fire, so set the tab directly.
+  function openProject(code, tab = null) {
+    setView("project");
     if (code === selectedCode) {
-      setAdminTab(tab);
+      if (tab) setAdminTab(tab);
     } else {
       pendingTab.current = tab;
       setSelectedCode(code);
     }
+  }
+  function goHome() {
+    setView(isDesktop ? "project" : "home");
+  }
+  function goSettings() {
+    setSettingsPage(null);
+    setView("settings");
   }
 
   // One-time cleanup: move any photos/PDFs still embedded as base64 into storage,
@@ -4846,8 +5019,12 @@ function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioSt
       return { ...prev, [selectedCode]: { ...p, lastReadStudio: new Date().toISOString() } };
     });
     setShowNewUpdate(false);
-    setAdminTab(pendingTab.current || "details");
-    pendingTab.current = null;
+    // A deep-link (bell / Waiting on you) lands on its tab; otherwise the
+    // project keeps the last-viewed tab (session memory).
+    if (pendingTab.current) {
+      setAdminTab(pendingTab.current);
+      pendingTab.current = null;
+    }
   }, [selectedCode, setProjects]);
 
   // When the studio opens the Fee tab, mark a client-signed proposal as seen so
@@ -5249,167 +5426,197 @@ function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioSt
   }
 
   const projectList = Object.values(projects);
-  const totalUnread = projectList.reduce((n, p) => n + unreadForStudio(p), 0);
+  // Cross-project "Waiting on you" list (mobile home) — derived, never stored.
+  const attention = [];
+  projectList.forEach((p) => {
+    studioPending(p).forEach((it) => {
+      attention.push({
+        key: p.code + it.type,
+        title: it.type === "signed" ? "Signed fee proposal" : it.label,
+        sub: p.name,
+        color: it.type === "message" ? "#811618" : it.type === "signed" ? "#576b45" : "#d5a933",
+        go: () => openProject(p.code, it.tab),
+      });
+    });
+  });
+  const chip = project ? stageChipFor(project) : null;
+  const settingsPanel = (
+    <StudioSettingsPanel
+      studioStatus={studioStatus}
+      studioStatusColor={studioStatusColor}
+      onChangeStatus={onChangeStatus}
+      onChangeStatusColor={onChangeStatusColor}
+      onSaveStatus={onSaveStatus}
+      loginImage={loginImage}
+      loginMessage={loginMessage}
+      studioInfo={studioInfo}
+      onSaveInfo={onSaveInfo}
+      autoReply={autoReply}
+      onSaveAutoReply={onSaveAutoReply}
+      noticeTemplates={noticeTemplates}
+      onSaveNoticeTemplates={onSaveNoticeTemplates}
+      viewerEmail={viewerEmail}
+      onSave={onSaveLogin}
+      page={settingsPage}
+      onOpenPage={setSettingsPage}
+      onBack={() => (settingsPage ? setSettingsPage(null) : goHome())}
+      onOptimize={optimizeStorage}
+      optimizing={optimizing}
+      optimizeMsg={optimizeMsg}
+      onLogout={onLogout}
+    />
+  );
 
   return (
-    <div className="min-h-screen bg-[#F7F0EC] md:flex md:h-screen md:overflow-hidden">
-      <div className="hidden md:flex w-64 border-r border-stone-200 flex-col">
-        <div className="p-5 border-b border-stone-200 flex items-center justify-between gap-2">
-          <Logo />
-          {totalUnread > 0 && (
-            <span className="inline-flex items-center gap-1 bg-[#B7453C] text-white text-[11px] rounded-full pl-1.5 pr-2 py-0.5" title="New messages from clients">
-              <MessageSquare className="w-3 h-3" /> {totalUnread}
-            </span>
-          )}
-        </div>
-        <div className="flex-1 overflow-y-auto py-2">
-          {projectList.map((p) => {
-            const unread = unreadForStudio(p);
-            return (
-              <button
-                key={p.code}
-                onClick={() => {
-                  setSelectedCode(p.code);
-                  setShowSettings(false);
-                }}
-                className={`w-full text-left px-5 py-3 flex items-center justify-between group ${selectedCode === p.code && !showSettings ? "bg-stone-100" : "hover:bg-stone-50"}`}
-              >
-                <div className="min-w-0">
-                  <p className="text-[14px] text-stone-800 truncate">{p.name}</p>
-                  <p className="text-[11px] text-stone-400">{p.code}</p>
-                </div>
-                {unread > 0 ? (
-                  <span className="shrink-0 inline-flex items-center gap-1 bg-[#B7453C] text-white text-[10px] rounded-full pl-1.5 pr-2 py-0.5">
-                    <MessageSquare className="w-3 h-3" /> {unread}
-                  </span>
-                ) : (
-                  <ChevronRight className="w-3.5 h-3.5 text-stone-300 shrink-0" />
-                )}
-              </button>
-            );
-          })}
-        </div>
-        <div className="p-3 border-t border-stone-200">
-          <button
-            onClick={() => setShowNewProject(true)}
-            className="w-full flex items-center justify-center gap-1.5 text-[13px] text-stone-600 border border-stone-300 rounded-lg py-2.5 hover:bg-stone-100 transition-colors"
-          >
-            <Plus className="w-3.5 h-3.5" /> New project
-          </button>
-          <button
-            onClick={() => setShowSettings(true)}
-            className={`w-full flex items-center justify-center gap-1.5 text-[13px] rounded-lg py-2.5 transition-colors mt-2 ${showSettings ? "bg-stone-900 text-white" : "text-stone-600 border border-stone-300 hover:bg-stone-100"}`}
-          >
-            <Settings className="w-3.5 h-3.5" /> Settings
-          </button>
-          <EnablePushBanner email={viewerEmail} />
-          <button
-            onClick={optimizeStorage}
-            disabled={optimizing}
-            className="w-full flex items-center justify-center gap-1.5 text-[12px] text-stone-500 border border-stone-200 rounded-lg py-2 mt-2 hover:bg-stone-100 disabled:opacity-50"
-          >
-            <Upload className="w-3.5 h-3.5" /> {optimizing ? "Optimising…" : "Speed up (optimise photos)"}
-          </button>
-          {optimizeMsg && <p className="text-[11px] text-stone-400 mt-1.5 text-center">{optimizeMsg}</p>}
-          <button onClick={onLogout} className="w-full text-center text-[12px] text-stone-400 hover:text-stone-600 mt-3">
-            Log out
-          </button>
-        </div>
-      </div>
-
-      <div className="md:hidden sticky top-0 z-10 bg-[#F7F0EC]/95 backdrop-blur border-b border-stone-200">
-        <div className="px-4 py-3 flex items-center gap-3">
-          <Logo />
-          <div className="ml-auto flex items-center gap-2">
+    <div className="h-screen flex overflow-hidden" style={{ background: "#f7f2ef", fontFamily: "Selva, Georgia, serif", color: "#2a221c" }}>
+      {/* Desktop sidebar — always visible */}
+      {isDesktop && (
+        <div className="w-[272px] shrink-0 flex flex-col" style={{ background: "#fffdfb", borderRight: "1px solid #e6d8cf" }}>
+          <div className="flex items-center justify-between gap-2 pl-[22px] pr-3 pt-6 pb-[18px]" style={{ borderBottom: "1px solid #efe4dc" }}>
+            <img src="/sn-wordmark-static.png" alt="Studio Nicholas" style={{ width: 148, height: "auto" }} />
             <AdminBell projects={projects} onOpen={openProject} />
-            <button onClick={() => setShowSettings(true)} className="text-stone-500 hover:text-stone-800 p-1.5" aria-label="Login page settings">
-              <Settings className="w-4 h-4" />
-            </button>
-            <button onClick={() => setShowNewProject(true)} className="inline-flex items-center gap-1 text-[12px] text-stone-600 border border-stone-300 rounded-lg px-2.5 py-1.5 hover:bg-stone-100">
-              <Plus className="w-3.5 h-3.5" /> New
-            </button>
-            <button onClick={onLogout} className="text-[12px] text-stone-400 hover:text-stone-600">
-              Log out
-            </button>
           </div>
-        </div>
-        <div className="px-4 pb-3">
-          <select
-            value={selectedCode || ""}
-            onChange={(e) => {
-              setSelectedCode(e.target.value);
-              setShowSettings(false);
-            }}
-            className="w-full px-3 py-2.5 rounded-lg border border-stone-300 bg-white text-[14px] focus:outline-none focus:ring-2 focus:ring-[#B7453C]"
-          >
-            {projectList.length === 0 && <option value="">No projects yet</option>}
-            {projectList.map((p) => (
-              <option key={p.code} value={p.code}>
-                {p.name} — {p.code}
-                {unreadForStudio(p) > 0 ? "  •" : ""}
-              </option>
-            ))}
-          </select>
-        </div>
-      </div>
-
-      <div className="flex-1 md:overflow-y-auto">
-        <div className="hidden md:flex justify-end items-center px-6 py-2.5 border-b border-stone-200 sticky top-0 bg-[#F7F0EC]/95 backdrop-blur z-10">
-          <AdminBell projects={projects} onOpen={openProject} />
-        </div>
-        {showSettings ? (
-          <StudioSettingsPanel
-            studioStatus={studioStatus}
-            studioStatusColor={studioStatusColor}
-            onChangeStatus={onChangeStatus}
-            onChangeStatusColor={onChangeStatusColor}
-            onSaveStatus={onSaveStatus}
-            loginImage={loginImage}
-            loginMessage={loginMessage}
-            studioInfo={studioInfo}
-            onSaveInfo={onSaveInfo}
-            autoReply={autoReply}
-            onSaveAutoReply={onSaveAutoReply}
-            noticeTemplates={noticeTemplates}
-            onSaveNoticeTemplates={onSaveNoticeTemplates}
-            viewerEmail={viewerEmail}
-            onSave={onSaveLogin}
-          />
-        ) : project ? (
-          <div className="max-w-2xl mx-auto px-5 sm:px-8 py-8 sm:py-10">
-            <div className="flex items-start justify-between gap-3 mb-1">
-              <h1 className="text-[26px] text-stone-900" style={{ fontFamily: "Selva, Georgia, serif", fontStyle: "italic" }}>
-                {project.name}
-              </h1>
-              <button onClick={() => deleteProject(project.code)} className="shrink-0 inline-flex items-center gap-1 text-[12px] text-stone-400 hover:text-red-600">
-                <Trash2 className="w-3.5 h-3.5" /> Delete
-              </button>
-            </div>
-            <p className="text-stone-500 text-[13px] mb-2">{project.location}</p>
-            <div className="flex items-center gap-3 mb-6">
-              <p className="text-stone-400 text-[12px]">
-                Client login: <span className="font-mono text-stone-600">{project.clientEmail || "not set"}</span>
-              </p>
-              {project.clientEmail && <CopyButton value={project.clientEmail} label="Copy email" />}
-            </div>
-
-            <div className="flex flex-nowrap gap-1 mb-8 border-b border-stone-200 pb-4 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-              {ADMIN_TABS.map((t) => {
-                const badge = t.id === "messages" ? unreadForStudio(project) : 0;
+          <div className="flex-1 overflow-y-auto px-3 py-4">
+            <p className="text-[11px] uppercase mb-2 ml-2.5" style={{ letterSpacing: "0.12em", color: "#a89d95" }}>
+              Projects
+            </p>
+            <div className="flex flex-col gap-0.5">
+              {projectList.map((p) => {
+                const unread = unreadForStudio(p);
+                const active = effView === "project" && selectedCode === p.code;
                 return (
                   <button
-                    key={t.id}
-                    onClick={() => setAdminTab(t.id)}
-                    className={`shrink-0 whitespace-nowrap flex items-center gap-1.5 px-4 py-2 rounded-full text-[13px] transition-colors ${adminTab === t.id ? "bg-stone-900 text-white" : "text-stone-500 hover:bg-stone-100"}`}
+                    key={p.code}
+                    onClick={() => openProject(p.code)}
+                    className="flex items-center gap-2.5 pl-2 pr-2.5 py-[9px] rounded-[3px] text-left"
+                    style={{ background: active ? "#f2e9e2" : "transparent", borderLeft: `3px solid ${active ? "#b26f52" : "transparent"}` }}
                   >
-                    {t.label}
-                    {badge > 0 && (
-                      <span className="inline-flex items-center justify-center min-w-[16px] h-[16px] px-1 rounded-full text-[10px] leading-none bg-[#B7453C] text-white">{badge}</span>
+                    <img src={p.heroPhoto} alt="" className="w-9 h-9 object-cover rounded-[3px] shrink-0" style={{ background: "#ece3dc" }} />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[14.5px] truncate leading-tight" style={{ fontStyle: "italic", fontWeight: 300 }}>{p.name}</p>
+                      <p className="text-[11px] mt-px" style={{ color: "#a89d95" }}>{p.code}</p>
+                    </div>
+                    {unread > 0 && (
+                      <span className="shrink-0 min-w-[18px] h-[18px] px-1 rounded-full text-[10px] flex items-center justify-center" style={{ background: "#811618", color: "#fffdfb" }}>{unread}</span>
                     )}
                   </button>
                 );
               })}
             </div>
+          </div>
+          <div className="p-3.5 flex flex-col gap-2" style={{ borderTop: "1px solid #efe4dc" }}>
+            <button onClick={() => setShowNewProject(true)} className="h-[42px] rounded-[3px] text-[13.5px]" style={{ background: "#576b45", color: "#efefec" }}>
+              + New project
+            </button>
+            <button onClick={goSettings} className="h-10 rounded-[3px] text-[13px]" style={{ border: "1px solid #e6d8cf", background: view === "settings" ? "#f2e9e2" : "#fffdfb", color: "#7a6f66" }}>
+              Settings
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Main column */}
+      <div className="flex-1 min-w-0 flex flex-col relative">
+        {/* Projects home (mobile only) */}
+        {effView === "home" && (
+          <>
+            <div className="flex items-center justify-between px-5 pt-4 pb-3">
+              <img src="/sn-wordmark-static.png" alt="Studio Nicholas" style={{ width: 130, height: "auto" }} />
+              <AdminBell projects={projects} onOpen={openProject} boxed />
+            </div>
+            <div className="flex-1 overflow-y-auto px-5 pb-10 pt-1">
+              {attention.length > 0 && (
+                <>
+                  <p className="text-[11px] uppercase mt-2 mb-2.5" style={{ letterSpacing: "0.12em", color: "#a89d95" }}>
+                    Waiting on you
+                  </p>
+                  <div className="flex flex-col gap-2 max-w-[640px]">
+                    {attention.map((a) => (
+                      <button key={a.key} onClick={a.go} className="flex items-center gap-3 rounded-[3px] px-3.5 py-3 text-left" style={{ background: "#fffdfb", border: "1px solid #e6d8cf", borderLeft: `3px solid ${a.color}` }}>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[14px] leading-snug">{a.title}</p>
+                          <p className="text-[12px] mt-px" style={{ color: "#a89d95" }}>{a.sub}</p>
+                        </div>
+                        <ChevronRight className="w-4 h-4 shrink-0" style={{ color: "#c9b9ae" }} />
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+              <p className="text-[11px] uppercase mb-2.5" style={{ letterSpacing: "0.12em", color: "#a89d95", marginTop: attention.length ? 22 : 8 }}>
+                Projects
+              </p>
+              <div className="flex flex-col gap-2 max-w-[640px]">
+                {projectList.length === 0 && <p className="text-[13px]" style={{ color: "#a89d95" }}>No projects yet — create your first below.</p>}
+                {projectList.map((p) => {
+                  const unread = unreadForStudio(p);
+                  return (
+                    <button key={p.code} onClick={() => openProject(p.code)} className="flex items-center gap-3 rounded-[3px] px-3 py-2.5 text-left" style={{ background: "#fffdfb", border: "1px solid #e6d8cf" }}>
+                      <img src={p.heroPhoto} alt="" className="w-[50px] h-[50px] object-cover rounded-[3px] shrink-0" style={{ background: "#ece3dc" }} />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[16px] truncate leading-snug" style={{ fontStyle: "italic", fontWeight: 300 }}>{p.name}</p>
+                        <p className="text-[11.5px] mt-0.5" style={{ color: "#a89d95" }}>
+                          {p.code}{p.stage ? ` · ${p.stage}` : ""}
+                        </p>
+                      </div>
+                      {unread > 0 && (
+                        <span className="shrink-0 min-w-[19px] h-[19px] px-1 rounded-full text-[10.5px] flex items-center justify-center" style={{ background: "#811618", color: "#fffdfb" }}>{unread}</span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="flex gap-2 max-w-[640px] mt-4">
+                <button onClick={() => setShowNewProject(true)} className="flex-1 h-11 rounded-[3px] text-[13.5px]" style={{ background: "#576b45", color: "#efefec" }}>
+                  + New project
+                </button>
+                <button onClick={goSettings} className="flex-1 h-11 rounded-[3px] text-[13.5px]" style={{ border: "1px solid #e6d8cf", background: "#fffdfb", color: "#7a6f66" }}>
+                  Settings
+                </button>
+              </div>
+            </div>
+          </>
+        )}
+
+        {/* Project view */}
+        {effView === "project" && !project && (
+          <div className="flex items-center justify-center flex-1 text-[14px]" style={{ color: "#a89d95" }}>
+            Select or create a project to get started.
+          </div>
+        )}
+        {effView === "project" && project && (
+          <>
+            <div className="flex items-center gap-2.5 pl-3 pr-[18px] md:px-[26px] pt-3.5 pb-3" style={{ borderBottom: "1px solid #e6d8cf" }}>
+              {!isDesktop && (
+                <button onClick={goHome} className="p-1.5 flex" style={{ color: "#7a6f66" }} aria-label="Back to projects">
+                  <ChevronLeft className="w-[18px] h-[18px]" />
+                </button>
+              )}
+              <p className="flex-1 truncate text-[20px] md:text-[24px] leading-none" style={{ fontStyle: "italic", fontWeight: 300 }}>
+                {project.name}
+              </p>
+              {project.stage && (
+                <span className="text-[11px] px-2.5 py-1 rounded-full whitespace-nowrap shrink-0" style={{ background: chip.t, color: chip.c }}>
+                  {project.stage}
+                </span>
+              )}
+            </div>
+            {isDesktop && (
+              <div className="flex gap-[26px] px-[28px]" style={{ borderBottom: "1px solid #e6d8cf" }}>
+                {ADMIN_TABS.map((t) => {
+                  const active = adminTab === t.id;
+                  const badge = t.id === "messages" ? unreadForStudio(project) : 0;
+                  return (
+                    <button key={t.id} onClick={() => setAdminTab(t.id)} className="flex items-center gap-1.5 text-[14px] pt-3 pb-[11px]" style={{ color: active ? "#2a221c" : "#a89d95", borderBottom: `2px solid ${active ? "#b26f52" : "transparent"}`, fontWeight: active ? 500 : 400 }}>
+                      {t.label}
+                      {badge > 0 && <span className="min-w-[16px] h-4 px-1 rounded-full text-[10px] flex items-center justify-center" style={{ background: "#811618", color: "#fffdfb" }}>{badge}</span>}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+            <div className={`flex-1 overflow-y-auto p-5 ${adminTab === "messages" ? "flex flex-col pb-3" : "pb-10"}`}>
+              <div className="w-full mx-auto flex-1 flex flex-col min-h-0" style={{ maxWidth: isDesktop ? 980 : 640 }}>
 
             {adminTab === "details" && (
               <>
@@ -5466,22 +5673,30 @@ function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioSt
             <AdminSection title="Features shown to this client">
               <AdminFeatures project={project} onToggle={(key, on) => setField(project.code, "features", { ...(project.features || {}), [key]: on })} />
             </AdminSection>
+
+            <div className="pt-1 pb-2">
+              <button onClick={() => deleteProject(project.code)} className="inline-flex items-center gap-1.5 text-[12.5px] hover:opacity-80" style={{ color: "#811618" }}>
+                <Trash2 className="w-3.5 h-3.5" /> Delete this project
+              </button>
+            </div>
               </>
             )}
 
             {adminTab === "updates" && (
               <>
-            <div className="border border-stone-200 rounded-xl bg-white p-5 mb-8">
-              <div className="flex items-center justify-between mb-3">
-                <h2 className="text-[15px] text-stone-800 flex items-center gap-2">
-                  <Upload className="w-4 h-4" /> Post a project update
-                </h2>
-                <button onClick={() => setShowNewUpdate((s) => !s)} className="text-[13px] text-stone-500 hover:text-stone-800">
-                  {showNewUpdate ? "Cancel" : "+ New"}
-                </button>
+            <button
+              onClick={() => setShowNewUpdate((s) => !s)}
+              className="w-full h-12 rounded-[3px] text-[14.5px] mb-3"
+              style={{ background: showNewUpdate ? "#47583a" : "#576b45", color: "#efefec", boxShadow: "0 12px 26px -12px rgba(87,107,69,0.75)" }}
+            >
+              {showNewUpdate ? "Cancel" : "+ Post a project update"}
+            </button>
+            {showNewUpdate && (
+              <div className="rounded-[3px] p-4 mb-3" style={{ background: "#fffdfb", border: "1px solid #e6d8cf" }}>
+                <NewUpdateForm onSubmit={(data) => addUpdate(project.code, data)} />
               </div>
-              {showNewUpdate && <NewUpdateForm onSubmit={(data) => addUpdate(project.code, data)} />}
-            </div>
+            )}
+            <div className="mb-[18px]" />
 
             <AdminSection title="Posted updates">
               <div className="space-y-3">
@@ -5551,6 +5766,33 @@ function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioSt
 
             {adminTab === "fee" && (
             <AdminSection title="Fee proposal">
+              {/* Where the proposal sits: issued → awaiting signature → signed */}
+              <div className="flex items-center mb-5 max-w-[520px]">
+                {[
+                  { label: "Issued", state: project.feeProposal ? "done" : project.feeProposalSigned ? "done" : "current" },
+                  { label: "Awaiting signature", state: project.feeProposalSigned ? "done" : project.feeProposal ? "current" : "idle" },
+                  { label: "Signed", state: project.feeProposalSigned ? "done" : "idle" },
+                ].map((s, i, arr) => (
+                  <React.Fragment key={s.label}>
+                    <div className="flex-1 flex flex-col items-center gap-1">
+                      <span
+                        className="w-[26px] h-[26px] rounded-full flex items-center justify-center text-[12px] box-border"
+                        style={
+                          s.state === "done"
+                            ? { background: "#576b45", color: "#efefec" }
+                            : s.state === "current"
+                              ? { background: "#fffdfb", border: "2px solid #b26f52", color: "#b26f52" }
+                              : { background: "#f0e8e2", color: "#a89d95" }
+                        }
+                      >
+                        {s.state === "done" ? "✓" : i + 1}
+                      </span>
+                      <span className="text-[11px] text-center leading-tight" style={{ color: s.state === "done" ? "#576b45" : s.state === "current" ? "#b26f52" : "#a89d95" }}>{s.label}</span>
+                    </div>
+                    {i < arr.length - 1 && <span className="flex-1 h-[1.5px] mb-[18px]" style={{ background: s.state === "done" ? "#576b45" : "#e6d8cf" }} />}
+                  </React.Fragment>
+                ))}
+              </div>
               <div className="space-y-4">
                 <AdminDocSlot
                   label="Issued fee proposal"
@@ -5573,8 +5815,9 @@ function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioSt
             )}
 
             {adminTab === "messages" && (
-            <AdminSection title="Messages" last>
+            <AdminSection title="Messages" last fill>
               <MessagesPanel
+                fill
                 messages={project.messages}
                 meRole="studio"
                 draftKey={`studio_${project.code}`}
@@ -5602,9 +5845,40 @@ function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioSt
               />
             </AdminSection>
             )}
+              </div>
+            </div>
+
+            {/* Mobile bottom tab bar — all six tabs one thumb-tap away */}
+            {!isDesktop && (
+              <div className="flex shrink-0 px-1 pt-2" style={{ borderTop: "1px solid #e6d8cf", background: "#fffdfb", paddingBottom: "calc(12px + env(safe-area-inset-bottom))" }}>
+                {ADMIN_TABS.map((t) => {
+                  const active = adminTab === t.id;
+                  const badge = t.id === "messages" ? unreadForStudio(project) : 0;
+                  const TabIcon = t.icon;
+                  return (
+                    <button key={t.id} onClick={() => setAdminTab(t.id)} className="flex-1 flex flex-col items-center gap-[3px] py-1 relative" style={{ color: active ? "#2a221c" : "#a89d95" }}>
+                      <TabIcon className="w-[19px] h-[19px]" strokeWidth={1.9} />
+                      <span className="text-[10px]" style={{ fontWeight: active ? 500 : 400 }}>{t.label}</span>
+                      {active ? <span className="w-4 h-0.5 rounded-[1px]" style={{ background: "#b26f52" }} /> : <span className="w-4 h-0.5" />}
+                      {badge > 0 && (
+                        <span className="absolute top-0 right-3.5 min-w-[16px] h-4 px-1 rounded-full text-[9.5px] flex items-center justify-center" style={{ background: "#811618", color: "#fffdfb" }}>{badge}</span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </>
+        )}
+
+        {/* Settings */}
+        {view === "settings" && settingsPanel}
+
+        {/* Toast */}
+        {toast && (
+          <div className="absolute left-1/2 -translate-x-1/2 bottom-24 z-40 whitespace-nowrap text-[13px] px-[18px] py-2.5 rounded-[3px]" style={{ background: "#2a221c", color: "#f7f2ef", boxShadow: "0 14px 30px -12px rgba(28,26,23,0.5)" }}>
+            {toast}
           </div>
-        ) : (
-          <div className="flex items-center justify-center h-full py-20 text-stone-400 text-[14px]">Select or create a project to get started.</div>
         )}
       </div>
 

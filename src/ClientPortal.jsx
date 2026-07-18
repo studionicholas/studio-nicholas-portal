@@ -1241,13 +1241,13 @@ function NotifBell({ notifications, onOpen, onNavigate, onDismiss, boxed }) {
           setOpen(next);
           if (next) onOpen();
         }}
-        className={boxed ? "relative w-10 h-10 rounded-[3px] flex items-center justify-center" : "relative text-stone-500 hover:text-stone-800"}
-        style={boxed ? { border: "1px solid #e6d8cf", background: "#fffdfb", color: "#7a6f66" } : undefined}
+        className={boxed ? "relative w-10 h-10 flex items-center justify-center" : "relative text-stone-500 hover:text-stone-800"}
+        style={boxed ? { color: "#7a6f66" } : undefined}
         aria-label="Notifications"
       >
-        <Bell className={boxed ? "w-[17px] h-[17px]" : "w-5 h-5"} strokeWidth={boxed ? 1.8 : 2} />
+        <Bell className={boxed ? "w-[19px] h-[19px]" : "w-5 h-5"} strokeWidth={boxed ? 1.8 : 2} />
         {unread > 0 && (
-          <span className="absolute -top-1 -right-1 min-w-[17px] h-[17px] px-1 rounded-full text-[10px] flex items-center justify-center" style={{ background: "#811618", color: "#fffdfb" }}>
+          <span className="absolute top-0 right-0 min-w-[17px] h-[17px] px-1 rounded-full text-[10px] flex items-center justify-center" style={{ background: "#811618", color: "#fffdfb" }}>
             {unread}
           </span>
         )}
@@ -1255,7 +1255,7 @@ function NotifBell({ notifications, onOpen, onNavigate, onDismiss, boxed }) {
       {open && (
         <>
           <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 mt-2 w-80 max-w-[calc(100vw-2rem)] bg-white border border-stone-200 rounded-xl shadow-lg z-20 overflow-hidden">
+          <div className="fixed top-14 right-3 left-3 sm:absolute sm:top-auto sm:left-auto sm:right-0 sm:mt-2 sm:w-80 bg-white border border-stone-200 rounded-[3px] shadow-lg z-20 overflow-hidden">
             <div className="px-4 py-3 border-b border-stone-100 text-[13px] text-stone-800">Notifications</div>
             <div className="max-h-80 overflow-y-auto">
               {list.length === 0 && <p className="text-[13px] text-stone-400 px-4 py-6 text-center">You're all caught up.</p>}

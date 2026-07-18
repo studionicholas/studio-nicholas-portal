@@ -1535,6 +1535,7 @@ function MessagesPanel({ messages, meRole, onSend, onSendNotice, onReact, onPin,
   const [editText, setEditText] = useState("");
   const [noticeOpen, setNoticeOpen] = useState(false);
   const [noticeSent, setNoticeSent] = useState(false);
+  const [statusOpen, setStatusOpen] = useState(false); // studio: status editor collapsed behind one small button
   const [query, setQuery] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
   const [labelFilter, setLabelFilter] = useState(null);
@@ -1623,26 +1624,65 @@ function MessagesPanel({ messages, meRole, onSend, onSendNotice, onReact, onPin,
   return (
     <div className={fill ? "flex-1 min-h-0 flex flex-col" : ""}>
       {onSetCustomStatus ? (
-        <div className="mb-4 border border-stone-200 rounded-lg bg-white p-3 space-y-3">
-          <BlurField
-            label="Custom status note for this project (optional)"
-            value={customStatus}
-            onSave={onSetCustomStatus}
-            placeholder="e.g. We're finalising your lighting plan this week"
-          />
-          <label className="flex items-center justify-between gap-3 cursor-pointer">
-            <span className="text-[13px] text-stone-700">…or show the studio-wide status note</span>
-            <Toggle on={showStatus} onChange={() => onToggleStatus(!showStatus)} />
-          </label>
-          {resolvedStatus ? (
-            <div className="flex items-center gap-2 text-[12px] leading-snug rounded-[3px] px-3 py-1.5" style={{ backgroundColor: barColor, color: textOn(barColor) }}>
-              <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: textOn(barColor) }} />
-              {resolvedStatus}
+        <>
+          {/* One slim line: status (tap to edit) + current strip + formal notice */}
+          <div className="mb-2 flex items-center gap-2 min-w-0">
+            <button
+              type="button"
+              onClick={() => setStatusOpen((o) => !o)}
+              className="shrink-0 inline-flex items-center gap-1.5 text-[12px] rounded-[3px] px-3 py-1.5"
+              style={{ border: "1px solid #e6d8cf", background: statusOpen ? "#f2e9e2" : "#fffdfb", color: "#7a6f66" }}
+            >
+              <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: resolvedStatus ? barColor : "#c9b9ae" }} />
+              Status
+            </button>
+            {resolvedStatus && !statusOpen ? (
+              <span className="flex-1 min-w-0 truncate text-[10.5px] leading-tight rounded-[3px] px-2.5 py-[5px]" style={{ backgroundColor: barColor, color: textOn(barColor) }}>
+                {resolvedStatus}
+              </span>
+            ) : (
+              <span className="flex-1" />
+            )}
+            {onSendNotice && !noticeOpen && (
+              <>
+                {noticeSent && <span className="shrink-0 text-[11px] text-[#576B45]">Sent ✓</span>}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setNoticeOpen(true);
+                    setNoticeSent(false);
+                  }}
+                  className="shrink-0 inline-flex items-center gap-1.5 text-[12px] rounded-[3px] px-3 py-1.5"
+                  style={{ border: "1px solid #e6d8cf", background: "#fffdfb", color: "#b26f52" }}
+                >
+                  <FileText className="w-3.5 h-3.5" /> Formal notice
+                </button>
+              </>
+            )}
+          </div>
+          {statusOpen && (
+            <div className="mb-3 rounded-[3px] p-3 space-y-3" style={{ background: "#fffdfb", border: "1px solid #e6d8cf" }}>
+              <BlurField
+                label="Custom status note for this project (optional)"
+                value={customStatus}
+                onSave={onSetCustomStatus}
+                placeholder="e.g. We're finalising your lighting plan this week"
+              />
+              <label className="flex items-center justify-between gap-3 cursor-pointer">
+                <span className="text-[13px] text-stone-700">…or show the studio-wide status note</span>
+                <Toggle on={showStatus} onChange={() => onToggleStatus(!showStatus)} />
+              </label>
+              {resolvedStatus ? (
+                <div className="flex items-center gap-2 text-[12px] leading-snug rounded-[3px] px-3 py-1.5" style={{ backgroundColor: barColor, color: textOn(barColor) }}>
+                  <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: textOn(barColor) }} />
+                  {resolvedStatus}
+                </div>
+              ) : (
+                <p className="text-[11px] text-stone-400">Nothing shows to this client right now. A custom note takes priority over the studio-wide one.</p>
+              )}
             </div>
-          ) : (
-            <p className="text-[11px] text-stone-400">Nothing shows to this client right now. A custom note takes priority over the studio-wide one.</p>
           )}
-        </div>
+        </>
       ) : resolvedStatus ? (
         <div className="mb-2 flex items-center gap-1.5 text-[10.5px] leading-tight rounded-[3px] px-2.5 py-[3px] min-w-0 shrink-0" style={{ backgroundColor: barColor, color: textOn(barColor) }}>
           <span className="w-[5px] h-[5px] rounded-full shrink-0" style={{ backgroundColor: textOn(barColor) }} />
@@ -2029,21 +2069,6 @@ function MessagesPanel({ messages, meRole, onSend, onSendNotice, onReact, onPin,
         })}
       </div>
 
-      {meRole === "studio" && onSendNotice && !noticeOpen && (
-        <div className="flex items-center justify-end gap-2 mb-2">
-          {noticeSent && <span className="text-[12px] text-[#576B45]">Notice sent — emailed to your clients ✓</span>}
-          <button
-            type="button"
-            onClick={() => {
-              setNoticeOpen(true);
-              setNoticeSent(false);
-            }}
-            className="inline-flex items-center gap-1.5 text-[12px] text-stone-500 border border-stone-300 rounded-lg px-3 py-1.5 hover:bg-stone-100"
-          >
-            <FileText className="w-3.5 h-3.5" /> Formal notice
-          </button>
-        </div>
-      )}
       {meRole === "studio" && onSendNotice && noticeOpen && (
         <NoticeComposer
           hasPrograma={!!programaUrl}

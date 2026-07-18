@@ -1589,7 +1589,7 @@ function MessagesPanel({ messages, meRole, onSend, onSendNotice, onReact, onPin,
   }
 
   return (
-    <div>
+    <div className={fill ? "flex-1 min-h-0 flex flex-col" : ""}>
       {onSetCustomStatus ? (
         <div className="mb-4 border border-stone-200 rounded-lg bg-white p-3 space-y-3">
           <BlurField
@@ -1612,9 +1612,9 @@ function MessagesPanel({ messages, meRole, onSend, onSendNotice, onReact, onPin,
           )}
         </div>
       ) : resolvedStatus ? (
-        <div className="mb-3 flex items-center gap-2 text-[12px] leading-snug rounded-[3px] px-3 py-1.5" style={{ backgroundColor: barColor, color: textOn(barColor) }}>
-          <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: textOn(barColor) }} />
-          {resolvedStatus}
+        <div className="mb-2 flex items-center gap-1.5 text-[10.5px] leading-tight rounded-[3px] px-2.5 py-[3px] min-w-0 shrink-0" style={{ backgroundColor: barColor, color: textOn(barColor) }}>
+          <span className="w-[5px] h-[5px] rounded-full shrink-0" style={{ backgroundColor: textOn(barColor) }} />
+          <span className="truncate">{resolvedStatus}</span>
         </div>
       ) : null}
 
@@ -1718,7 +1718,7 @@ function MessagesPanel({ messages, meRole, onSend, onSendNotice, onReact, onPin,
       <div
         ref={listRef}
         onScroll={onListScroll}
-        className={`space-y-2 mb-4 overflow-y-auto overflow-x-hidden rounded-[3px] p-3.5 ${fill ? "h-[52vh] md:h-[58vh]" : "max-h-[420px]"}`}
+        className={`space-y-2 mb-3 overflow-y-auto overflow-x-hidden rounded-[3px] p-3.5 ${fill ? "flex-1 min-h-[120px]" : "max-h-[420px]"}`}
         style={{ border: "1px solid #e6d8cf", background: "#fbf7f3" }}
       >
         {messages.length === 0 && <EmptyState text="No messages yet." />}
@@ -2084,7 +2084,7 @@ function MessagesPanel({ messages, meRole, onSend, onSendNotice, onReact, onPin,
       )}
 
       {view === "photos" && (
-        <div>
+        <div className={fill ? "flex-1 min-h-0 overflow-y-auto" : ""}>
           {photoTagList.length > 0 && (
             <div className="flex flex-wrap gap-1.5 mb-3">
               <button
@@ -3180,7 +3180,10 @@ function ClientDashboard({ project, viewerEmail, studioStatus, studioStatusColor
   const heroIsPhoto = project.heroStyle === "photo" && project.heroPhoto;
 
   return (
-    <div className="min-h-screen overflow-x-hidden flex flex-col" style={{ background: "#f7f2ef", fontFamily: "Selva, Georgia, serif", color: "#2a221c" }}>
+    <div
+      className={`${activeTab === "messages" ? "h-screen overflow-hidden" : "min-h-screen"} overflow-x-hidden flex flex-col`}
+      style={{ background: "#f7f2ef", fontFamily: "Selva, Georgia, serif", color: "#2a221c" }}
+    >
       <header className="sticky top-0 z-10" style={{ background: "rgba(247,242,239,0.95)", backdropFilter: "blur(6px)", borderBottom: "1px solid #e6d8cf" }}>
         <div className="max-w-[1000px] mx-auto px-5 py-2 flex items-center justify-between gap-3">
           <img src="/sn-wordmark-static.png" alt="Studio Nicholas" style={{ width: 112, height: "auto" }} />
@@ -3227,7 +3230,7 @@ function ClientDashboard({ project, viewerEmail, studioStatus, studioStatusColor
         )}
       </div>
 
-      <div className="max-w-[1000px] mx-auto px-5 w-full">
+      <div className={`max-w-[1000px] mx-auto px-5 w-full ${activeTab === "messages" ? "flex-1 min-h-0 flex flex-col" : ""}`}>
         {notifPerm === "default" && (
           <div className="mt-3 flex items-center gap-3 rounded-[3px] px-3.5 py-2.5" style={{ background: "#fffdfb", border: "1px solid #e6d8cf" }}>
             <Bell className="w-4 h-4 shrink-0" style={{ color: "#b26f52" }} />
@@ -3279,7 +3282,10 @@ function ClientDashboard({ project, viewerEmail, studioStatus, studioStatusColor
           </div>
         )}
 
-        <div className={activeTab === "messages" ? "pt-4" : "pt-6"} style={{ paddingBottom: isDesktop ? 32 : activeTab === "messages" ? 88 : 110 }}>
+        <div
+          className={activeTab === "messages" ? "pt-2 flex-1 min-h-0 flex flex-col" : "pt-6"}
+          style={{ paddingBottom: activeTab === "messages" ? (isDesktop ? 16 : 84) : isDesktop ? 32 : 110 }}
+        >
           {activeTab === "updates" && (
             <div>
               {project.updates.length === 0 && <EmptyState text="No project updates yet. They'll appear here as soon as they're posted." />}
@@ -3426,6 +3432,7 @@ function ClientDashboard({ project, viewerEmail, studioStatus, studioStatusColor
 
           {activeTab === "messages" && (
             <MessagesPanel
+              fill
               messages={project.messages}
               meRole="client"
               draftKey={`client_${project.code}`}

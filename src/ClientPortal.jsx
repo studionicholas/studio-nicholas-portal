@@ -5121,13 +5121,13 @@ function AdminBell({ projects, onOpen, boxed }) {
     <div className="relative">
       <button
         onClick={() => setOpen((o) => !o)}
-        className={boxed ? "relative w-10 h-10 rounded-[3px] flex items-center justify-center" : "relative p-1.5"}
-        style={boxed ? { border: "1px solid #e6d8cf", background: "#fffdfb", color: "#7a6f66" } : { color: "#7a6f66" }}
+        className={boxed ? "relative w-9 h-9 flex items-center justify-center" : "relative p-1.5"}
+        style={{ color: "#7a6f66" }}
         aria-label="Studio notifications"
       >
-        <Bell className={boxed ? "w-[17px] h-[17px]" : "w-5 h-5"} strokeWidth={1.8} />
+        <Bell className={boxed ? "w-[19px] h-[19px]" : "w-5 h-5"} strokeWidth={1.8} />
         {total > 0 && (
-          <span className="absolute -top-1 -right-1 min-w-[17px] h-[17px] px-1 rounded-full text-[10px] flex items-center justify-center" style={{ background: "#811618", color: "#fffdfb" }}>{total}</span>
+          <span className="absolute top-0 right-0 min-w-[17px] h-[17px] px-1 rounded-full text-[10px] flex items-center justify-center" style={{ background: "#811618", color: "#fffdfb" }}>{total}</span>
         )}
       </button>
       {open && (
@@ -5872,36 +5872,60 @@ function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioSt
         )}
         {effView === "project" && project && (
           <>
-            <div className="flex items-center gap-2.5 pl-3 pr-[18px] md:px-[26px] pt-3.5 pb-3" style={{ borderBottom: "1px solid #e6d8cf" }}>
-              {!isDesktop && (
-                <button onClick={goHome} className="p-1.5 flex" style={{ color: "#7a6f66" }} aria-label="Back to projects">
-                  <ChevronLeft className="w-[18px] h-[18px]" />
-                </button>
-              )}
-              <p className="flex-1 truncate text-[20px] md:text-[24px] leading-none" style={{ fontStyle: "italic", fontWeight: 300 }}>
-                {project.name}
-              </p>
-              {project.stage && (
-                <span className="text-[11px] px-2.5 py-1 rounded-full whitespace-nowrap shrink-0" style={{ background: chip.t, color: chip.c }}>
-                  {project.stage}
-                </span>
-              )}
-            </div>
-            {isDesktop && (
-              <div className="flex gap-[26px] px-[28px]" style={{ borderBottom: "1px solid #e6d8cf" }}>
-                {ADMIN_TABS.map((t) => {
-                  const active = adminTab === t.id;
-                  const badge = t.id === "messages" ? unreadForStudio(project) : 0;
-                  return (
-                    <button key={t.id} onClick={() => setAdminTab(t.id)} className="flex items-center gap-1.5 text-[14px] pt-3 pb-[11px]" style={{ color: active ? "#2a221c" : "#a89d95", borderBottom: `2px solid ${active ? "#b26f52" : "transparent"}`, fontWeight: active ? 500 : 400 }}>
-                      {t.label}
-                      {badge > 0 && <span className="min-w-[16px] h-4 px-1 rounded-full text-[10px] flex items-center justify-center" style={{ background: "#811618", color: "#fffdfb" }}>{badge}</span>}
+            {/* Flat-colour banner — same treatment as the client side */}
+            {(() => {
+              const heroColor = project.heroColor || "#7fa2ab";
+              const heroIsPhoto = project.heroStyle === "photo" && project.heroPhoto;
+              return (
+                <div className="relative overflow-hidden shrink-0" style={{ height: isDesktop ? 110 : 88, background: heroIsPhoto ? "#1C1A17" : heroColor }}>
+                  {heroIsPhoto && <img src={project.heroPhoto} alt="" className="absolute inset-0 w-full h-full object-cover" style={{ opacity: 0.9 }} />}
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <p className="px-12 text-center truncate max-w-full" style={{ fontSize: isDesktop ? 28 : 20, fontStyle: "italic", fontWeight: 300, color: "#e9edee", textShadow: heroIsPhoto ? "0 1px 8px rgba(0,0,0,0.5)" : "none" }}>
+                      {project.name}
+                    </p>
+                  </div>
+                  {!isDesktop && (
+                    <button onClick={goHome} className="absolute top-2 left-2 w-9 h-9 flex items-center justify-center" style={{ color: "rgba(255,253,251,0.9)" }} aria-label="Back to projects">
+                      <ChevronLeft className="w-5 h-5" />
                     </button>
-                  );
-                })}
+                  )}
+                  {project.stage && (
+                    <span className="absolute top-2.5 right-3 text-[9px] sm:text-[11px] px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full whitespace-nowrap" style={{ background: chip.t, color: chip.c }}>
+                      {project.stage}
+                    </span>
+                  )}
+                  <p className="absolute bottom-1.5 left-0 right-0 text-center text-[9px]" style={{ fontStyle: "italic", color: "rgba(255,253,251,0.7)" }}>
+                    {project.code}
+                    {project.address || project.location ? ` · ${project.address || project.location}` : ""}
+                  </p>
+                </div>
+              );
+            })()}
+            {isDesktop && (
+              <div className="shrink-0 px-5 pt-3.5">
+                <div className="max-w-[980px] mx-auto flex rounded-[14px] p-[5px]" style={{ background: "#fffdfb", border: "1px solid #e6d8cf", boxShadow: "0 12px 28px -16px rgba(28,26,23,0.3)" }}>
+                  {ADMIN_TABS.map((t) => {
+                    const active = adminTab === t.id;
+                    const badge = t.id === "messages" ? unreadForStudio(project) : 0;
+                    return (
+                      <button
+                        key={t.id}
+                        onClick={() => setAdminTab(t.id)}
+                        className="flex-1 flex items-center justify-center gap-1.5 text-[14px] py-[9px] rounded-[10px]"
+                        style={{ background: active ? "#2a221c" : "transparent", color: active ? "#f7f2ef" : "#7a6f66", fontWeight: active ? 500 : 400 }}
+                      >
+                        {t.label}
+                        {badge > 0 && <span className="min-w-[16px] h-4 px-1 rounded-full text-[10px] flex items-center justify-center" style={{ background: "#811618", color: "#fffdfb" }}>{badge}</span>}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             )}
-            <div className={`flex-1 overflow-y-auto p-5 ${adminTab === "messages" ? "flex flex-col pb-3" : "pb-10"}`}>
+            <div
+              className={`flex-1 overflow-y-auto p-5 ${adminTab === "messages" ? "flex flex-col" : ""}`}
+              style={{ paddingBottom: adminTab === "messages" ? (isDesktop ? 12 : 84) : isDesktop ? 40 : 110 }}
+            >
               <div className="w-full mx-auto flex-1 flex flex-col min-h-0" style={{ maxWidth: isDesktop ? 980 : 640 }}>
 
             {adminTab === "details" && (
@@ -6158,20 +6182,22 @@ function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioSt
               </div>
             </div>
 
-            {/* Mobile bottom tab bar — all six tabs one thumb-tap away */}
+            {/* Mobile: floating tab bar — same treatment as the client side */}
             {!isDesktop && (
-              <div className="flex shrink-0 px-1 pt-2" style={{ borderTop: "1px solid #e6d8cf", background: "#fffdfb", paddingBottom: "calc(12px + env(safe-area-inset-bottom))" }}>
+              <div className="absolute z-40 flex rounded-[14px] px-1 py-[5px]" style={{ left: 14, right: 14, bottom: "calc(14px + env(safe-area-inset-bottom))", background: "#fffdfb", border: "1px solid #e6d8cf", boxShadow: "0 18px 40px -12px rgba(28,26,23,0.45)" }}>
                 {ADMIN_TABS.map((t) => {
                   const active = adminTab === t.id;
                   const badge = t.id === "messages" ? unreadForStudio(project) : 0;
-                  const TabIcon = t.icon;
                   return (
-                    <button key={t.id} onClick={() => setAdminTab(t.id)} className="flex-1 flex flex-col items-center gap-[3px] py-1 relative" style={{ color: active ? "#2a221c" : "#a89d95" }}>
-                      <TabIcon className="w-[19px] h-[19px]" strokeWidth={1.9} />
-                      <span className="text-[10px]" style={{ fontWeight: active ? 500 : 400 }}>{t.label}</span>
-                      {active ? <span className="w-4 h-0.5 rounded-[1px]" style={{ background: "#b26f52" }} /> : <span className="w-4 h-0.5" />}
+                    <button
+                      key={t.id}
+                      onClick={() => setAdminTab(t.id)}
+                      className="flex-1 flex items-center justify-center rounded-[10px] relative mx-0.5"
+                      style={{ background: active ? "#2a221c" : "transparent", color: active ? "#f7f2ef" : "#7a6f66", padding: "11px 2px" }}
+                    >
+                      <span className="text-[11.5px]" style={{ fontWeight: active ? 500 : 400 }}>{t.label}</span>
                       {badge > 0 && (
-                        <span className="absolute top-0 right-3.5 min-w-[16px] h-4 px-1 rounded-full text-[9.5px] flex items-center justify-center" style={{ background: "#811618", color: "#fffdfb" }}>{badge}</span>
+                        <span className="absolute top-0 right-2 min-w-[16px] h-4 px-1 rounded-full text-[9.5px] flex items-center justify-center" style={{ background: "#811618", color: "#fffdfb" }}>{badge}</span>
                       )}
                     </button>
                   );

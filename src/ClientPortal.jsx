@@ -1228,7 +1228,7 @@ const NOTIF_ICON = { update: ImageIcon, fee: FileText, file: Paperclip, meeting:
 // Which client tab each notification type jumps to when tapped.
 const NOTIF_TAB = { update: "updates", fee: "fee", file: "fee", meeting: "meetings", milestone: "timeline", message: "messages" };
 
-function NotifBell({ notifications, onOpen, onNavigate, onDismiss }) {
+function NotifBell({ notifications, onOpen, onNavigate, onDismiss, boxed }) {
   const [open, setOpen] = useState(false);
   const unread = notifications.filter((n) => !n.read).length;
   const list = [...notifications].sort((a, b) => new Date(b.date) - new Date(a.date));
@@ -1241,12 +1241,13 @@ function NotifBell({ notifications, onOpen, onNavigate, onDismiss }) {
           setOpen(next);
           if (next) onOpen();
         }}
-        className="relative text-stone-500 hover:text-stone-800"
+        className={boxed ? "relative w-10 h-10 rounded-[3px] flex items-center justify-center" : "relative text-stone-500 hover:text-stone-800"}
+        style={boxed ? { border: "1px solid #e6d8cf", background: "#fffdfb", color: "#7a6f66" } : undefined}
         aria-label="Notifications"
       >
-        <Bell className="w-5 h-5" />
+        <Bell className={boxed ? "w-[17px] h-[17px]" : "w-5 h-5"} strokeWidth={boxed ? 1.8 : 2} />
         {unread > 0 && (
-          <span className="absolute -top-1.5 -right-1.5 min-w-[16px] h-[16px] px-1 rounded-full bg-[#B7453C] text-white text-[10px] leading-[16px] text-center">
+          <span className="absolute -top-1 -right-1 min-w-[17px] h-[17px] px-1 rounded-full text-[10px] flex items-center justify-center" style={{ background: "#811618", color: "#fffdfb" }}>
             {unread}
           </span>
         )}
@@ -1745,9 +1746,15 @@ function MessagesPanel({ messages, meRole, onSend, onSendNotice, onReact, onPin,
                 className={
                   isNotice
                     ? "w-full rounded-xl border border-[#e2d8cd] bg-[#F7F0EC] px-5 py-6 text-[14px] text-stone-800 text-center"
-                    : `max-w-[80%] rounded-xl px-4 py-2.5 text-[14px] ${mine ? "bg-stone-900 text-white" : "bg-white border border-stone-200 text-stone-800"}`
+                    : `max-w-[80%] px-4 py-2.5 text-[14px] ${mine ? "text-[#efefec]" : "text-stone-800"}`
                 }
-                style={isNotice ? { animation: "snFadeUp .6s cubic-bezier(.2,.7,.2,1) both" } : undefined}
+                style={
+                  isNotice
+                    ? { animation: "snFadeUp .6s cubic-bezier(.2,.7,.2,1) both" }
+                    : mine
+                      ? { background: "#576b45", borderRadius: "12px 3px 12px 12px" }
+                      : { background: "#fffdfb", border: "1px solid #e6d8cf", borderRadius: "3px 12px 12px 12px" }
+                }
               >
                 {isNotice && (
                   <div className="mb-3.5">
@@ -2487,52 +2494,33 @@ function Timeline({ milestones }) {
 
       <div>
         {sorted.map((m, i) => {
-          const s = milestoneStatus(m.status);
-          const last = i === total - 1;
+          const done = m.status === "done";
+          const cur = m.status === "current";
           return (
-            <div key={m.id} className="relative pl-12 pb-6 last:pb-0">
-              {!last && (
-                <span className="absolute left-[15px] top-9 bottom-0 w-0.5" style={{ backgroundColor: m.status === "done" ? "#576B45" : "#E7E5E4" }} />
-              )}
-              <span
-                className="absolute left-0 top-0 w-8 h-8 rounded-full flex items-center justify-center"
-                style={{ backgroundColor: m.status === "upcoming" ? "#fff" : s.tint, border: `2px solid ${s.color}` }}
-              >
-                {m.status === "done" ? (
-                  <Check className="w-4 h-4" style={{ color: s.color }} />
-                ) : m.status === "current" ? (
-                  <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: s.color }} />
-                ) : (
-                  <Flag className="w-3.5 h-3.5" style={{ color: s.color }} />
-                )}
-              </span>
-
-              <div className="border border-stone-200 rounded-xl bg-white p-4">
-                <div className="flex items-center justify-between gap-3 mb-1">
-                  <span className="text-[12px] text-stone-400">
+            <div key={m.id} className="flex gap-3.5">
+              <div className="flex flex-col items-center shrink-0">
+                <span className="shrink-0" style={{ width: 14, height: 14, borderRadius: 7, marginTop: 3, boxSizing: "border-box", background: done ? "#576b45" : cur ? "#fffdfb" : "#e6d8cf", border: `2px solid ${done ? "#576b45" : cur ? "#b26f52" : "#e6d8cf"}` }} />
+                {i < total - 1 && <span style={{ width: 1.5, flex: 1, background: done ? "#576b45" : "#e6d8cf" }} />}
+              </div>
+              <div className="flex-1 min-w-0 pb-5">
+                <div className="flex justify-between items-baseline gap-2.5">
+                  <p className="text-[16px]" style={{ color: done || cur ? "#2a221c" : "#55483e", fontWeight: cur ? 500 : 400 }}>{m.title}</p>
+                  <span className="text-[12px] whitespace-nowrap shrink-0" style={{ color: done ? "#576b45" : cur ? "#b26f52" : "#a89d95" }}>
+                    {done ? "Done · " : cur ? "Now · " : ""}
                     {formatDate(m.date)}
                     {m.endDate ? ` – ${formatDate(m.endDate)}` : ""}
                   </span>
-                  <span className="text-[11px] rounded-full px-2.5 py-0.5" style={{ color: s.color, backgroundColor: s.tint }}>
-                    {s.label}
-                  </span>
                 </div>
-                <h4 className="text-[17px] text-stone-900" style={{ fontFamily: "Selva, Georgia, serif", fontStyle: "italic" }}>
-                  {m.title}
-                </h4>
-                {m.note && <p className="text-[13px] text-stone-500 leading-relaxed mt-1">{m.note}</p>}
+                {m.note && <p className="text-[12.5px] mt-0.5 leading-relaxed" style={{ color: "#7a6f66" }}>{m.note}</p>}
                 {Array.isArray(m.deliverables) && m.deliverables.filter(Boolean).length > 0 && (
-                  <div className="mt-3">
-                    <p className="text-[11px] text-stone-400 uppercase tracking-wide mb-1.5">Deliverables</p>
-                    <ul className="space-y-1">
-                      {m.deliverables.filter(Boolean).map((d, di) => (
-                        <li key={di} className="flex gap-2 text-[13px] text-stone-600 leading-relaxed">
-                          <span className="mt-1.5 w-1 h-1 rounded-full bg-[#576B45] shrink-0" />
-                          <span>{d}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
+                  <ul className="mt-2 space-y-1">
+                    {m.deliverables.filter(Boolean).map((d, di) => (
+                      <li key={di} className="flex gap-2 text-[13px] leading-relaxed" style={{ color: "#55483e" }}>
+                        <span className="mt-[7px] w-1 h-1 rounded-full shrink-0" style={{ background: "#576b45" }} />
+                        <span>{d}</span>
+                      </li>
+                    ))}
+                  </ul>
                 )}
               </div>
             </div>
@@ -2982,7 +2970,22 @@ function EnablePushBanner({ email }) {
 }
 
 function ClientDashboard({ project, viewerEmail, studioStatus, studioStatusColor, autoStatus, onLogout, onSetEmailNotify, onSendMessage, onReactMessage, onPinMessage, onMarkRead, onMarkNotifs, onDismissNotif, onSeenTab, onUploadSigned, onSignProposal, onRespondMeeting, onRequestMeeting, onEditRequest, onAcceptRequest, onDismissRequest, installOpen }) {
-  const [tab, setTab] = useState("about");
+  // Last-viewed tab is remembered per device (client redesign) and restored on
+  // open; notification deep-links overwrite it.
+  const [tab, setTab] = useState(() => {
+    try {
+      const s = JSON.parse(localStorage.getItem("sn-client-session") || "null");
+      return (s && s.code === project.code && s.tab) || "about";
+    } catch (_e) {
+      return "about";
+    }
+  });
+  const [isDesktop, setIsDesktop] = useState(() => typeof window !== "undefined" && window.innerWidth >= 900);
+  useEffect(() => {
+    const onR = () => setIsDesktop(window.innerWidth >= 900);
+    window.addEventListener("resize", onR);
+    return () => window.removeEventListener("resize", onR);
+  }, []);
   const [lightbox, setLightbox] = useState(null);
   const [prefillMsg, setPrefillMsg] = useState("");
   function askAboutUpdate(u) {
@@ -3067,6 +3070,12 @@ function ClientDashboard({ project, viewerEmail, studioStatus, studioStatusColor
   ];
   const tabs = allTabs.filter((t) => features[t.id] !== false);
   const activeTab = tabs.some((t) => t.id === tab) ? tab : tabs[0]?.id;
+  // Remember where they are (per device, per project).
+  useEffect(() => {
+    try {
+      localStorage.setItem("sn-client-session", JSON.stringify({ code: project.code, tab: activeTab }));
+    } catch (_e) {}
+  }, [activeTab, project.code]);
 
   // Opening a tab clears its red dot (marks that tab's notifications seen).
   // Also watches the unread count for the current tab, so an alert that arrives
@@ -3084,128 +3093,131 @@ function ClientDashboard({ project, viewerEmail, studioStatus, studioStatusColor
     else if (unreadHere > 0) onSeenTab(activeTab);
   }, [activeTab, unreadHere, needsSeenStamp, onMarkRead, onSeenTab]);
 
+  // Hero banner (client redesign): a flat brand colour with the project name in
+  // italic Selva by default; the studio can switch a project to its photo
+  // instead (Details tab). Existing projects keep working either way.
+  const heroColor = project.heroColor || "#7fa2ab";
+  const heroIsPhoto = project.heroStyle === "photo" && project.heroPhoto;
+
   return (
-    <div className="min-h-screen bg-[#F7F0EC] overflow-x-hidden">
-      <header className="border-b border-stone-200 bg-[#F7F0EC]/95 backdrop-blur sticky top-0 z-10">
-        <div className="max-w-3xl mx-auto px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between gap-2">
-          <Logo />
-          <div className="flex items-center gap-3 sm:gap-4 shrink-0">
+    <div className="min-h-screen overflow-x-hidden flex flex-col" style={{ background: "#f7f2ef", fontFamily: "Selva, Georgia, serif", color: "#2a221c" }}>
+      <header className="sticky top-0 z-10" style={{ background: "rgba(247,242,239,0.95)", backdropFilter: "blur(6px)", borderBottom: "1px solid #e6d8cf" }}>
+        <div className="max-w-[1000px] mx-auto px-5 py-2 flex items-center justify-between gap-3">
+          <img src="/sn-wordmark-static.png" alt="Studio Nicholas" style={{ width: 112, height: "auto" }} />
+          <div className="flex items-center gap-2 shrink-0">
             <NotifBell
               notifications={project.notifications}
               onOpen={onMarkNotifs}
               onNavigate={(type) => setTab(NOTIF_TAB[type] || "updates")}
               onDismiss={onDismissNotif}
+              boxed
             />
-            <button onClick={onLogout} className="text-stone-400 hover:text-stone-700 text-[13px] flex items-center gap-1 shrink-0">
-              <LogOut className="w-4 h-4 sm:w-3.5 sm:h-3.5" /> <span className="hidden sm:inline">Logout</span>
+            <button onClick={onLogout} className="h-10 px-3 text-[13px]" style={{ color: "#a89d95" }}>
+              Log out
             </button>
           </div>
         </div>
       </header>
 
-      <div className="relative h-48 sm:h-72 overflow-hidden">
-        <img src={project.heroPhoto} alt="" className="w-full h-full object-cover" />
-        {/* Top overlays: status (left), account email (right) */}
+      {/* Hero banner — flat colour + typed name (default) or the project photo */}
+      <div className="relative overflow-hidden shrink-0" style={{ height: isDesktop ? 150 : 118, background: heroIsPhoto ? "#1C1A17" : heroColor }}>
+        {heroIsPhoto && <img src={project.heroPhoto} alt="" className="absolute inset-0 w-full h-full object-cover" style={{ opacity: 0.9 }} />}
+        <div className="absolute inset-0 flex items-center justify-center">
+          <p className="px-5 text-center" style={{ fontSize: isDesktop ? 34 : 24, fontStyle: "italic", fontWeight: 300, color: "#e9edee", textShadow: heroIsPhoto ? "0 1px 8px rgba(0,0,0,0.5)" : "none" }}>
+            {project.name}
+          </p>
+        </div>
         <div className="absolute top-0 left-0 right-0">
-          <div className="max-w-3xl mx-auto px-4 sm:px-6 pt-3 sm:pt-4 flex items-start justify-between gap-2">
+          <div className="max-w-[1000px] mx-auto px-5 pt-3.5 flex items-start justify-between gap-2.5">
             <StageBadge stage={project.stage} color={project.stageColor} />
-            <span className="inline-flex items-center gap-1.5 text-[11px] sm:text-[12px] text-white bg-black/35 backdrop-blur rounded-full px-2.5 py-1 min-w-0 max-w-[55vw] sm:max-w-none">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#9DBE7E] shrink-0" />
+            <span className="inline-flex items-center gap-1.5 text-[11.5px] rounded-full px-2.5 py-1 min-w-0" style={{ color: "#fffdfb", background: "rgba(20,15,11,0.22)", maxWidth: "55vw" }}>
+              <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: "#9DBE7E" }} />
               <span className="truncate">{viewerEmail || project.clientEmail}</span>
             </span>
           </div>
         </div>
-        {/* Bottom: full address */}
-        <div className="absolute bottom-0 left-0 right-0 px-4 sm:px-6 py-3.5 max-w-3xl mx-auto w-full">
-          <p className="text-white text-[12px] sm:text-[13px] leading-snug" style={{ fontFamily: "Selva, Georgia, serif", fontStyle: "italic", textShadow: "0 1px 6px rgba(0,0,0,0.6)" }}>
-            {project.address || project.location}
-          </p>
-        </div>
+        {(project.address || project.location) && (
+          <div className="absolute bottom-0 left-0 right-0 pointer-events-none">
+            <div className="max-w-[1000px] mx-auto px-5 pb-3 text-center">
+              <p className="text-[12.5px]" style={{ fontStyle: "italic", color: "rgba(255,253,251,0.85)", textShadow: heroIsPhoto ? "0 1px 6px rgba(0,0,0,0.5)" : "none" }}>
+                {project.address || project.location}
+              </p>
+            </div>
+          </div>
+        )}
       </div>
 
-      <div className="max-w-3xl mx-auto px-4 sm:px-6">
+      <div className="max-w-[1000px] mx-auto px-5 w-full">
         {notifPerm === "default" && (
-          <div className="mt-3 flex items-center gap-3 bg-white border border-stone-200 rounded-lg px-3.5 py-2.5">
-            <Bell className="w-4 h-4 text-[#B7453C] shrink-0" />
+          <div className="mt-3 flex items-center gap-3 rounded-[3px] px-3.5 py-2.5" style={{ background: "#fffdfb", border: "1px solid #e6d8cf" }}>
+            <Bell className="w-4 h-4 shrink-0" style={{ color: "#b26f52" }} />
             <div className="min-w-0 flex-1">
-              <p className="text-[13px] text-stone-800">Turn on notifications</p>
-              <p className="text-[11px] text-stone-400">Get a pop-up when there's a new message or update.</p>
+              <p className="text-[13px]">Turn on notifications</p>
+              <p className="text-[11px]" style={{ color: "#a89d95" }}>Get a pop-up when there's a new message or update.</p>
             </div>
-            <button
-              disabled={notifBusy}
-              onClick={turnOnNotifs}
-              className="shrink-0 bg-stone-900 text-white text-[12px] rounded-lg px-3 py-1.5 hover:bg-stone-800 disabled:opacity-50"
-            >
+            <button disabled={notifBusy} onClick={turnOnNotifs} className="shrink-0 text-[12px] rounded-[3px] px-3 py-1.5 disabled:opacity-50" style={{ background: "#576b45", color: "#efefec" }}>
               {notifBusy ? "…" : "Turn on"}
             </button>
           </div>
         )}
         {features.programa !== false && programaUrl && (
-          <div className="py-3.5 border-b border-stone-200">
+          <div style={{ borderBottom: "1px solid #e6d8cf", padding: "14px 0 18px 0" }}>
             <a
               href={programaUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="group flex items-center gap-2 rounded-lg px-3.5 py-3 transition-opacity hover:opacity-90"
-              style={{ backgroundColor: "#9BACB6" }}
+              className="flex items-center gap-2.5 rounded-[3px] px-4 py-3.5 transition-opacity hover:opacity-90"
+              style={{ backgroundColor: "#9BACB6", boxShadow: "0 10px 22px -14px rgba(28,26,23,0.45)" }}
             >
-              <div className="min-w-0 flex-1">
-                <p className="text-[13px]" style={{ color: "#1C1A17" }}>Programa dashboard</p>
-                <p className="text-[11px] truncate" style={{ color: "#1C1A17", opacity: 0.7 }}>Schedules, presentations, invoices &amp; documents</p>
-              </div>
-              <span className="shrink-0 inline-flex items-center gap-0.5 text-[12px]" style={{ color: "#1C1A17" }}>
-                Open <ChevronRight className="w-3.5 h-3.5" />
-              </span>
+              <p className="flex-1 min-w-0 truncate text-[13.5px]" style={{ color: "#1C1A17" }}>
+                Programa dashboard <span style={{ color: "rgba(28,26,23,0.65)" }}>— schedules, invoices &amp; documents</span>
+              </p>
+              <span className="shrink-0 text-[12.5px] whitespace-nowrap" style={{ color: "#1C1A17" }}>Open ›</span>
             </a>
           </div>
         )}
 
-        <div className="flex justify-between sm:justify-start gap-0.5 sm:gap-1.5 py-3.5 border-b border-stone-200">
-          {tabs.map((t) => {
-            const Icon = t.icon;
-            const active = activeTab === t.id;
-            return (
-              <button
-                key={t.id}
-                onClick={() => setTab(t.id)}
-                className={`relative whitespace-nowrap flex items-center gap-1 sm:gap-1.5 px-1.5 sm:px-4 py-1.5 sm:py-2 rounded-full text-[10px] sm:text-[13px] transition-colors ${
-                  active ? "bg-stone-900 text-white" : "text-stone-500 hover:bg-stone-100"
-                }`}
-              >
-                <Icon className="w-3.5 h-3.5 hidden sm:block" />
-                {t.label}
-                {t.badge > 0 && (
-                  <span
-                    className={`ml-0.5 inline-flex items-center justify-center min-w-[16px] h-[16px] px-1 rounded-full text-[10px] leading-none ${
-                      active ? "bg-white/25 text-white" : "bg-[#B7453C] text-white"
-                    }`}
-                  >
-                    {t.badge}
-                  </span>
-                )}
-              </button>
-            );
-          })}
-        </div>
+        {/* Desktop: segmented tab card. Mobile: floating bottom bar (below). */}
+        {isDesktop && (
+          <div className="flex mt-[18px] rounded-[14px] p-[5px]" style={{ background: "#fffdfb", border: "1px solid #e6d8cf", boxShadow: "0 12px 28px -16px rgba(28,26,23,0.3)" }}>
+            {tabs.map((t) => {
+              const active = activeTab === t.id;
+              return (
+                <button
+                  key={t.id}
+                  onClick={() => setTab(t.id)}
+                  className="flex-1 flex items-center justify-center gap-1.5 text-[14px] py-[9px] rounded-[10px]"
+                  style={{ background: active ? "#2a221c" : "transparent", color: active ? "#f7f2ef" : "#7a6f66", fontWeight: active ? 500 : 400 }}
+                >
+                  {t.label}
+                  {t.badge > 0 && (
+                    <span className="min-w-[16px] h-4 px-1 rounded-full text-[10px] flex items-center justify-center" style={{ background: "#811618", color: "#fffdfb" }}>{t.badge}</span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        )}
 
-        <div className={`pb-8 ${activeTab === "messages" ? "pt-4" : "pt-8"}`}>
+        <div className={activeTab === "messages" ? "pt-4" : "pt-6"} style={{ paddingBottom: isDesktop ? 32 : activeTab === "messages" ? 88 : 110 }}>
           {activeTab === "updates" && (
-            <div className="space-y-10">
+            <div>
               {project.updates.length === 0 && <EmptyState text="No project updates yet. They'll appear here as soon as they're posted." />}
               {[...project.updates].reverse().map((u) => (
-                <div key={u.id}>
-                  <p className="text-[12px] text-stone-400 mb-1">{formatDate(u.date)}</p>
-                  <h3 className="text-[19px] text-stone-900 mb-2" style={{ fontFamily: "Selva, Georgia, serif", fontStyle: "italic" }}>
+                <div key={u.id} className="rounded-[3px] p-[18px] mb-3.5" style={{ background: "#fffdfb", border: "1px solid #e6d8cf" }}>
+                  <p className="text-[12px] mb-0.5" style={{ color: "#a89d95" }}>{formatDate(u.date)}</p>
+                  <h3 className="text-[21px] mb-2" style={{ fontStyle: "italic", fontWeight: 300 }}>
                     {u.title}
                   </h3>
-                  <p className="text-[14px] text-stone-600 leading-relaxed mb-4">{u.note}</p>
+                  <p className="text-[14.5px] leading-relaxed mb-3" style={{ color: "#55483e" }}>{u.note}</p>
                   {u.photos?.length > 0 && (
-                    <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                    <div className={`grid gap-2 mb-3 ${isDesktop ? "grid-cols-4" : "grid-cols-3"}`}>
                       {u.photos.map((p, i) => (
                         <button
                           key={i}
                           onClick={() => setLightbox({ photos: u.photos, index: i })}
-                          className="aspect-square overflow-hidden rounded-lg bg-stone-100"
+                          className="aspect-square overflow-hidden rounded-[3px]"
+                          style={{ background: "#ece3dc" }}
                         >
                           <img src={p} alt="" className="w-full h-full object-cover hover:opacity-90 transition-opacity" />
                         </button>
@@ -3214,7 +3226,8 @@ function ClientDashboard({ project, viewerEmail, studioStatus, studioStatusColor
                   )}
                   <button
                     onClick={() => askAboutUpdate(u)}
-                    className="mt-3 inline-flex items-center gap-1.5 text-[13px] text-stone-500 hover:text-stone-900 border border-stone-200 hover:border-stone-300 rounded-full px-3 py-1.5 transition-colors"
+                    className="inline-flex items-center gap-1.5 text-[13px] rounded-[3px] px-3.5 py-2 transition-opacity hover:opacity-80"
+                    style={{ border: "1px solid #e6d8cf", background: "#fffdfb", color: "#7a6f66" }}
                   >
                     <Reply className="w-3.5 h-3.5" /> Ask a question about this
                   </button>
@@ -3355,6 +3368,28 @@ function ClientDashboard({ project, viewerEmail, studioStatus, studioStatusColor
           )}
         </div>
       </div>
+
+      {/* Mobile: floating tab bar hovering above the content */}
+      {!isDesktop && (
+        <div className="fixed z-40 flex rounded-[14px] px-1 py-[5px]" style={{ left: 14, right: 14, bottom: "calc(14px + env(safe-area-inset-bottom))", background: "#fffdfb", border: "1px solid #e6d8cf", boxShadow: "0 18px 40px -12px rgba(28,26,23,0.45)" }}>
+          {tabs.map((t) => {
+            const active = activeTab === t.id;
+            return (
+              <button
+                key={t.id}
+                onClick={() => setTab(t.id)}
+                className="flex-1 flex items-center justify-center rounded-[10px] relative mx-0.5"
+                style={{ background: active ? "#2a221c" : "transparent", color: active ? "#f7f2ef" : "#7a6f66", padding: "11px 2px" }}
+              >
+                <span className="text-[11.5px]" style={{ fontWeight: active ? 500 : 400 }}>{t.label}</span>
+                {t.badge > 0 && (
+                  <span className="absolute top-0 right-2 min-w-[16px] h-4 px-1 rounded-full text-[9.5px] flex items-center justify-center" style={{ background: "#811618", color: "#fffdfb" }}>{t.badge}</span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      )}
       {lightbox && (
         <Lightbox
           photos={lightbox.photos}
@@ -5642,6 +5677,30 @@ function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioSt
                 })}
                 <button onClick={() => setField(project.code, "stageColor", null)} className="text-[12px] text-stone-400 hover:text-stone-700 ml-1">
                   Reset
+                </button>
+              </div>
+            </div>
+
+            <div className="mb-8">
+              <p className="text-[12px] text-stone-400 mb-2">Client banner — a flat colour with the project name (default), or the project photo</p>
+              <div className="flex flex-wrap items-center gap-2">
+                {["#7fa2ab", "#576b45", "#b26f52", "#2a221c"].map((c) => (
+                  <button
+                    key={c}
+                    type="button"
+                    onClick={() => updateProject(project.code, (p) => ({ ...p, heroStyle: "colour", heroColor: c }))}
+                    className="w-7 h-7 rounded-full border-2 transition-transform hover:scale-110"
+                    style={{ backgroundColor: c, borderColor: project.heroStyle !== "photo" && (project.heroColor || "#7fa2ab") === c ? "#1c1917" : "transparent" }}
+                    aria-label="Banner colour"
+                  />
+                ))}
+                <button
+                  type="button"
+                  onClick={() => setField(project.code, "heroStyle", project.heroStyle === "photo" ? "colour" : "photo")}
+                  className="text-[12px] rounded-[3px] px-3 py-1.5 ml-1"
+                  style={{ border: "1px solid #e6d8cf", background: project.heroStyle === "photo" ? "#f2e9e2" : "#fffdfb", color: "#7a6f66" }}
+                >
+                  {project.heroStyle === "photo" ? "Using project photo ✓" : "Use project photo"}
                 </button>
               </div>
             </div>

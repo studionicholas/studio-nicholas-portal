@@ -1618,78 +1618,81 @@ function MessagesPanel({ messages, meRole, onSend, onSendNotice, onReact, onPin,
         </div>
       ) : null}
 
-      {photoItems.length > 0 && (
-        <div className="flex gap-1.5 mb-3">
-          <button
-            onClick={() => setView("chat")}
-            className={`flex items-center gap-1.5 text-[12px] rounded-full px-3 py-1 border ${view === "chat" ? "border-stone-900 bg-stone-900 text-white" : "border-stone-200 text-stone-500"}`}
-          >
-            <MessageSquare className="w-3.5 h-3.5" /> Messages
-          </button>
-          <button
-            onClick={() => setView("photos")}
-            className={`flex items-center gap-1.5 text-[12px] rounded-full px-3 py-1 border ${view === "photos" ? "border-stone-900 bg-stone-900 text-white" : "border-stone-200 text-stone-500"}`}
-          >
-            <Images className="w-3.5 h-3.5" /> Photos {photoItems.length}
-          </button>
+      {/* One toolbar line: view pills left, label filter + search right */}
+      {(photoItems.length > 0 || messages.length > 0) && (
+        <div className="mb-3 flex items-center gap-1.5 min-w-0">
+          {photoItems.length > 0 && (
+            <>
+              <button
+                onClick={() => setView("chat")}
+                className={`shrink-0 flex items-center gap-1.5 text-[12px] rounded-full px-3 py-1.5 border ${view === "chat" ? "border-stone-900 bg-stone-900 text-white" : "border-stone-200 text-stone-500"}`}
+              >
+                <MessageSquare className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Messages</span><span className="sm:hidden">Chat</span>
+              </button>
+              <button
+                onClick={() => setView("photos")}
+                className={`shrink-0 flex items-center gap-1.5 text-[12px] rounded-full px-3 py-1.5 border ${view === "photos" ? "border-stone-900 bg-stone-900 text-white" : "border-stone-200 text-stone-500"}`}
+              >
+                <Images className="w-3.5 h-3.5" /> Photos {photoItems.length}
+              </button>
+            </>
+          )}
+          {view === "chat" && messages.length > 0 && (
+            <div className="ml-auto flex items-center justify-end gap-1.5 min-w-0 flex-1">
+              {labels.length > 0 && (
+                <select
+                  value={labelFilter || ""}
+                  onChange={(e) => setLabelFilter(e.target.value || null)}
+                  className="shrink min-w-0 max-w-[110px] text-[12px] rounded-lg border border-stone-300 bg-white px-2 py-1.5 text-stone-600 focus:outline-none focus:ring-2 focus:ring-[#B7453C]"
+                >
+                  <option value="">All labels</option>
+                  {labels.map((l) => (
+                    <option key={l} value={l}>
+                      {l}
+                    </option>
+                  ))}
+                </select>
+              )}
+              {searchOpen ? (
+                <div className="relative w-full max-w-[190px] min-w-[110px]">
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-stone-400" />
+                  <input
+                    autoFocus
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    onBlur={() => {
+                      if (!query) setSearchOpen(false);
+                    }}
+                    placeholder="Search…"
+                    className="w-full pl-8 pr-7 py-1.5 rounded-lg border border-stone-300 text-[13px] focus:outline-none focus:ring-2 focus:ring-[#B7453C]"
+                  />
+                  <button
+                    onClick={() => {
+                      setQuery("");
+                      setSearchOpen(false);
+                    }}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-700"
+                    aria-label="Close search"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setSearchOpen(true)}
+                  className="shrink-0 inline-flex items-center justify-center w-8 h-8 text-stone-400 hover:text-stone-700 border border-stone-200 rounded-full"
+                  aria-label="Search messages"
+                >
+                  <Search className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+          )}
         </div>
       )}
 
       {view === "chat" && (
       <>
-      {messages.length > 0 && (
-        <div className="mb-3 flex flex-wrap items-center gap-1.5">
-          {/* Filter dropdown on the left */}
-          {labels.length > 0 && (
-            <select
-              value={labelFilter || ""}
-              onChange={(e) => setLabelFilter(e.target.value || null)}
-              className="text-[12px] rounded-lg border border-stone-300 bg-white px-2.5 py-1.5 text-stone-600 focus:outline-none focus:ring-2 focus:ring-[#B7453C]"
-            >
-              <option value="">All labels</option>
-              {labels.map((l) => (
-                <option key={l} value={l}>
-                  {l}
-                </option>
-              ))}
-            </select>
-          )}
-          {/* Search on the right */}
-          {searchOpen ? (
-            <div className="relative flex-1 min-w-[150px] ml-auto">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-stone-400" />
-              <input
-                autoFocus
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                onBlur={() => {
-                  if (!query) setSearchOpen(false);
-                }}
-                placeholder="Search messages…"
-                className="w-full pl-8 pr-7 py-1.5 rounded-lg border border-stone-300 text-[13px] focus:outline-none focus:ring-2 focus:ring-[#B7453C]"
-              />
-              <button
-                onClick={() => {
-                  setQuery("");
-                  setSearchOpen(false);
-                }}
-                className="absolute right-2 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-700"
-                aria-label="Close search"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          ) : (
-            <button
-              onClick={() => setSearchOpen(true)}
-              className="ml-auto shrink-0 inline-flex items-center justify-center w-8 h-8 text-stone-400 hover:text-stone-700 border border-stone-200 rounded-lg"
-              aria-label="Search messages"
-            >
-              <Search className="w-4 h-4" />
-            </button>
-          )}
-        </div>
-      )}
 
       {pinned.length > 0 && (
         <div className="mb-4 border border-stone-200 rounded-lg bg-white p-3">
@@ -2533,6 +2536,81 @@ function Timeline({ milestones }) {
 
 /* ---------------- Fee proposal (client view) ---------------- */
 
+// In-app pop-up preview of a PDF (the fee proposal / signed copy): pdf.js
+// renders each page to a canvas inside a scrollable overlay. Read-only — the
+// signing flow is untouched; this only replaces jumping out to a new tab.
+function PdfPreviewModal({ file, title, onClose }) {
+  const [state, setState] = useState("loading"); // loading | ready | error
+  const holderRef = useRef(null);
+  useEffect(() => {
+    let alive = true;
+    let doc = null;
+    (async () => {
+      try {
+        const { openPdfDocument } = await import("./lib/sign");
+        doc = await openPdfDocument(file.dataUrl || file.url || file);
+        if (!alive) return;
+        const holder = holderRef.current;
+        const width = Math.min((holder?.clientWidth || 640) - 2, 760);
+        for (let n = 1; n <= doc.numPages; n++) {
+          const page = await doc.getPage(n);
+          const base = page.getViewport({ scale: 1 });
+          const scale = (width / base.width) * Math.min(window.devicePixelRatio || 1, 2);
+          const vp = page.getViewport({ scale });
+          const canvas = document.createElement("canvas");
+          canvas.width = vp.width;
+          canvas.height = vp.height;
+          canvas.style.width = "100%";
+          canvas.style.display = "block";
+          canvas.style.marginBottom = "10px";
+          canvas.style.borderRadius = "3px";
+          canvas.style.boxShadow = "0 8px 22px -12px rgba(42,34,28,0.35)";
+          await page.render({ canvasContext: canvas.getContext("2d"), viewport: vp }).promise;
+          if (!alive) return;
+          holder?.appendChild(canvas);
+          if (n === 1) setState("ready");
+        }
+        if (alive) setState("ready");
+      } catch (e) {
+        console.error("pdf preview failed", e);
+        if (alive) setState("error");
+      }
+    })();
+    return () => {
+      alive = false;
+      try {
+        doc?.destroy?.();
+      } catch (_e) {}
+    };
+  }, [file]);
+  return (
+    <div className="fixed inset-0 z-50 flex flex-col" style={{ background: "rgba(28,26,23,0.78)" }}>
+      <div className="flex items-center gap-3 px-4 py-3 shrink-0">
+        <p className="flex-1 min-w-0 truncate text-[15px]" style={{ fontFamily: "Selva, Georgia, serif", fontStyle: "italic", color: "#f7f2ef" }}>{title || "Fee proposal"}</p>
+        <button onClick={() => openDoc(file)} className="shrink-0 text-[12px] px-3 py-1.5 rounded-[3px]" style={{ border: "1px solid rgba(247,242,239,0.4)", color: "#f7f2ef" }}>
+          Open in new tab
+        </button>
+        <button onClick={onClose} className="shrink-0 p-1.5" style={{ color: "#f7f2ef" }} aria-label="Close preview">
+          <X className="w-5 h-5" />
+        </button>
+      </div>
+      <div className="flex-1 overflow-y-auto px-4 pb-6" onClick={(e) => e.target === e.currentTarget && onClose()}>
+        <div ref={holderRef} className="max-w-[760px] mx-auto">
+          {state === "loading" && <p className="text-center text-[13px] py-10" style={{ color: "rgba(247,242,239,0.8)" }}>Opening the proposal…</p>}
+          {state === "error" && (
+            <div className="text-center py-10">
+              <p className="text-[13px] mb-3" style={{ color: "rgba(247,242,239,0.8)" }}>Couldn't preview it here — open it in a new tab instead.</p>
+              <button onClick={() => openDoc(file)} className="text-[13px] px-4 py-2 rounded-[3px]" style={{ background: "#576b45", color: "#efefec" }}>
+                Open in new tab
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function FeeDocCard({ label, dateLabel, file, note, emptyText }) {
   return (
     <div className="border border-stone-200 rounded-xl bg-white p-5">
@@ -2683,6 +2761,7 @@ function SignProposalCard({ proposal, signed, projectName, clientName, clientEma
   const [agree, setAgree] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [preview, setPreview] = useState(null); // { file, title } for the pop-up PDF preview
 
   async function submit() {
     if (!first.trim() || !last.trim()) {
@@ -2731,8 +2810,8 @@ function SignProposalCard({ proposal, signed, projectName, clientName, clientEma
               {note && <p className="text-[13px] text-stone-500 leading-relaxed mt-3">{note}</p>}
               {proposal.dataUrl ? (
                 <div className="flex flex-wrap gap-2 mt-4">
-                  <button onClick={() => openDoc(proposal)} className="inline-flex items-center gap-1.5 text-[13px] bg-stone-900 text-white rounded-full px-4 py-2 hover:bg-stone-800 transition-colors">
-                    <ExternalLink className="w-3.5 h-3.5" /> View
+                  <button onClick={() => setPreview({ file: proposal, title: proposal.name || "Fee proposal" })} className="inline-flex items-center gap-1.5 text-[13px] bg-stone-900 text-white rounded-full px-4 py-2 hover:bg-stone-800 transition-colors">
+                    <FileText className="w-3.5 h-3.5" /> Read the proposal
                   </button>
                   <button onClick={() => downloadFile(proposal)} className="inline-flex items-center gap-1.5 text-[13px] text-stone-700 border border-stone-300 rounded-full px-4 py-2 hover:bg-stone-100 transition-colors">
                     <Download className="w-3.5 h-3.5" /> Download
@@ -2767,7 +2846,7 @@ function SignProposalCard({ proposal, signed, projectName, clientName, clientEma
                 </p>
                 {signed.dataUrl && (
                   <div className="flex flex-wrap gap-2 mt-4">
-                    <button onClick={() => openDoc(signed)} className="inline-flex items-center gap-1.5 text-[13px] bg-stone-900 text-white rounded-full px-4 py-2 hover:bg-stone-800 transition-colors">
+                    <button onClick={() => setPreview({ file: signed, title: signed.name || "Signed fee proposal" })} className="inline-flex items-center gap-1.5 text-[13px] bg-stone-900 text-white rounded-full px-4 py-2 hover:bg-stone-800 transition-colors">
                       <ExternalLink className="w-3.5 h-3.5" /> View
                     </button>
                     <button onClick={() => downloadFile(signed)} className="inline-flex items-center gap-1.5 text-[13px] text-stone-700 border border-stone-300 rounded-full px-4 py-2 hover:bg-stone-100 transition-colors">
@@ -2848,6 +2927,7 @@ function SignProposalCard({ proposal, signed, projectName, clientName, clientEma
           )}
         </div>
       )}
+      {preview && <PdfPreviewModal file={preview.file} title={preview.title} onClose={() => setPreview(null)} />}
     </div>
   );
 }
@@ -3139,7 +3219,7 @@ function ClientDashboard({ project, viewerEmail, studioStatus, studioStatusColor
         {(project.address || project.location) && (
           <div className="absolute bottom-0 left-0 right-0 pointer-events-none">
             <div className="max-w-[1000px] mx-auto px-5 pb-3 text-center">
-              <p className="text-[12.5px]" style={{ fontStyle: "italic", color: "rgba(255,253,251,0.85)", textShadow: heroIsPhoto ? "0 1px 6px rgba(0,0,0,0.5)" : "none" }}>
+              <p className="text-[10.5px]" style={{ fontStyle: "italic", color: "rgba(255,253,251,0.75)", textShadow: heroIsPhoto ? "0 1px 6px rgba(0,0,0,0.5)" : "none" }}>
                 {project.address || project.location}
               </p>
             </div>
@@ -3169,10 +3249,10 @@ function ClientDashboard({ project, viewerEmail, studioStatus, studioStatusColor
               className="flex items-center gap-2.5 rounded-[3px] px-4 py-3.5 transition-opacity hover:opacity-90"
               style={{ backgroundColor: "#9BACB6", boxShadow: "0 10px 22px -14px rgba(28,26,23,0.45)" }}
             >
-              <p className="flex-1 min-w-0 truncate text-[13.5px]" style={{ color: "#1C1A17" }}>
+              <p className="flex-1 min-w-0 text-[11.5px] sm:text-[13.5px] leading-snug" style={{ color: "#1C1A17" }}>
                 Programa dashboard <span style={{ color: "rgba(28,26,23,0.65)" }}>— schedules, invoices &amp; documents</span>
               </p>
-              <span className="shrink-0 text-[12.5px] whitespace-nowrap" style={{ color: "#1C1A17" }}>Open ›</span>
+              <span className="shrink-0 text-[11.5px] sm:text-[12.5px] whitespace-nowrap" style={{ color: "#1C1A17" }}>Open ›</span>
             </a>
           </div>
         )}

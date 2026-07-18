@@ -6,22 +6,63 @@
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf.mjs";
 import PdfWorker from "pdfjs-dist/legacy/build/pdf.worker.min.mjs?worker";
+import pdfWorkerUrl from "pdfjs-dist/legacy/build/pdf.worker.min.mjs?url";
 
-// Spin up pdf.js's worker the Vite way: a bundled, classic-format worker that
-// ships inside this chunk. This is far more reliable in the deployed PWA than
-// fetching a separate hashed worker file (?url → workerSrc), which can silently
-// fail to load — and when it does, the in-document signature fill is skipped
-// while the certificate page (pure pdf-lib, no worker) still appends. Lazy +
-// guarded so a worker hiccup never breaks signing; it just falls back to the
-// certificate-only result.
+// pdf.js needs a worker. Preferred: the bundled dedicated worker (?worker).
+// BUT if that worker fails to boot, getDocument never resolves — it just hangs —
+// so every open goes through getPdfDocument() below, which races a timeout and
+// falls back to the ?url worker path. A total failure still resolves/rejects
+// (never hangs), so signing can always proceed with the certificate-only result.
 let _workerSet = false;
 function ensurePdfWorker() {
   if (_workerSet) return;
   _workerSet = true;
   try {
-    pdfjsLib.GlobalWorkerOptions.workerPort = new PdfWorker();
+    const w = new PdfWorker();
+    // If the worker itself errors (module failed to load inside it), drop it so
+    // later attempts use the URL fallback instead of hanging.
+    w.onerror = () => {
+      try {
+        w.terminate();
+      } catch (_e) {}
+      if (pdfjsLib.GlobalWorkerOptions.workerPort) pdfjsLib.GlobalWorkerOptions.workerPort = null;
+      pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
+    };
+    pdfjsLib.GlobalWorkerOptions.workerPort = w;
   } catch (_e) {
-    /* getDocument will surface any real problem; we just won't crash here */
+    pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
+  }
+}
+
+function withTimeout(promise, ms) {
+  return new Promise((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error("pdf worker timeout")), ms);
+    promise.then(
+      (v) => {
+        clearTimeout(t);
+        resolve(v);
+      },
+      (e) => {
+        clearTimeout(t);
+        reject(e);
+      }
+    );
+  });
+}
+
+// Open a PDF with pdf.js, guaranteed to settle: dedicated worker first, then
+// the URL-loaded worker if the first never answers.
+async function getPdfDocumentSafe(bytes) {
+  ensurePdfWorker();
+  try {
+    return await withTimeout(pdfjsLib.getDocument({ data: bytes.slice(0) }).promise, 9000);
+  } catch (e) {
+    try {
+      pdfjsLib.GlobalWorkerOptions.workerPort?.terminate?.();
+    } catch (_e) {}
+    pdfjsLib.GlobalWorkerOptions.workerPort = null;
+    pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
+    return await withTimeout(pdfjsLib.getDocument({ data: bytes.slice(0) }).promise, 15000);
   }
 }
 
@@ -66,6 +107,14 @@ export function bytesToDataUrl(bytes, mime = "application/pdf") {
     bin += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
   }
   return `data:${mime};base64,${btoa(bin)}`;
+}
+
+// Open a PDF (data: URL or storage URL) with pdf.js for in-app preview — used
+// by the fee-proposal pop-up. Caller renders the pages and should call
+// doc.destroy() when done.
+export async function openPdfDocument(url) {
+  const bytes = await bytesFromUrl(url);
+  return await getPdfDocumentSafe(bytes);
 }
 
 // SHA-256 fingerprint of the original document (hex), so any later tampering is
@@ -119,8 +168,7 @@ function chunkMono(text, font, size, maxWidth) {
 // template regardless of which page the block lands on. Returns null if absent.
 async function findAcceptance(bytes) {
   try {
-    ensurePdfWorker();
-    const doc = await pdfjsLib.getDocument({ data: bytes.slice(0) }).promise;
+    const doc = await getPdfDocumentSafe(bytes);
     for (let n = 1; n <= doc.numPages; n++) {
       const page = await doc.getPage(n);
       const tc = await page.getTextContent();

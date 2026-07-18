@@ -827,7 +827,7 @@ function EmptyState({ text }) {
 }
 
 // Fullscreen image viewer with prev/next + swipe.
-function Lightbox({ photos, index, onClose, onIndex }) {
+function Lightbox({ photos, index, onClose, onIndex, extra }) {
   const touchStart = useRef(null);
   const go = (d) => onIndex((index + d + photos.length) % photos.length);
   useEffect(() => {
@@ -855,6 +855,18 @@ function Lightbox({ photos, index, onClose, onIndex }) {
       <button onClick={onClose} className="absolute top-4 right-4 text-white/80 hover:text-white z-10" aria-label="Close">
         <X className="w-7 h-7" />
       </button>
+      {extra && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            extra.onClick();
+          }}
+          className="absolute bottom-12 left-1/2 -translate-x-1/2 z-10 inline-flex items-center gap-1.5 text-[12.5px] rounded-full px-4 py-2"
+          style={{ background: "rgba(255,253,251,0.16)", color: "#fffdfb", border: "1px solid rgba(255,253,251,0.35)" }}
+        >
+          <Images className="w-3.5 h-3.5" /> {extra.label}
+        </button>
+      )}
       <img src={photos[index]} alt="" className="max-h-[88vh] max-w-[92vw] object-contain" onClick={(e) => e.stopPropagation()} />
       {photos.length > 1 && (
         <>
@@ -1443,7 +1455,7 @@ function NoticeComposer({ onSend, onCancel, hasPrograma, templates }) {
   );
 }
 
-function MessagesPanel({ messages, meRole, onSend, onSendNotice, onReact, onPin, onLabel, onTagPhoto, onEdit, onDelete, seenSince, showReceipts, showStatus, onToggleStatus, customStatus, onSetCustomStatus, studioStatus, studioStatusColor, autoStatus, prefill, onPrefillUsed, draftKey, clients, myEmail, fallbackClientName, programaUrl, noticeTemplates, fill }) {
+function MessagesPanel({ messages, meRole, onSend, onSendNotice, onReact, onPin, onLabel, onTagPhoto, onEdit, onDelete, seenSince, showReceipts, showStatus, onToggleStatus, customStatus, onSetCustomStatus, studioStatus, studioStatusColor, autoStatus, prefill, onPrefillUsed, draftKey, clients, myEmail, fallbackClientName, programaUrl, noticeTemplates, fill, slimTools }) {
   // The automatic out-of-office note shows (to everyone) during its active hours,
   // unless this project has its own custom status note set.
   const autoNote = customStatus ? null : activeAutoNote(autoStatus);
@@ -1618,10 +1630,12 @@ function MessagesPanel({ messages, meRole, onSend, onSendNotice, onReact, onPin,
         </div>
       ) : null}
 
-      {/* One toolbar line: view pills left, label filter + search right */}
-      {(photoItems.length > 0 || messages.length > 0) && (
+      {/* One toolbar line: view pills left, label filter + search right.
+          slimTools (client mobile): no pills or search — the gallery opens from
+          a photo tap, and search lives in the app header. */}
+      {(slimTools ? view === "chat" && labels.length > 0 : photoItems.length > 0 || messages.length > 0) && (
         <div className="mb-3 flex items-center gap-1.5 min-w-0">
-          {photoItems.length > 0 && (
+          {!slimTools && photoItems.length > 0 && (
             <>
               <button
                 onClick={() => setView("chat")}
@@ -1653,39 +1667,40 @@ function MessagesPanel({ messages, meRole, onSend, onSendNotice, onReact, onPin,
                   ))}
                 </select>
               )}
-              {searchOpen ? (
-                <div className="relative w-full max-w-[190px] min-w-[110px]">
-                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-stone-400" />
-                  <input
-                    autoFocus
-                    value={query}
-                    onChange={(e) => setQuery(e.target.value)}
-                    onBlur={() => {
-                      if (!query) setSearchOpen(false);
-                    }}
-                    placeholder="Search…"
-                    className="w-full pl-8 pr-7 py-1.5 rounded-lg border border-stone-300 text-[13px] focus:outline-none focus:ring-2 focus:ring-[#B7453C]"
-                  />
+              {!slimTools &&
+                (searchOpen ? (
+                  <div className="relative w-full max-w-[190px] min-w-[110px]">
+                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-stone-400" />
+                    <input
+                      autoFocus
+                      value={query}
+                      onChange={(e) => setQuery(e.target.value)}
+                      onBlur={() => {
+                        if (!query) setSearchOpen(false);
+                      }}
+                      placeholder="Search…"
+                      className="w-full pl-8 pr-7 py-1.5 rounded-lg border border-stone-300 text-[13px] focus:outline-none focus:ring-2 focus:ring-[#B7453C]"
+                    />
+                    <button
+                      onClick={() => {
+                        setQuery("");
+                        setSearchOpen(false);
+                      }}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-700"
+                      aria-label="Close search"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ) : (
                   <button
-                    onClick={() => {
-                      setQuery("");
-                      setSearchOpen(false);
-                    }}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-700"
-                    aria-label="Close search"
+                    onClick={() => setSearchOpen(true)}
+                    className="shrink-0 inline-flex items-center justify-center w-8 h-8 text-stone-400 hover:text-stone-700 border border-stone-200 rounded-full"
+                    aria-label="Search messages"
                   >
-                    <X className="w-3.5 h-3.5" />
+                    <Search className="w-4 h-4" />
                   </button>
-                </div>
-              ) : (
-                <button
-                  onClick={() => setSearchOpen(true)}
-                  className="shrink-0 inline-flex items-center justify-center w-8 h-8 text-stone-400 hover:text-stone-700 border border-stone-200 rounded-full"
-                  aria-label="Search messages"
-                >
-                  <Search className="w-4 h-4" />
-                </button>
-              )}
+                ))}
             </div>
           )}
         </div>
@@ -2064,7 +2079,8 @@ function MessagesPanel({ messages, meRole, onSend, onSendNotice, onReact, onPin,
         <button
           type="button"
           onClick={() => fileRef.current?.click()}
-          className="shrink-0 px-3 rounded-lg border border-stone-300 bg-white text-stone-500 hover:text-stone-800 hover:border-stone-400 transition-colors"
+          className="shrink-0 px-2.5 rounded-[3px] border transition-colors"
+          style={{ borderColor: "#e6d8cf", background: "#fffdfb", color: "#7a6f66" }}
           aria-label="Add photos"
         >
           <Camera className="w-4 h-4" />
@@ -2074,9 +2090,10 @@ function MessagesPanel({ messages, meRole, onSend, onSendNotice, onReact, onPin,
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           placeholder={meRole === "client" ? `Send a message to ${studioFirstName()}…` : "Reply to client…"}
-          className="flex-1 min-w-0 px-4 py-3 rounded-lg border border-stone-300 bg-white text-[14px] focus:outline-none focus:ring-2 focus:ring-[#B7453C] focus:border-transparent"
+          className="flex-1 min-w-0 px-3.5 py-2 rounded-[3px] border text-[13.5px] focus:outline-none focus:ring-2 focus:ring-[#B7453C] focus:border-transparent"
+          style={{ borderColor: "#e6d8cf", background: "#fffdfb", color: "#2a221c" }}
         />
-        <button type="submit" className="shrink-0 bg-stone-900 text-white rounded-lg px-4 hover:bg-stone-800 transition-colors">
+        <button type="submit" className="shrink-0 rounded-[3px] px-3.5 transition-opacity hover:opacity-90" style={{ background: "#576b45", color: "#efefec" }}>
           <Send className="w-4 h-4" />
         </button>
       </form>
@@ -2085,6 +2102,11 @@ function MessagesPanel({ messages, meRole, onSend, onSendNotice, onReact, onPin,
 
       {view === "photos" && (
         <div className={fill ? "flex-1 min-h-0 overflow-y-auto" : ""}>
+          {slimTools && (
+            <button onClick={() => setView("chat")} className="inline-flex items-center gap-1 text-[12px] mb-3" style={{ color: "#7a6f66" }}>
+              <ChevronLeft className="w-3.5 h-3.5" /> Back to messages
+            </button>
+          )}
           {photoTagList.length > 0 && (
             <div className="flex flex-wrap gap-1.5 mb-3">
               <button
@@ -2146,6 +2168,17 @@ function MessagesPanel({ messages, meRole, onSend, onSendNotice, onReact, onPin,
           index={lb.index}
           onClose={() => setLb(null)}
           onIndex={(i) => setLb((l) => ({ ...l, index: i }))}
+          extra={
+            slimTools && view === "chat" && photoItems.length > 0
+              ? {
+                  label: `View gallery (${photoItems.length})`,
+                  onClick: () => {
+                    setView("photos");
+                    setLb(null);
+                  },
+                }
+              : null
+          }
         />
       )}
     </div>
@@ -3012,6 +3045,66 @@ function AboutTab({ project }) {
 
 /* ---------------- Client Dashboard ---------------- */
 
+// App-wide search (client header): one box that looks across messages,
+// updates, timeline, meetings and the fee proposal; a result jumps to its tab.
+function GlobalSearchOverlay({ project, onGo, onClose }) {
+  const [q, setQ] = useState("");
+  const needle = q.trim().toLowerCase();
+  const has = (s) => (s || "").toLowerCase().includes(needle);
+  const results = [];
+  if (needle.length >= 2) {
+    (project.messages || []).forEach((m) => {
+      if (has(m.text) || has(m.title)) results.push({ tab: "messages", type: "Message", text: m.title || m.text, sub: `${formatDate(m.date)} · ${formatTime(m.date)}` });
+    });
+    (project.updates || []).forEach((u) => {
+      if (has(u.title) || has(u.note)) results.push({ tab: "updates", type: "Update", text: u.title || u.note, sub: formatDate(u.date) });
+    });
+    (project.milestones || []).forEach((m) => {
+      if (has(m.title) || has(m.note) || (m.deliverables || []).some(has))
+        results.push({ tab: "timeline", type: "Timeline", text: m.title, sub: m.status === "done" ? "Complete" : m.status === "current" ? "In progress" : "Upcoming" });
+    });
+    (project.meetings || []).forEach((m) => {
+      if (has(m.title) || has(m.notes) || has(m.location)) results.push({ tab: "meetings", type: "Meeting", text: m.title, sub: m.date ? formatDate(m.date) : "" });
+    });
+    if (project.feeProposal && has(project.feeProposal.name)) results.push({ tab: "fee", type: "Fee proposal", text: project.feeProposal.name, sub: `Issued ${formatDate(project.feeProposal.date)}` });
+  }
+  const top = results.slice(0, 12);
+  return (
+    <div className="fixed inset-0 z-50 flex flex-col" style={{ background: "rgba(28,26,23,0.55)" }} onClick={onClose}>
+      <div className="w-full" style={{ background: "#f7f2ef", borderBottom: "1px solid #e6d8cf" }} onClick={(e) => e.stopPropagation()}>
+        <div className="max-w-[640px] mx-auto px-4 py-3">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: "#a89d95" }} />
+            <input
+              autoFocus
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="Search messages, updates, meetings…"
+              className="w-full pl-9 pr-9 py-2.5 rounded-[3px] border text-[14px] focus:outline-none"
+              style={{ borderColor: "#e6d8cf", background: "#fffdfb", color: "#2a221c", fontFamily: "Selva, Georgia, serif" }}
+            />
+            <button onClick={onClose} className="absolute right-2.5 top-1/2 -translate-y-1/2" style={{ color: "#a89d95" }} aria-label="Close search">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+          {needle.length >= 2 && (
+            <div className="mt-2 rounded-[3px] overflow-hidden" style={{ background: "#fffdfb", border: "1px solid #e6d8cf" }}>
+              {top.length === 0 && <p className="text-[13px] px-3.5 py-4 text-center" style={{ color: "#a89d95" }}>Nothing matches "{q.trim()}".</p>}
+              {top.map((r, i) => (
+                <button key={i} onClick={() => onGo(r.tab)} className="w-full text-left flex items-center gap-3 px-3.5 py-2.5" style={{ borderBottom: i < top.length - 1 ? "1px solid #efe4dc" : "none" }}>
+                  <span className="shrink-0 text-[10px] uppercase" style={{ letterSpacing: "0.08em", color: "#b26f52", minWidth: 62 }}>{r.type}</span>
+                  <span className="flex-1 min-w-0 truncate text-[13.5px]" style={{ color: "#2a221c" }}>{truncate(r.text, 80)}</span>
+                  <span className="shrink-0 text-[11px]" style={{ color: "#a89d95" }}>{r.sub}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // Slim prompt to switch on push notifications. Hides itself if already
 // granted/denied, or if the device/browser can't do web push (e.g. iPhone
 // before the app is added to the home screen).
@@ -3068,6 +3161,7 @@ function ClientDashboard({ project, viewerEmail, studioStatus, studioStatusColor
   }, []);
   const [lightbox, setLightbox] = useState(null);
   const [prefillMsg, setPrefillMsg] = useState("");
+  const [globalSearch, setGlobalSearch] = useState(false);
   function askAboutUpdate(u) {
     setPrefillMsg(`Re: "${u.title}" — `);
     setTab("messages");
@@ -3185,9 +3279,12 @@ function ClientDashboard({ project, viewerEmail, studioStatus, studioStatusColor
       style={{ background: "#f7f2ef", fontFamily: "Selva, Georgia, serif", color: "#2a221c" }}
     >
       <header className="sticky top-0 z-10" style={{ background: "rgba(247,242,239,0.95)", backdropFilter: "blur(6px)", borderBottom: "1px solid #e6d8cf" }}>
-        <div className="max-w-[1000px] mx-auto px-5 py-2 flex items-center justify-between gap-3">
-          <img src="/sn-wordmark-static.png" alt="Studio Nicholas" style={{ width: 112, height: "auto" }} />
-          <div className="flex items-center gap-2 shrink-0">
+        <div className="max-w-[1000px] mx-auto px-5 py-1 flex items-center justify-between gap-2">
+          <img src="/sn-wordmark-static.png" alt="Studio Nicholas" style={{ width: 96, height: "auto" }} />
+          <div className="flex items-center gap-1 shrink-0">
+            <button onClick={() => setGlobalSearch(true)} className="w-9 h-9 flex items-center justify-center" style={{ color: "#7a6f66" }} aria-label="Search your project">
+              <Search className="w-[17px] h-[17px]" strokeWidth={1.8} />
+            </button>
             <NotifBell
               notifications={project.notifications}
               onOpen={onMarkNotifs}
@@ -3195,7 +3292,7 @@ function ClientDashboard({ project, viewerEmail, studioStatus, studioStatusColor
               onDismiss={onDismissNotif}
               boxed
             />
-            <button onClick={onLogout} className="h-10 px-3 text-[13px]" style={{ color: "#a89d95" }}>
+            <button onClick={onLogout} className="h-9 px-2 text-[12.5px]" style={{ color: "#a89d95" }}>
               Log out
             </button>
           </div>
@@ -3433,6 +3530,7 @@ function ClientDashboard({ project, viewerEmail, studioStatus, studioStatusColor
           {activeTab === "messages" && (
             <MessagesPanel
               fill
+              slimTools
               messages={project.messages}
               meRole="client"
               draftKey={`client_${project.code}`}
@@ -3476,6 +3574,16 @@ function ClientDashboard({ project, viewerEmail, studioStatus, studioStatusColor
             );
           })}
         </div>
+      )}
+      {globalSearch && (
+        <GlobalSearchOverlay
+          project={project}
+          onGo={(tabId) => {
+            setTab(tabId);
+            setGlobalSearch(false);
+          }}
+          onClose={() => setGlobalSearch(false)}
+        />
       )}
       {lightbox && (
         <Lightbox

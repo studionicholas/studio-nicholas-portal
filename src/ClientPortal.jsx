@@ -783,14 +783,14 @@ function Logo({ light, large }) {
   );
 }
 
-function StageBadge({ stage, color }) {
+function StageBadge({ stage, color, small }) {
   const c = color && color.bg ? color : stageColour(stage);
   return (
     <span
-      className="inline-flex items-center gap-1.5 text-[11px] sm:text-[12px] rounded-full px-2.5 py-1 border"
+      className={`inline-flex items-center rounded-full border ${small ? "gap-1 text-[9px] sm:text-[12px] px-2 py-0.5 sm:px-2.5 sm:py-1" : "gap-1.5 text-[11px] sm:text-[12px] px-2.5 py-1"}`}
       style={{ color: c.bg, backgroundColor: c.tint, borderColor: c.tint }}
     >
-      <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: c.bg }} />
+      <span className={`rounded-full shrink-0 ${small ? "w-1 h-1 sm:w-1.5 sm:h-1.5" : "w-1.5 h-1.5"}`} style={{ backgroundColor: c.bg }} />
       {stage}
     </span>
   );
@@ -3200,26 +3200,26 @@ function ClientDashboard({ project, viewerEmail, studioStatus, studioStatusColor
       </header>
 
       {/* Hero banner — flat colour + typed name (default) or the project photo */}
-      <div className="relative overflow-hidden shrink-0" style={{ height: isDesktop ? 150 : 118, background: heroIsPhoto ? "#1C1A17" : heroColor }}>
+      <div className="relative overflow-hidden shrink-0" style={{ height: isDesktop ? 150 : 96, background: heroIsPhoto ? "#1C1A17" : heroColor }}>
         {heroIsPhoto && <img src={project.heroPhoto} alt="" className="absolute inset-0 w-full h-full object-cover" style={{ opacity: 0.9 }} />}
         <div className="absolute inset-0 flex items-center justify-center">
-          <p className="px-5 text-center" style={{ fontSize: isDesktop ? 34 : 24, fontStyle: "italic", fontWeight: 300, color: "#e9edee", textShadow: heroIsPhoto ? "0 1px 8px rgba(0,0,0,0.5)" : "none" }}>
+          <p className="px-5 text-center" style={{ fontSize: isDesktop ? 34 : 21, fontStyle: "italic", fontWeight: 300, color: "#e9edee", textShadow: heroIsPhoto ? "0 1px 8px rgba(0,0,0,0.5)" : "none" }}>
             {project.name}
           </p>
         </div>
         <div className="absolute top-0 left-0 right-0">
-          <div className="max-w-[1000px] mx-auto px-5 pt-3.5 flex items-start justify-between gap-2.5">
-            <StageBadge stage={project.stage} color={project.stageColor} />
-            <span className="inline-flex items-center gap-1.5 text-[11.5px] rounded-full px-2.5 py-1 min-w-0" style={{ color: "#fffdfb", background: "rgba(20,15,11,0.22)", maxWidth: "55vw" }}>
-              <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: "#9DBE7E" }} />
+          <div className="max-w-[1000px] mx-auto px-3.5 sm:px-5 pt-2 sm:pt-3.5 flex items-start justify-between gap-2.5">
+            <StageBadge stage={project.stage} color={project.stageColor} small />
+            <span className="inline-flex items-center gap-1 sm:gap-1.5 text-[9px] sm:text-[11.5px] rounded-full px-2 py-0.5 sm:px-2.5 sm:py-1 min-w-0" style={{ color: "#fffdfb", background: "rgba(20,15,11,0.22)", maxWidth: "55vw" }}>
+              <span className="w-1 h-1 sm:w-1.5 sm:h-1.5 rounded-full shrink-0" style={{ background: "#9DBE7E" }} />
               <span className="truncate">{viewerEmail || project.clientEmail}</span>
             </span>
           </div>
         </div>
         {(project.address || project.location) && (
           <div className="absolute bottom-0 left-0 right-0 pointer-events-none">
-            <div className="max-w-[1000px] mx-auto px-5 pb-3 text-center">
-              <p className="text-[10.5px]" style={{ fontStyle: "italic", color: "rgba(255,253,251,0.75)", textShadow: heroIsPhoto ? "0 1px 6px rgba(0,0,0,0.5)" : "none" }}>
+            <div className="max-w-[1000px] mx-auto px-5 pb-1.5 sm:pb-3 text-center">
+              <p className="text-[9px] sm:text-[10.5px]" style={{ fontStyle: "italic", color: "rgba(255,253,251,0.75)", textShadow: heroIsPhoto ? "0 1px 6px rgba(0,0,0,0.5)" : "none" }}>
                 {project.address || project.location}
               </p>
             </div>
@@ -3241,18 +3241,18 @@ function ClientDashboard({ project, viewerEmail, studioStatus, studioStatusColor
           </div>
         )}
         {features.programa !== false && programaUrl && (
-          <div style={{ borderBottom: "1px solid #e6d8cf", padding: "14px 0 18px 0" }}>
+          <div style={{ borderBottom: "1px solid #e6d8cf", padding: isDesktop ? "14px 0 18px 0" : "10px 0 12px 0" }}>
             <a
               href={programaUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center gap-2.5 rounded-[3px] px-4 py-3.5 transition-opacity hover:opacity-90"
+              className="flex items-center gap-2 rounded-[3px] px-3 py-2 sm:px-4 sm:py-3.5 transition-opacity hover:opacity-90"
               style={{ backgroundColor: "#9BACB6", boxShadow: "0 10px 22px -14px rgba(28,26,23,0.45)" }}
             >
-              <p className="flex-1 min-w-0 text-[11.5px] sm:text-[13.5px] leading-snug" style={{ color: "#1C1A17" }}>
-                Programa dashboard <span style={{ color: "rgba(28,26,23,0.65)" }}>— schedules, invoices &amp; documents</span>
+              <p className="flex-1 min-w-0 truncate text-[11.5px] sm:text-[13.5px]" style={{ color: "#1C1A17" }}>
+                Programa <span style={{ color: "rgba(28,26,23,0.65)" }}>— schedules, invoices &amp; documents</span>
               </p>
-              <span className="shrink-0 text-[11.5px] sm:text-[12.5px] whitespace-nowrap" style={{ color: "#1C1A17" }}>Open ›</span>
+              <span className="shrink-0 text-[11px] sm:text-[12.5px] whitespace-nowrap" style={{ color: "#1C1A17" }}>Open ›</span>
             </a>
           </div>
         )}

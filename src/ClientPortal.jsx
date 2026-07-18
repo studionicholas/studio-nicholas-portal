@@ -2824,7 +2824,8 @@ function SignProposalCard({ proposal, signed, projectName, clientName, clientEma
 
   return (
     <div className="border border-stone-200 rounded-xl bg-white p-5">
-      {/* The fee proposal itself */}
+      {/* The fee proposal itself — once signed, only the signed copy shows */}
+      {!signed && (
       <div className="flex items-start gap-4">
         <div className="w-11 h-11 rounded-lg bg-[#F7F0EC] flex items-center justify-center shrink-0">
           <FileText className="w-5 h-5 text-stone-500" />
@@ -2859,10 +2860,11 @@ function SignProposalCard({ proposal, signed, projectName, clientName, clientEma
           )}
         </div>
       </div>
+      )}
 
-      {/* Sign / signed section — flows on from the proposal above */}
-      {proposal && (
-        <div className="mt-5 pt-5 border-t border-stone-200">
+      {/* Sign / signed section — once signed it's the only thing shown */}
+      {(proposal || signed) && (
+        <div className={signed ? "" : "mt-5 pt-5 border-t border-stone-200"}>
           {signed ? (
             <div className="flex items-start gap-4">
               <div className="w-11 h-11 rounded-lg bg-[#D1D2C9] flex items-center justify-center shrink-0">

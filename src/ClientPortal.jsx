@@ -1603,8 +1603,8 @@ function MessagesPanel({ messages, meRole, onSend, onSendNotice, onReact, onPin,
             <Toggle on={showStatus} onChange={() => onToggleStatus(!showStatus)} />
           </label>
           {resolvedStatus ? (
-            <div className="flex items-center gap-2.5 text-[13px] rounded-lg px-3.5 py-2.5" style={{ backgroundColor: barColor, color: textOn(barColor) }}>
-              <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: textOn(barColor) }} />
+            <div className="flex items-center gap-2 text-[12px] leading-snug rounded-[3px] px-3 py-1.5" style={{ backgroundColor: barColor, color: textOn(barColor) }}>
+              <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: textOn(barColor) }} />
               {resolvedStatus}
             </div>
           ) : (
@@ -1612,8 +1612,8 @@ function MessagesPanel({ messages, meRole, onSend, onSendNotice, onReact, onPin,
           )}
         </div>
       ) : resolvedStatus ? (
-        <div className="mb-4 flex items-center gap-2.5 text-[13px] rounded-lg px-3.5 py-2.5" style={{ backgroundColor: barColor, color: textOn(barColor) }}>
-          <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: textOn(barColor) }} />
+        <div className="mb-3 flex items-center gap-2 text-[12px] leading-snug rounded-[3px] px-3 py-1.5" style={{ backgroundColor: barColor, color: textOn(barColor) }}>
+          <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: textOn(barColor) }} />
           {resolvedStatus}
         </div>
       ) : null}

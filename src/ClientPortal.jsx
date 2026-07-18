@@ -118,8 +118,20 @@ function studioNowMinutes() {
   }
 }
 // Is this note on AND are we currently inside its active hours?
+// Day of week (0=Sun … 6=Sat) in the studio's timezone.
+function studioDayOfWeek() {
+  try {
+    const wd = new Intl.DateTimeFormat("en-US", { timeZone: "Australia/Melbourne", weekday: "short" }).format(new Date());
+    return ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].indexOf(wd);
+  } catch (e) {
+    return new Date().getDay();
+  }
+}
 function autoReplyActive(cfg) {
   if (!cfg || !cfg.enabled || !cfg.text || !cfg.text.trim()) return false;
+  // Day scheduling: a note can be limited to certain days (e.g. weekends).
+  // No days set (or all seven) = every day.
+  if (Array.isArray(cfg.days) && cfg.days.length > 0 && cfg.days.length < 7 && !cfg.days.includes(studioDayOfWeek())) return false;
   const start = parseHM(cfg.start);
   const end = parseHM(cfg.end);
   if (start == null || end == null || start === end) return true; // no window = always on
@@ -1570,11 +1582,19 @@ function MessagesPanel({ messages, meRole, onSend, onSendNotice, onReact, onPin,
     return true;
   });
 
-  // Keep the thread pinned to the newest message (jump to bottom on open and when
-  // a new message arrives) — unless the user has scrolled up to read older ones.
+  // Keep the thread on the newest message (on open and when a new one arrives) —
+  // unless the user has scrolled up to read older ones. If the newest message is
+  // taller than the view, land on its TOP so it reads from the beginning,
+  // instead of pinning to the bottom and showing only its end.
   useEffect(() => {
     const el = listRef.current;
-    if (el && stickRef.current) el.scrollTop = el.scrollHeight;
+    if (!el || !stickRef.current) return;
+    const last = el.lastElementChild;
+    if (last && last.offsetHeight > el.clientHeight - 24) {
+      el.scrollTop = last.offsetTop - el.offsetTop - 8;
+    } else {
+      el.scrollTop = el.scrollHeight;
+    }
   }, [filtered.length, view]);
 
   function submit(e) {
@@ -3294,8 +3314,8 @@ function ClientDashboard({ project, viewerEmail, studioStatus, studioStatusColor
               onDismiss={onDismissNotif}
               boxed
             />
-            <button onClick={onLogout} className="h-9 px-2 text-[12.5px]" style={{ color: "#a89d95" }}>
-              Log out
+            <button onClick={onLogout} className="w-9 h-9 flex items-center justify-center" style={{ color: "#a89d95" }} aria-label="Log out">
+              <LogOut className="w-4 h-4" strokeWidth={1.8} />
             </button>
           </div>
         </div>
@@ -3343,7 +3363,7 @@ function ClientDashboard({ project, viewerEmail, studioStatus, studioStatusColor
           </div>
         )}
         {features.programa !== false && programaUrl && (
-          <div style={{ borderBottom: "1px solid #e6d8cf", padding: isDesktop ? "14px 0 18px 0" : "10px 0 12px 0" }}>
+          <div style={{ borderBottom: "1px solid #e6d8cf", padding: isDesktop ? "14px 0 18px 0" : "10px 0 8px 0" }}>
             <a
               href={programaUrl}
               target="_blank"
@@ -3382,7 +3402,7 @@ function ClientDashboard({ project, viewerEmail, studioStatus, studioStatusColor
         )}
 
         <div
-          className={activeTab === "messages" ? "pt-2 flex-1 min-h-0 flex flex-col" : "pt-6"}
+          className={activeTab === "messages" ? "pt-1 flex-1 min-h-0 flex flex-col" : "pt-6"}
           style={{ paddingBottom: activeTab === "messages" ? (isDesktop ? 16 : 84) : isDesktop ? 32 : 110 }}
         >
           {activeTab === "updates" && (
@@ -4712,6 +4732,12 @@ function StudioSettingsPanel({ studioStatus, studioStatusColor, onChangeStatus, 
   };
   const toggleNote = (i) => persistNotes(notes.map((n, idx) => (idx === i ? { ...n, enabled: !n.enabled } : n)));
   const addNote = () => persistNotes([...notes, { id: uid(), enabled: true, text: "", start: "16:00", end: "08:00", color: "#D5A933" }]);
+  // One-tap preset: an all-day weekend note (Sat + Sun) promising a Monday reply.
+  const addWeekendNote = () =>
+    persistNotes([
+      ...notes,
+      { id: uid(), enabled: true, text: "We're out of the studio for the weekend — we'll be back Monday morning and will reply then.", start: "00:00", end: "00:00", color: "#D5A933", days: [6, 0] },
+    ]);
   const removeNote = (i) => persistNotes(notes.filter((_, idx) => idx !== i));
   const saveNotes = () => {
     onSaveAutoReply(notes);
@@ -4961,6 +4987,31 @@ function StudioSettingsPanel({ studioStatus, studioStatusColor, onChangeStatus, 
                   ))}
                 </div>
               </div>
+              <div>
+                <p className="text-[11px] text-stone-400 mb-1">Days it shows</p>
+                <div className="flex items-center gap-1">
+                  {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((label, idx) => {
+                    const day = (idx + 1) % 7; // Mon=1 … Sat=6, Sun=0
+                    const allOn = !Array.isArray(n.days) || n.days.length === 0 || n.days.length === 7;
+                    const on = allOn || n.days.includes(day);
+                    return (
+                      <button
+                        key={label}
+                        type="button"
+                        onClick={() => {
+                          const current = allOn ? [0, 1, 2, 3, 4, 5, 6] : [...n.days];
+                          const next = current.includes(day) ? current.filter((d) => d !== day) : [...current, day];
+                          editNote(i, { days: next });
+                        }}
+                        className="w-9 h-8 rounded-[3px] text-[11px] border transition-colors"
+                        style={on ? { background: "#576b45", color: "#efefec", borderColor: "#576b45" } : { background: "#fffdfb", color: "#a89d95", borderColor: "#e6d8cf" }}
+                      >
+                        {label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
               {(n.text || "").trim() && (
                 <div className="flex items-center gap-2.5 text-[13px] rounded-lg px-3.5 py-2.5" style={{ backgroundColor: n.color || "#D5A933", color: textOn(n.color || "#D5A933") }}>
                   <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: textOn(n.color || "#D5A933") }} />
@@ -4972,6 +5023,9 @@ function StudioSettingsPanel({ studioStatus, studioStatusColor, onChangeStatus, 
           <div className="flex items-center gap-3">
             <button onClick={addNote} className="inline-flex items-center gap-1.5 text-[13px] text-stone-600 border border-stone-300 rounded-lg px-3 py-2 hover:bg-stone-100">
               <Plus className="w-3.5 h-3.5" /> Add a note
+            </button>
+            <button onClick={addWeekendNote} className="inline-flex items-center gap-1.5 text-[13px] rounded-lg px-3 py-2" style={{ background: "#F5EED9", color: "#8a6d1d", border: "1px solid #e8d9a8" }}>
+              <Plus className="w-3.5 h-3.5" /> Add weekend note (Sat–Sun)
             </button>
             <button onClick={saveNotes} className="bg-stone-900 text-white rounded-lg px-4 py-2 text-[13px] hover:bg-stone-800 transition-colors">
               Save changes

@@ -3294,20 +3294,22 @@ function ClientDashboard({ project, viewerEmail, studioStatus, studioStatusColor
   }
   useEffect(() => {
     // Once the install popup is out of the way, prompt for notifications if the
-    // device supports them and the user hasn't decided yet.
-    if (!installOpen && !pushAsked && api.pushSupported() && api.pushPermission() === "default") {
+    // device supports them and the user hasn't decided yet. Leads aren't asked
+    // at login — they get one combined prompt after their first message instead.
+    if (!installOpen && !pushAsked && !project.isLead && api.pushSupported() && api.pushPermission() === "default") {
       setShowNotifPrompt(true);
     }
-  }, [installOpen, pushAsked]);
+  }, [installOpen, pushAsked, project.isLead]);
   // Per-client feature access: this client's own overrides on top of the
   // project-wide defaults (so each client can see a different set of tabs).
   const myClient = (project.clients || []).find((c) => (c.email || "").trim().toLowerCase() === (viewerEmail || "").trim().toLowerCase());
-  // Leads (pre-signature) see nothing but the fee proposal — every other tab
-  // and the Programa link stay hidden until they sign and the studio publishes.
+  // Leads (pre-signature) see only the fee proposal and Messages (so they can
+  // ask questions) — everything else stays hidden until they sign and the
+  // studio publishes.
   const features = {
     ...(project.features || {}),
     ...((myClient && myClient.features) || {}),
-    ...(project.isLead ? { about: false, updates: false, timeline: false, meetings: false, messages: false, programa: false, fee: true } : {}),
+    ...(project.isLead ? { about: false, updates: false, timeline: false, meetings: false, messages: true, programa: false, fee: true } : {}),
   };
   const programaUrl = programaForViewer(project, viewerEmail);
 
@@ -3318,13 +3320,42 @@ function ClientDashboard({ project, viewerEmail, studioStatus, studioStatusColor
   // not yet decided, not yet dismissed). Otherwise the email popup is free to show.
   const pushPending = api.pushSupported() && api.pushPermission() === "default" && !pushAsked;
   useEffect(() => {
-    if (!installOpen && !pushPending && !showNotifPrompt && emailUndecided) {
+    if (!installOpen && !pushPending && !showNotifPrompt && emailUndecided && !project.isLead) {
       setShowEmailPrompt(true);
     }
-  }, [installOpen, pushPending, showNotifPrompt, emailUndecided]);
+  }, [installOpen, pushPending, showNotifPrompt, emailUndecided, project.isLead]);
   function decideEmail(value) {
     onSetEmailNotify(value);
     setShowEmailPrompt(false);
+  }
+
+  // After this viewer's FIRST message, one combined "stay in the loop" sheet:
+  // add to home screen, push notifications, email updates. Once per device,
+  // and only when there's actually something left to switch on.
+  const [engageOpen, setEngageOpen] = useState(false);
+  const sentBeforeRef = useRef(
+    (project.messages || []).some((m) => m.from === "client" && (!m.fromEmail || (m.fromEmail || "").toLowerCase() === (viewerEmail || "").trim().toLowerCase()))
+  );
+  const isStandalone = (() => {
+    try {
+      return window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone;
+    } catch (_e) {
+      return false;
+    }
+  })();
+  function sendWithEngage(text, replyTo, photos) {
+    onSendMessage(text, replyTo, photos);
+    try {
+      if (!sentBeforeRef.current && !localStorage.getItem("sn_engage_seen")) {
+        const needPush = api.pushSupported() && api.pushPermission() === "default";
+        const needEmail = !!(myClient && typeof myClient.emailNotify === "undefined");
+        if (!isStandalone || needPush || needEmail) {
+          localStorage.setItem("sn_engage_seen", "1");
+          setEngageOpen(true);
+        }
+      }
+    } catch (_e) {}
+    sentBeforeRef.current = true;
   }
 
   const now = Date.now();
@@ -3652,7 +3683,7 @@ function ClientDashboard({ project, viewerEmail, studioStatus, studioStatusColor
               myEmail={viewerEmail}
               programaUrl={programaUrl}
               fallbackClientName={project.clientName}
-              onSend={onSendMessage}
+              onSend={sendWithEngage}
               onReact={onReactMessage}
               onPin={onPinMessage}
               showReceipts={false}
@@ -3687,6 +3718,61 @@ function ClientDashboard({ project, viewerEmail, studioStatus, studioStatusColor
               </button>
             );
           })}
+        </div>
+      )}
+      {engageOpen && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center px-4 pb-6 sm:pb-0" onClick={() => setEngageOpen(false)}>
+          <div className="bg-white rounded-2xl max-w-sm w-full p-6" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-[19px] text-stone-900 mb-1" style={{ fontFamily: "Selva, Georgia, serif", fontStyle: "italic" }}>
+              Message sent ✓
+            </h3>
+            <p className="text-[13px] text-stone-500 mb-4">So you don't miss {studioFirstName()}'s reply:</p>
+            <div className="space-y-2.5">
+              {!isStandalone && (
+                <div className="rounded-[3px] px-3.5 py-3" style={{ background: "#fffdfb", border: "1px solid #e6d8cf" }}>
+                  <p className="text-[13.5px] text-stone-800">Add this to your home screen</p>
+                  <p className="text-[11.5px] text-stone-400 mt-0.5">
+                    iPhone: <strong className="text-stone-600">Share → Add to Home Screen</strong> · Android: <strong className="text-stone-600">⋮ → Install app</strong>
+                  </p>
+                </div>
+              )}
+              {api.pushSupported() && (
+                <div className="flex items-center gap-3 rounded-[3px] px-3.5 py-3" style={{ background: "#fffdfb", border: "1px solid #e6d8cf" }}>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[13.5px] text-stone-800">Notifications</p>
+                    <p className="text-[11.5px] text-stone-400 mt-0.5">A pop-up the moment there's a reply.</p>
+                  </div>
+                  {notifPerm === "granted" ? (
+                    <span className="shrink-0 text-[12px]" style={{ color: "#576B45" }}>On ✓</span>
+                  ) : notifPerm === "default" ? (
+                    <button onClick={turnOnNotifs} disabled={notifBusy} className="shrink-0 text-[12px] rounded-[3px] px-3 py-1.5 disabled:opacity-50" style={{ background: "#576b45", color: "#efefec" }}>
+                      {notifBusy ? "…" : "Turn on"}
+                    </button>
+                  ) : (
+                    <span className="shrink-0 text-[11px] text-stone-400">Blocked in settings</span>
+                  )}
+                </div>
+              )}
+              {myClient && (
+                <div className="flex items-center gap-3 rounded-[3px] px-3.5 py-3" style={{ background: "#fffdfb", border: "1px solid #e6d8cf" }}>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[13.5px] text-stone-800">Email updates</p>
+                    <p className="text-[11.5px] text-stone-400 mt-0.5">An email when there's a new reply or update.</p>
+                  </div>
+                  {myClient.emailNotify ? (
+                    <span className="shrink-0 text-[12px]" style={{ color: "#576B45" }}>On ✓</span>
+                  ) : (
+                    <button onClick={() => decideEmail(true)} className="shrink-0 text-[12px] rounded-[3px] px-3 py-1.5" style={{ background: "#576b45", color: "#efefec" }}>
+                      Email me
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+            <button onClick={() => setEngageOpen(false)} className="w-full text-stone-400 hover:text-stone-600 text-[13px] py-2.5 mt-3">
+              Done
+            </button>
+          </div>
         </div>
       )}
       {globalSearch && (

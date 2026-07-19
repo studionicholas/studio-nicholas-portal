@@ -2588,7 +2588,7 @@ function Timeline({ milestones }) {
                   <p className="text-[16px]" style={{ color: done || cur ? "#2a221c" : "#55483e", fontWeight: cur ? 500 : 400 }}>{m.title}</p>
                   <span className="text-[12px] whitespace-nowrap shrink-0" style={{ color: done ? "#576b45" : cur ? "#b26f52" : "#a89d95" }}>
                     {done ? "Done · " : cur ? "Now · " : ""}
-                    {formatDate(m.date)}
+                    {m.date ? formatDate(m.date) : "dates coming"}
                     {m.endDate ? ` – ${formatDate(m.endDate)}` : ""}
                   </span>
                 </div>
@@ -3092,6 +3092,47 @@ function AboutTab({ project }) {
 
 /* ---------------- Client Dashboard ---------------- */
 
+// The holding screen a client sees after signing their fee proposal, until the
+// studio presses Publish. Calm, minimal — they can revisit their signed copy.
+function LeadWaiting({ project, onLogout }) {
+  const [preview, setPreview] = useState(false);
+  const signed = project.feeProposalSigned;
+  return (
+    <div className="min-h-screen flex flex-col" style={{ background: "#f7f2ef", fontFamily: "Selva, Georgia, serif", color: "#2a221c" }}>
+      <header style={{ borderBottom: "1px solid #e6d8cf" }}>
+        <div className="max-w-[640px] mx-auto px-5 py-1 flex items-center justify-between">
+          <img src="/sn-wordmark-static.png" alt="Studio Nicholas" style={{ width: 96, height: "auto" }} />
+          <button onClick={onLogout} className="w-9 h-9 flex items-center justify-center" style={{ color: "#a89d95" }} aria-label="Log out">
+            <LogOut className="w-4 h-4" strokeWidth={1.8} />
+          </button>
+        </div>
+      </header>
+      <div className="flex-1 flex items-center justify-center px-6 py-10">
+        <div className="w-full max-w-[360px] text-center">
+          <span className="inline-flex w-11 h-11 rounded-full items-center justify-center" style={{ background: "#576b45", color: "#efefec", fontSize: 18 }}>✓</span>
+          <p className="mt-4 mb-1.5 text-[22px] leading-tight" style={{ fontStyle: "italic", fontWeight: 300 }}>
+            Signed — thank you
+          </p>
+          <p className="mx-auto mb-5 text-[13px] leading-relaxed" style={{ color: "#55483e", maxWidth: 300 }}>
+            A countersigned copy and your Certificate of Completion are on their way to your inbox.
+          </p>
+          <div className="rounded-[3px] px-4 py-4" style={{ background: "#fffdfb", border: "1px solid #e6d8cf" }}>
+            <p className="text-[13.5px] leading-relaxed" style={{ color: "#55483e" }}>
+              {studioFirstName()} is setting up your project. You'll get an email and a notification the moment it's ready.
+            </p>
+          </div>
+          {signed?.dataUrl && (
+            <button onClick={() => setPreview(true)} className="mt-4 text-[12.5px] underline hover:opacity-70" style={{ color: "#7a6f66" }}>
+              View your signed proposal
+            </button>
+          )}
+        </div>
+      </div>
+      {preview && signed && <PdfPreviewModal file={signed} title={signed.name || "Signed fee proposal"} onClose={() => setPreview(false)} />}
+    </div>
+  );
+}
+
 // App-wide search (client header): one box that looks across messages,
 // updates, timeline, meetings and the fee proposal; a result jumps to its tab.
 function GlobalSearchOverlay({ project, onGo, onClose }) {
@@ -3245,7 +3286,13 @@ function ClientDashboard({ project, viewerEmail, studioStatus, studioStatusColor
   // Per-client feature access: this client's own overrides on top of the
   // project-wide defaults (so each client can see a different set of tabs).
   const myClient = (project.clients || []).find((c) => (c.email || "").trim().toLowerCase() === (viewerEmail || "").trim().toLowerCase());
-  const features = { ...(project.features || {}), ...((myClient && myClient.features) || {}) };
+  // Leads (pre-signature) see nothing but the fee proposal — every other tab
+  // and the Programa link stay hidden until they sign and the studio publishes.
+  const features = {
+    ...(project.features || {}),
+    ...((myClient && myClient.features) || {}),
+    ...(project.isLead ? { about: false, updates: false, timeline: false, meetings: false, messages: false, programa: false, fee: true } : {}),
+  };
   const programaUrl = programaForViewer(project, viewerEmail);
 
   // Email-updates opt-in — asked once after the push prompt is out of the way.
@@ -3942,6 +3989,29 @@ function AdminMilestones({ project, onAdd, onEdit, onSetStatus, onMove, onDelete
     if (next) onSetStatus(next.id, "current");
   };
 
+  // Seed the timeline from the fee proposal: pull the stage headings + their
+  // dot-point deliverables straight out of the PDF, ready for dates.
+  const [importing, setImporting] = useState(false);
+  const [importMsg, setImportMsg] = useState("");
+  async function importFromProposal() {
+    setImporting(true);
+    setImportMsg("");
+    try {
+      const { extractStagesFromPdf } = await import("./lib/sign");
+      const stages = await extractStagesFromPdf(project.feeProposal.dataUrl);
+      if (!stages.length) {
+        setImportMsg("Couldn't find stages in the proposal — add them with “+ Phase” instead.");
+      } else {
+        stages.forEach((s) => onAdd({ title: s.title, date: "", endDate: "", status: "upcoming", note: "", deliverables: s.deliverables || [] }));
+        setImportMsg(`Imported ${stages.length} stage${stages.length === 1 ? "" : "s"} from the proposal — add dates and tweak anything.`);
+      }
+    } catch (e) {
+      console.error(e);
+      setImportMsg("Couldn't read the proposal PDF — add phases manually.");
+    }
+    setImporting(false);
+  }
+
   return (
     <div>
       <div className="flex justify-end mb-3.5">
@@ -3953,6 +4023,17 @@ function AdminMilestones({ project, onAdd, onEdit, onSetStatus, onMove, onDelete
           {showForm ? "Close" : "+ Phase"}
         </button>
       </div>
+      {list.length === 0 && project.feeProposal?.dataUrl && (
+        <button
+          onClick={importFromProposal}
+          disabled={importing}
+          className="w-full h-11 rounded-[3px] text-[13px] mb-2 disabled:opacity-60"
+          style={{ background: "#576b45", color: "#efefec", boxShadow: "0 12px 26px -12px rgba(87,107,69,0.75)" }}
+        >
+          {importing ? "Reading the proposal…" : "Import stages from the fee proposal"}
+        </button>
+      )}
+      {importMsg && <p className="text-[12px] mb-3" style={{ color: "#576b45" }}>{importMsg}</p>}
       {list.length === 0 && <p className="text-[13px] text-stone-400 mb-3">No phases yet — add the first with "+ Phase".</p>}
       {list.map((m, i) => {
         const done = m.status === "done";
@@ -3968,7 +4049,7 @@ function AdminMilestones({ project, onAdd, onEdit, onSetStatus, onMove, onDelete
                 <p className="text-[16px] truncate" style={{ color: done || cur ? "#2a221c" : "#55483e", fontWeight: cur ? 500 : 400 }}>{m.title}</p>
                 <span className="text-[12px] whitespace-nowrap shrink-0" style={{ color: done ? "#576b45" : cur ? "#b26f52" : "#a89d95" }}>
                   {done ? "Done · " : cur ? "Now · " : ""}
-                  {formatDate(m.date)}
+                  {m.date ? formatDate(m.date) : "add dates"}
                   {m.endDate ? ` – ${formatDate(m.endDate)}` : ""}
                 </span>
               </div>
@@ -5212,6 +5293,7 @@ function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioSt
   const [settingsPage, setSettingsPage] = useState(savedSession?.settingsPage || null);
   const [isDesktop, setIsDesktop] = useState(() => typeof window !== "undefined" && window.innerWidth >= 900);
   const [showNewProject, setShowNewProject] = useState(false);
+  const [showNewLead, setShowNewLead] = useState(false);
   const [showNewUpdate, setShowNewUpdate] = useState(false);
   const [editingUpdate, setEditingUpdate] = useState(null);
   const [optimizing, setOptimizing] = useState(false);
@@ -5384,6 +5466,78 @@ function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioSt
     }));
     setSelectedCode(code);
     setShowNewProject(false);
+  }
+
+  // A lead is a project in disguise: same record, pipeline flags only. Clients
+  // on a lead can see nothing but the fee proposal until they sign; after
+  // signing it becomes an "unpublished" project (they see the waiting page)
+  // until the studio presses Publish.
+  function addLead(data) {
+    let code = (data.name || "LEAD").toUpperCase().replace(/[^A-Z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 14) || "LEAD";
+    if (projects[code]) code = `${code}-${uid().slice(0, 3).toUpperCase()}`;
+    setProjects((prev) => ({
+      ...prev,
+      [code]: {
+        code,
+        name: data.name,
+        location: data.address || "",
+        clientName: data.contact || data.name,
+        clientEmail: data.email || "",
+        clientPassword: "",
+        clients: data.email ? [{ name: data.contact || "", email: data.email, programaUrl: "" }] : [],
+        stage: "Lead",
+        isLead: true,
+        leadPhone: data.phone || "",
+        leadNotes: data.notes || "",
+        programaUrl: "",
+        heroPhoto: "",
+        description: "",
+        currentFocus: "",
+        address: data.address || "",
+        projectType: data.projectType || "",
+        builders: "",
+        architects: "",
+        stageColor: null,
+        milestones: [],
+        meetings: [],
+        meetingRequests: [],
+        notifications: [],
+        lastReadStudio: null,
+        lastReadClient: null,
+        updates: [],
+        feeProposal: null,
+        feeProposalSigned: null,
+        messages: [],
+        features: {},
+      },
+    }));
+    setShowNewLead(false);
+    openProject(code, "details");
+  }
+  // Publish an unpublished (signed-lead) project: unlocks the client portal and
+  // tells every client by email + push. No banner in the portal — it just opens.
+  function publishPortal(code) {
+    updateProject(code, (p) => ({ ...p, unpublished: false, stage: p.stage === "Lead" ? "Pre Sign-up" : p.stage, notifications: withNotif(p, "update", "Your portal is ready — welcome!") }));
+    const proj = projects[code];
+    const emails = (proj?.clients || []).map((c) => (c.email || "").trim().toLowerCase()).filter(Boolean);
+    if (emails.length) {
+      api.notifyPush({ toEmails: emails, title: `${proj?.name || "Your project"} — your portal is ready`, body: "Your project timeline and details are live.", url: "/" });
+      api.notifyEmail({
+        toEmails: emails,
+        subject: `Your portal is ready — ${proj?.name || "your project"}`,
+        heading: "Your portal is ready",
+        body: `Your ${proj?.name || "project"} portal is now live — your timeline, project details and messages are all set up and ready. Sign in any time with the login you created. We're looking forward to working with you.`,
+        projectName: proj?.name,
+        senderName: "Studio Nicholas",
+        time: emailStamp(),
+        kind: "notice",
+      });
+    }
+    showToast("Published — your clients have been notified");
+  }
+  function setLeadLost(code, lost) {
+    updateProject(code, (p) => ({ ...p, leadLost: !!lost }));
+    if (lost) goHome();
   }
 
   function deleteProject(code) {
@@ -5737,6 +5891,10 @@ function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioSt
   }
 
   const projectList = Object.values(projects);
+  const leadList = projectList.filter((p) => p.isLead && !p.leadLost);
+  const lostLeads = projectList.filter((p) => p.isLead && p.leadLost);
+  const liveList = projectList.filter((p) => !p.isLead);
+  const leadStageOf = (p) => (p.feeProposal ? "Awaiting signature" : "New enquiry");
   // Cross-project "Waiting on you" list (mobile home) — derived, never stored.
   const attention = [];
   projectList.forEach((p) => {
@@ -5788,11 +5946,36 @@ function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioSt
             <AdminBell projects={projects} onOpen={openProject} />
           </div>
           <div className="flex-1 overflow-y-auto px-3 py-4">
+            {leadList.length > 0 && (
+              <>
+                <p className="text-[11px] uppercase mb-2 ml-2.5" style={{ letterSpacing: "0.12em", color: "#a89d95" }}>
+                  Leads
+                </p>
+                <div className="flex flex-col gap-0.5 mb-4">
+                  {leadList.map((p) => {
+                    const active = effView === "project" && selectedCode === p.code;
+                    return (
+                      <button
+                        key={p.code}
+                        onClick={() => openProject(p.code)}
+                        className="flex items-center gap-2.5 pl-2 pr-2.5 py-[9px] rounded-[3px] text-left"
+                        style={{ background: active ? "#f2e9e2" : "transparent", borderLeft: `3px solid ${active ? "#b26f52" : "#d5a933"}` }}
+                      >
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[14.5px] truncate leading-tight" style={{ fontStyle: "italic", fontWeight: 300 }}>{p.name}</p>
+                          <p className="text-[11px] mt-px" style={{ color: "#8a6d1d" }}>{leadStageOf(p)}</p>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </>
+            )}
             <p className="text-[11px] uppercase mb-2 ml-2.5" style={{ letterSpacing: "0.12em", color: "#a89d95" }}>
               Projects
             </p>
             <div className="flex flex-col gap-0.5">
-              {projectList.map((p) => {
+              {liveList.map((p) => {
                 const unread = unreadForStudio(p);
                 const active = effView === "project" && selectedCode === p.code;
                 return (
@@ -5805,7 +5988,7 @@ function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioSt
                     <img src={p.heroPhoto} alt="" className="w-9 h-9 object-cover rounded-[3px] shrink-0" style={{ background: "#ece3dc" }} />
                     <div className="flex-1 min-w-0">
                       <p className="text-[14.5px] truncate leading-tight" style={{ fontStyle: "italic", fontWeight: 300 }}>{p.name}</p>
-                      <p className="text-[11px] mt-px" style={{ color: "#a89d95" }}>{p.code}</p>
+                      <p className="text-[11px] mt-px" style={{ color: p.unpublished ? "#8a6d1d" : "#a89d95" }}>{p.unpublished ? "Not published" : p.code}</p>
                     </div>
                     {unread > 0 && (
                       <span className="shrink-0 min-w-[18px] h-[18px] px-1 rounded-full text-[10px] flex items-center justify-center" style={{ background: "#811618", color: "#fffdfb" }}>{unread}</span>
@@ -5818,6 +6001,9 @@ function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioSt
           <div className="p-3.5 flex flex-col gap-2" style={{ borderTop: "1px solid #efe4dc" }}>
             <button onClick={() => setShowNewProject(true)} className="h-[42px] rounded-[3px] text-[13.5px]" style={{ background: "#576b45", color: "#efefec" }}>
               + New project
+            </button>
+            <button onClick={() => setShowNewLead(true)} className="h-10 rounded-[3px] text-[13px]" style={{ border: "1px solid #e8d9a8", background: "#fffdfb", color: "#8a6d1d" }}>
+              + New lead
             </button>
             <button onClick={goSettings} className="h-10 rounded-[3px] text-[13px]" style={{ border: "1px solid #e6d8cf", background: view === "settings" ? "#f2e9e2" : "#fffdfb", color: "#7a6f66" }}>
               Settings
@@ -5854,20 +6040,42 @@ function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioSt
                   </div>
                 </>
               )}
-              <p className="text-[11px] uppercase mb-2.5" style={{ letterSpacing: "0.12em", color: "#a89d95", marginTop: attention.length ? 22 : 8 }}>
+              {leadList.length > 0 && (
+                <>
+                  <p className="text-[11px] uppercase mb-2.5" style={{ letterSpacing: "0.12em", color: "#a89d95", marginTop: attention.length ? 22 : 8 }}>
+                    Leads
+                  </p>
+                  <div className="flex flex-col gap-2 max-w-[640px]">
+                    {leadList.map((p) => (
+                      <button key={p.code} onClick={() => openProject(p.code)} className="flex items-center gap-3 rounded-[3px] px-3.5 py-3 text-left" style={{ background: "#fffdfb", border: "1px solid #e6d8cf", borderLeft: "3px solid #d5a933" }}>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[15px] truncate leading-snug" style={{ fontStyle: "italic", fontWeight: 300 }}>{p.name}</p>
+                          <p className="text-[11px] mt-0.5" style={{ color: "#a89d95" }}>
+                            {(p.clients || []).map((c) => c.name || c.email).filter(Boolean).join(", ") || "No contact yet"}
+                          </p>
+                        </div>
+                        <span className="shrink-0 text-[10px] rounded-full px-2.5 py-1" style={{ background: p.feeProposal ? "#F5EED9" : "#ece3dc", color: p.feeProposal ? "#8a6d1d" : "#7a6f66" }}>
+                          {leadStageOf(p)}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+              <p className="text-[11px] uppercase mb-2.5" style={{ letterSpacing: "0.12em", color: "#a89d95", marginTop: attention.length || leadList.length ? 22 : 8 }}>
                 Projects
               </p>
               <div className="flex flex-col gap-2 max-w-[640px]">
-                {projectList.length === 0 && <p className="text-[13px]" style={{ color: "#a89d95" }}>No projects yet — create your first below.</p>}
-                {projectList.map((p) => {
+                {liveList.length === 0 && <p className="text-[13px]" style={{ color: "#a89d95" }}>No projects yet — create your first below.</p>}
+                {liveList.map((p) => {
                   const unread = unreadForStudio(p);
                   return (
                     <button key={p.code} onClick={() => openProject(p.code)} className="flex items-center gap-3 rounded-[3px] px-3 py-2.5 text-left" style={{ background: "#fffdfb", border: "1px solid #e6d8cf" }}>
                       <img src={p.heroPhoto} alt="" className="w-[50px] h-[50px] object-cover rounded-[3px] shrink-0" style={{ background: "#ece3dc" }} />
                       <div className="flex-1 min-w-0">
                         <p className="text-[16px] truncate leading-snug" style={{ fontStyle: "italic", fontWeight: 300 }}>{p.name}</p>
-                        <p className="text-[11.5px] mt-0.5" style={{ color: "#a89d95" }}>
-                          {p.code}{p.stage ? ` · ${p.stage}` : ""}
+                        <p className="text-[11.5px] mt-0.5" style={{ color: p.unpublished ? "#8a6d1d" : "#a89d95" }}>
+                          {p.unpublished ? "Signed · not published yet" : `${p.code}${p.stage ? ` · ${p.stage}` : ""}`}
                         </p>
                       </div>
                       {unread > 0 && (
@@ -5877,9 +6085,22 @@ function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioSt
                   );
                 })}
               </div>
+              {lostLeads.length > 0 && (
+                <p className="text-[11px] mt-4 max-w-[640px]" style={{ color: "#c9b9ae" }}>
+                  {lostLeads.length} archived lead{lostLeads.length === 1 ? "" : "s"}:{" "}
+                  {lostLeads.map((p, i) => (
+                    <button key={p.code} onClick={() => openProject(p.code)} className="underline hover:opacity-70" style={{ color: "#a89d95" }}>
+                      {p.name}{i < lostLeads.length - 1 ? ", " : ""}
+                    </button>
+                  ))}
+                </p>
+              )}
               <div className="flex gap-2 max-w-[640px] mt-4">
                 <button onClick={() => setShowNewProject(true)} className="flex-1 h-11 rounded-[3px] text-[13.5px]" style={{ background: "#576b45", color: "#efefec" }}>
                   + New project
+                </button>
+                <button onClick={() => setShowNewLead(true)} className="flex-1 h-11 rounded-[3px] text-[13.5px]" style={{ border: "1px solid #e8d9a8", background: "#fffdfb", color: "#8a6d1d" }}>
+                  + New lead
                 </button>
                 <button onClick={goSettings} className="flex-1 h-11 rounded-[3px] text-[13.5px]" style={{ border: "1px solid #e6d8cf", background: "#fffdfb", color: "#7a6f66" }}>
                   Settings
@@ -5899,8 +6120,8 @@ function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioSt
           <>
             {/* Flat-colour banner — same treatment as the client side */}
             {(() => {
-              const heroColor = project.heroColor || "#7fa2ab";
-              const heroIsPhoto = project.heroStyle === "photo" && project.heroPhoto;
+              const heroColor = project.isLead ? "#d5a933" : project.heroColor || "#7fa2ab";
+              const heroIsPhoto = !project.isLead && project.heroStyle === "photo" && project.heroPhoto;
               return (
                 <div className="relative overflow-hidden shrink-0" style={{ height: isDesktop ? 110 : 88, background: heroIsPhoto ? "#1C1A17" : heroColor }}>
                   {heroIsPhoto && <img src={project.heroPhoto} alt="" className="absolute inset-0 w-full h-full object-cover" style={{ opacity: 0.9 }} />}
@@ -5926,6 +6147,42 @@ function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioSt
                 </div>
               );
             })()}
+
+            {/* Lead / unpublished state strips */}
+            {project.isLead && (
+              <div className="flex items-center gap-2 pl-4 pr-3 py-2 shrink-0" style={{ background: "#F5EED9", borderBottom: "1px solid #e8d9a8" }}>
+                <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: "#d5a933" }} />
+                <p className="flex-1 min-w-0 truncate text-[11px]" style={{ color: "#8a6d1d" }}>
+                  {project.leadLost
+                    ? "Archived lead"
+                    : project.feeProposal
+                      ? "Lead — awaiting signature · they can only see the fee proposal"
+                      : "Lead — add the fee proposal on the Fee tab to invite them"}
+                </p>
+                {project.leadLost ? (
+                  <button onClick={() => setLeadLost(project.code, false)} className="shrink-0 text-[11px] underline" style={{ color: "#8a6d1d" }}>
+                    Restore
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => window.confirm("Archive this lead as lost? You can restore it later.") && setLeadLost(project.code, true)}
+                    className="shrink-0 text-[11px] underline"
+                    style={{ color: "#811618" }}
+                  >
+                    Archive as lost
+                  </button>
+                )}
+              </div>
+            )}
+            {!project.isLead && project.unpublished && (
+              <div className="flex items-center gap-2 pl-4 pr-2 py-1.5 shrink-0" style={{ background: "#F5EED9", borderBottom: "1px solid #e8d9a8" }}>
+                <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: "#d5a933" }} />
+                <p className="flex-1 min-w-0 truncate text-[11px]" style={{ color: "#8a6d1d" }}>Not published — your clients see the waiting page</p>
+                <button onClick={() => publishPortal(project.code)} className="shrink-0 text-[11.5px] rounded-[3px] px-3.5 py-1.5" style={{ background: "#576b45", color: "#efefec" }}>
+                  Publish
+                </button>
+              </div>
+            )}
             {isDesktop && (
               <div className="shrink-0 px-5 pt-3.5">
                 <div className="max-w-[980px] mx-auto flex rounded-[14px] p-[5px]" style={{ background: "#fffdfb", border: "1px solid #e6d8cf", boxShadow: "0 12px 28px -16px rgba(28,26,23,0.3)" }}>
@@ -6244,6 +6501,45 @@ function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioSt
       </div>
 
       {showNewProject && <NewProjectModal onClose={() => setShowNewProject(false)} onSubmit={addProject} />}
+      {showNewLead && <NewLeadModal onClose={() => setShowNewLead(false)} onSubmit={addLead} />}
+    </div>
+  );
+}
+
+// New lead — a light version of the new-project form: contact + address + notes.
+function NewLeadModal({ onClose, onSubmit }) {
+  const [form, setForm] = useState({ name: "", contact: "", email: "", phone: "", address: "", projectType: "", notes: "" });
+  const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
+  return (
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center px-4 pb-6 sm:pb-0" onClick={onClose}>
+      <div className="bg-white rounded-2xl max-w-md w-full p-6 max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <h3 className="text-[20px] text-stone-900 mb-1" style={{ fontFamily: "Selva, Georgia, serif", fontStyle: "italic" }}>
+          New lead
+        </h3>
+        <p className="text-[12.5px] text-stone-500 mb-4">A potential client — they'll only ever see the fee proposal until they sign.</p>
+        <div className="space-y-2.5">
+          <input value={form.name} onChange={set("name")} placeholder="Project / lead name (e.g. Harbourview Terrace)" className="w-full px-3.5 py-2.5 rounded-lg border border-stone-300 text-[14px] focus:outline-none focus:ring-2 focus:ring-[#B7453C]" />
+          <div className="grid grid-cols-2 gap-2.5">
+            <input value={form.contact} onChange={set("contact")} placeholder="Contact name" className="w-full px-3.5 py-2.5 rounded-lg border border-stone-300 text-[14px] focus:outline-none focus:ring-2 focus:ring-[#B7453C]" />
+            <input value={form.phone} onChange={set("phone")} placeholder="Phone" className="w-full px-3.5 py-2.5 rounded-lg border border-stone-300 text-[14px] focus:outline-none focus:ring-2 focus:ring-[#B7453C]" />
+          </div>
+          <input type="email" value={form.email} onChange={set("email")} placeholder="Email (needed to issue the proposal)" autoCapitalize="none" className="w-full px-3.5 py-2.5 rounded-lg border border-stone-300 text-[14px] focus:outline-none focus:ring-2 focus:ring-[#B7453C]" />
+          <input value={form.address} onChange={set("address")} placeholder="Address / suburb" className="w-full px-3.5 py-2.5 rounded-lg border border-stone-300 text-[14px] focus:outline-none focus:ring-2 focus:ring-[#B7453C]" />
+          <input value={form.projectType} onChange={set("projectType")} placeholder="Project type (e.g. New build — single dwelling)" className="w-full px-3.5 py-2.5 rounded-lg border border-stone-300 text-[14px] focus:outline-none focus:ring-2 focus:ring-[#B7453C]" />
+          <textarea value={form.notes} onChange={set("notes")} rows={3} placeholder="Private notes — budget, source, first impressions (never shown to them)" className="w-full px-3.5 py-2.5 rounded-lg border border-stone-300 text-[14px] resize-none focus:outline-none focus:ring-2 focus:ring-[#B7453C]" />
+        </div>
+        <button
+          onClick={() => form.name.trim() && onSubmit({ ...form, name: form.name.trim() })}
+          disabled={!form.name.trim()}
+          className="w-full mt-4 rounded-lg py-3 text-[14px] disabled:opacity-50"
+          style={{ background: "#576b45", color: "#efefec" }}
+        >
+          Add lead
+        </button>
+        <button onClick={onClose} className="w-full text-stone-400 hover:text-stone-600 text-[13px] py-2.5 mt-1">
+          Cancel
+        </button>
+      </div>
     </div>
   );
 }
@@ -6891,7 +7187,17 @@ export default function App() {
         signedAt: when.toISOString(),
         signerName: clientName,
       };
-      setProjects((prev) => ({ ...prev, [activeCode]: { ...prev[activeCode], feeProposalSigned: signedRecord } }));
+      setProjects((prev) => ({
+        ...prev,
+        [activeCode]: {
+          ...prev[activeCode],
+          feeProposalSigned: signedRecord,
+          // A signed LEAD becomes an unpublished project: the studio gets the
+          // full project view to set up, the client sees the waiting page until
+          // the studio presses Publish.
+          ...(prev[activeCode].isLead ? { isLead: false, unpublished: true } : {}),
+        },
+      }));
 
       // Email the signed copy to client + studio, and push the studio (all best-effort).
       const isUrl = /^https?:/i.test(dataUrl);
@@ -7031,7 +7337,9 @@ export default function App() {
     );
   } else {
     const project = activeCode ? projects[activeCode] : Object.values(projects)[0];
-    content = project ? (
+    content = project && project.unpublished && project.feeProposalSigned ? (
+      <LeadWaiting project={project} onLogout={handleSignOut} />
+    ) : project ? (
       <ClientDashboard
         project={project}
         viewerEmail={session?.user?.email || ""}

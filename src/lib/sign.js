@@ -117,6 +117,62 @@ export async function openPdfDocument(url) {
   return await getPdfDocumentSafe(bytes);
 }
 
+// Pull likely project stages (and their dot-point deliverables) out of a fee
+// proposal PDF, to pre-seed a new project's timeline. Heuristic: a short line
+// starting with a known stage word begins a stage; following short, non-prose
+// lines become its deliverables. The studio reviews/edits before saving.
+const STAGE_WORDS = /^(concept|schematic|design development|design|documentation|tender|construction|procurement|delivery|installation|handover|briefing|pre[- ]?design|site|styling|fit[- ]?out)/i;
+export async function extractStagesFromPdf(url) {
+  const bytes = await bytesFromUrl(url);
+  const doc = await getPdfDocumentSafe(bytes);
+  const stages = [];
+  try {
+    for (let n = 1; n <= doc.numPages; n++) {
+      const page = await doc.getPage(n);
+      const tc = await page.getTextContent();
+      // Stitch text items into visual lines (same y).
+      const lines = [];
+      let last = null;
+      for (const it of tc.items) {
+        const s = String(it.str || "").trim();
+        if (!s) continue;
+        const y = Math.round(it.transform[5]);
+        if (last && Math.abs(last.y - y) < 3) last.text += " " + s;
+        else {
+          last = { y, text: s };
+          lines.push(last);
+        }
+      }
+      let current = null;
+      let missesInARow = 0;
+      for (const ln of lines) {
+        const t = ln.text.replace(/\s+/g, " ").trim();
+        const words = t.split(" ").length;
+        const isTitle = STAGE_WORDS.test(t) && words <= 5 && t.length < 40 && !/[.?!,;:]$/.test(t);
+        if (isTitle) {
+          const existing = stages.find((s) => s.title.toLowerCase() === t.toLowerCase());
+          current = existing || { title: t, deliverables: [] };
+          if (!existing && stages.length < 8) stages.push(current);
+          missesInARow = 0;
+        } else if (current) {
+          const looksDeliverable = t.length >= 8 && t.length <= 70 && words <= 9 && !/[.?!]$/.test(t) && !/\$|@|\d{4}/.test(t);
+          if (looksDeliverable && current.deliverables.length < 6 && !current.deliverables.some((d) => d.toLowerCase() === t.toLowerCase())) {
+            current.deliverables.push(t);
+            missesInARow = 0;
+          } else if (++missesInARow >= 3) {
+            current = null; // drifted into prose — stop attributing lines to this stage
+          }
+        }
+      }
+    }
+  } finally {
+    try {
+      await doc.destroy?.();
+    } catch (_e) {}
+  }
+  return stages;
+}
+
 // SHA-256 fingerprint of the original document (hex), so any later tampering is
 // detectable against the value printed on the certificate.
 export async function sha256Hex(bytes) {

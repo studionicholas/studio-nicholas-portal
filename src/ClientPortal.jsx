@@ -5475,16 +5475,19 @@ function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioSt
   function addLead(data) {
     let code = (data.name || "LEAD").toUpperCase().replace(/[^A-Z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 14) || "LEAD";
     if (projects[code]) code = `${code}-${uid().slice(0, 3).toUpperCase()}`;
+    const contacts = (data.contacts || [])
+      .map((c) => ({ name: (c.name || "").trim(), email: (c.email || "").trim().toLowerCase() }))
+      .filter((c) => c.name || c.email);
     setProjects((prev) => ({
       ...prev,
       [code]: {
         code,
         name: data.name,
         location: data.address || "",
-        clientName: data.contact || data.name,
-        clientEmail: data.email || "",
+        clientName: contacts[0]?.name || data.name,
+        clientEmail: contacts[0]?.email || "",
         clientPassword: "",
-        clients: data.email ? [{ name: data.contact || "", email: data.email, programaUrl: "" }] : [],
+        clients: contacts.map((c) => ({ name: c.name, email: c.email, programaUrl: "" })),
         stage: "Lead",
         isLead: true,
         leadPhone: data.phone || "",
@@ -6506,10 +6509,12 @@ function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioSt
   );
 }
 
-// New lead — a light version of the new-project form: contact + address + notes.
+// New lead — a light version of the new-project form: contacts + address + notes.
 function NewLeadModal({ onClose, onSubmit }) {
-  const [form, setForm] = useState({ name: "", contact: "", email: "", phone: "", address: "", projectType: "", notes: "" });
+  const [form, setForm] = useState({ name: "", phone: "", address: "", projectType: "", notes: "" });
+  const [contacts, setContacts] = useState([{ name: "", email: "" }]);
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
+  const setContact = (i, k) => (e) => setContacts((arr) => arr.map((c, j) => (j === i ? { ...c, [k]: e.target.value } : c)));
   return (
     <div className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center px-4 pb-6 sm:pb-0" onClick={onClose}>
       <div className="bg-white rounded-2xl max-w-md w-full p-6 max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
@@ -6519,17 +6524,29 @@ function NewLeadModal({ onClose, onSubmit }) {
         <p className="text-[12.5px] text-stone-500 mb-4">A potential client — they'll only ever see the fee proposal until they sign.</p>
         <div className="space-y-2.5">
           <input value={form.name} onChange={set("name")} placeholder="Project / lead name (e.g. Harbourview Terrace)" className="w-full px-3.5 py-2.5 rounded-lg border border-stone-300 text-[14px] focus:outline-none focus:ring-2 focus:ring-[#B7453C]" />
-          <div className="grid grid-cols-2 gap-2.5">
-            <input value={form.contact} onChange={set("contact")} placeholder="Contact name" className="w-full px-3.5 py-2.5 rounded-lg border border-stone-300 text-[14px] focus:outline-none focus:ring-2 focus:ring-[#B7453C]" />
-            <input value={form.phone} onChange={set("phone")} placeholder="Phone" className="w-full px-3.5 py-2.5 rounded-lg border border-stone-300 text-[14px] focus:outline-none focus:ring-2 focus:ring-[#B7453C]" />
-          </div>
-          <input type="email" value={form.email} onChange={set("email")} placeholder="Email (needed to issue the proposal)" autoCapitalize="none" className="w-full px-3.5 py-2.5 rounded-lg border border-stone-300 text-[14px] focus:outline-none focus:ring-2 focus:ring-[#B7453C]" />
+          {contacts.map((c, i) => (
+            <div key={i} className="grid grid-cols-2 gap-2.5">
+              <input value={c.name} onChange={setContact(i, "name")} placeholder={i === 0 ? "Contact name" : "Another contact"} className="w-full px-3.5 py-2.5 rounded-lg border border-stone-300 text-[14px] focus:outline-none focus:ring-2 focus:ring-[#B7453C]" />
+              <div className="relative">
+                <input type="email" value={c.email} onChange={setContact(i, "email")} placeholder="Email" autoCapitalize="none" className="w-full px-3.5 py-2.5 pr-8 rounded-lg border border-stone-300 text-[14px] focus:outline-none focus:ring-2 focus:ring-[#B7453C]" />
+                {contacts.length > 1 && (
+                  <button type="button" onClick={() => setContacts((arr) => arr.filter((_, j) => j !== i))} className="absolute right-2 top-1/2 -translate-y-1/2 text-stone-300 hover:text-red-600" aria-label="Remove contact">
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
+          <button type="button" onClick={() => setContacts((arr) => [...arr, { name: "", email: "" }])} className="text-[12.5px] text-stone-500 hover:text-stone-800 underline">
+            + Add another contact
+          </button>
+          <input value={form.phone} onChange={set("phone")} placeholder="Phone" className="w-full px-3.5 py-2.5 rounded-lg border border-stone-300 text-[14px] focus:outline-none focus:ring-2 focus:ring-[#B7453C]" />
           <input value={form.address} onChange={set("address")} placeholder="Address / suburb" className="w-full px-3.5 py-2.5 rounded-lg border border-stone-300 text-[14px] focus:outline-none focus:ring-2 focus:ring-[#B7453C]" />
           <input value={form.projectType} onChange={set("projectType")} placeholder="Project type (e.g. New build — single dwelling)" className="w-full px-3.5 py-2.5 rounded-lg border border-stone-300 text-[14px] focus:outline-none focus:ring-2 focus:ring-[#B7453C]" />
           <textarea value={form.notes} onChange={set("notes")} rows={3} placeholder="Private notes — budget, source, first impressions (never shown to them)" className="w-full px-3.5 py-2.5 rounded-lg border border-stone-300 text-[14px] resize-none focus:outline-none focus:ring-2 focus:ring-[#B7453C]" />
         </div>
         <button
-          onClick={() => form.name.trim() && onSubmit({ ...form, name: form.name.trim() })}
+          onClick={() => form.name.trim() && onSubmit({ ...form, name: form.name.trim(), contacts })}
           disabled={!form.name.trim()}
           className="w-full mt-4 rounded-lg py-3 text-[14px] disabled:opacity-50"
           style={{ background: "#576b45", color: "#efefec" }}

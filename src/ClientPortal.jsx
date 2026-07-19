@@ -337,6 +337,8 @@ const STAGE_COLOURS = {
   "Pre Sign-up": { bg: "#576B45", tint: "#D1D2C9" },
   "Concept Development": { bg: "#D5A933", tint: "#F5EED9" },
   "Design Development": { bg: "#811618", tint: "#D7C1B6" },
+  "Project underway": { bg: "#576B45", tint: "#D1D2C9" }, // green — set on publish
+  Lead: { bg: "#D5A933", tint: "#F5EED9" }, // amber — pipeline
 };
 function stageColour(stage) {
   return STAGE_COLOURS[stage] || { bg: "#B7453C", tint: "#E6D0C7" };
@@ -3122,9 +3124,23 @@ function LeadWaiting({ project, onLogout }) {
             </p>
           </div>
           {signed?.dataUrl && (
-            <button onClick={() => setPreview(true)} className="mt-4 text-[12.5px] underline hover:opacity-70" style={{ color: "#7a6f66" }}>
-              View your signed proposal
-            </button>
+            <div className="mt-4 rounded-[3px] p-3.5 text-left" style={{ background: "#fffdfb", border: "1px solid #e6d8cf" }}>
+              <div className="flex items-center gap-3 mb-3">
+                <span className="shrink-0 flex items-center justify-center rounded-[3px]" style={{ width: 36, height: 44, background: "#f0e8e2", color: "#b26f52", fontSize: 9, letterSpacing: "0.08em" }}>PDF</span>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[13px] truncate">{signed.name || "Signed fee proposal"}</p>
+                  <p className="text-[11px] mt-px" style={{ color: "#a89d95" }}>Signed {formatDate(signed.date)}</p>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <button onClick={() => setPreview(true)} className="flex-1 h-10 rounded-[3px] text-[12.5px]" style={{ background: "#2a221c", color: "#f7f2ef" }}>
+                  View
+                </button>
+                <button onClick={() => downloadFile(signed)} className="flex-1 h-10 rounded-[3px] text-[12.5px]" style={{ border: "1px solid #e6d8cf", background: "#fffdfb", color: "#7a6f66" }}>
+                  Download
+                </button>
+              </div>
+            </div>
           )}
         </div>
       </div>
@@ -3403,7 +3419,11 @@ function ClientDashboard({ project, viewerEmail, studioStatus, studioStatusColor
         </div>
         <div className="absolute top-0 left-0 right-0">
           <div className="max-w-[1000px] mx-auto px-3.5 sm:px-5 pt-2 sm:pt-3.5 flex items-start justify-between gap-2.5">
-            <StageBadge stage={project.stage} color={project.stageColor} small />
+            <StageBadge
+              stage={project.isLead ? "Pending signature" : project.stage}
+              color={project.isLead ? { bg: "#8a6d1d", tint: "#F5EED9" } : project.stageColor}
+              small
+            />
             <span className="inline-flex items-center gap-1 sm:gap-1.5 text-[9px] sm:text-[11.5px] rounded-full px-2 py-0.5 sm:px-2.5 sm:py-1 min-w-0" style={{ color: "#fffdfb", background: "rgba(20,15,11,0.22)", maxWidth: "55vw" }}>
               <span className="w-1 h-1 sm:w-1.5 sm:h-1.5 rounded-full shrink-0" style={{ background: "#9DBE7E" }} />
               <span className="truncate">{viewerEmail || project.clientEmail}</span>
@@ -4002,7 +4022,7 @@ function AdminMilestones({ project, onAdd, onEdit, onSetStatus, onMove, onDelete
       if (!stages.length) {
         setImportMsg("Couldn't find stages in the proposal — add them with “+ Phase” instead.");
       } else {
-        stages.forEach((s) => onAdd({ title: s.title, date: "", endDate: "", status: "upcoming", note: "", deliverables: s.deliverables || [] }));
+        stages.forEach((s) => onAdd({ title: s.title, date: "", endDate: "", status: "upcoming", note: s.note || "", deliverables: s.deliverables || [] }));
         setImportMsg(`Imported ${stages.length} stage${stages.length === 1 ? "" : "s"} from the proposal — add dates and tweak anything.`);
       }
     } catch (e) {
@@ -4053,11 +4073,16 @@ function AdminMilestones({ project, onAdd, onEdit, onSetStatus, onMove, onDelete
                   {m.endDate ? ` – ${formatDate(m.endDate)}` : ""}
                 </span>
               </div>
-              {m.note && <p className="text-[12.5px] mt-0.5" style={{ color: "#7a6f66" }}>{m.note}</p>}
-              {(m.deliverables || []).length > 0 && (
-                <p className="text-[11.5px] mt-0.5" style={{ color: "#a89d95" }}>
-                  {m.deliverables.length} deliverable{m.deliverables.length === 1 ? "" : "s"} shown to the client
-                </p>
+              {m.note && <p className="text-[12.5px] mt-1 leading-relaxed" style={{ color: "#7a6f66" }}>{m.note}</p>}
+              {(m.deliverables || []).filter(Boolean).length > 0 && (
+                <ul className="mt-1.5 space-y-0.5">
+                  {m.deliverables.filter(Boolean).map((d, di) => (
+                    <li key={di} className="flex gap-2 text-[12px] leading-relaxed" style={{ color: "#55483e" }}>
+                      <span className="mt-[7px] w-1 h-1 rounded-full shrink-0" style={{ background: "#576b45" }} />
+                      <span>{d}</span>
+                    </li>
+                  ))}
+                </ul>
               )}
               <div className="flex items-center gap-2 mt-2 flex-wrap">
                 {cur && (
@@ -5520,7 +5545,7 @@ function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioSt
   // Publish an unpublished (signed-lead) project: unlocks the client portal and
   // tells every client by email + push. No banner in the portal — it just opens.
   function publishPortal(code) {
-    updateProject(code, (p) => ({ ...p, unpublished: false, stage: p.stage === "Lead" ? "Pre Sign-up" : p.stage, notifications: withNotif(p, "update", "Your portal is ready — welcome!") }));
+    updateProject(code, (p) => ({ ...p, unpublished: false, stage: p.stage === "Lead" || !p.stage ? "Project underway" : p.stage, notifications: withNotif(p, "update", "Your portal is ready — welcome!") }));
     const proj = projects[code];
     const emails = (proj?.clients || []).map((c) => (c.email || "").trim().toLowerCase()).filter(Boolean);
     if (emails.length) {

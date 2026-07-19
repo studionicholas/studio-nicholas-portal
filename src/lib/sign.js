@@ -117,60 +117,85 @@ export async function openPdfDocument(url) {
   return await getPdfDocumentSafe(bytes);
 }
 
-// Pull likely project stages (and their dot-point deliverables) out of a fee
-// proposal PDF, to pre-seed a new project's timeline. Heuristic: a short line
-// starting with a known stage word begins a stage; following short, non-prose
-// lines become its deliverables. The studio reviews/edits before saving.
-const STAGE_WORDS = /^(concept|schematic|design development|design|documentation|tender|construction|procurement|delivery|installation|handover|briefing|pre[- ]?design|site|styling|fit[- ]?out)/i;
+// Pull the project stages (title + description + dot-point deliverables) out of
+// a fee proposal PDF, to pre-seed a new project's timeline. Tuned to the Studio
+// Nicholas proposal template: a "Project Stages —" heading, stage titles in the
+// larger display size, prose description, a "Deliverables:" label with bullet
+// lines, then "Fee:". Parsing stops at Terms of Service / Fee Schedule /
+// Acceptance. Falls back to empty (manual entry) if the structure isn't found.
 export async function extractStagesFromPdf(url) {
   const bytes = await bytesFromUrl(url);
   const doc = await getPdfDocumentSafe(bytes);
-  const stages = [];
+  const lines = [];
   try {
     for (let n = 1; n <= doc.numPages; n++) {
       const page = await doc.getPage(n);
       const tc = await page.getTextContent();
-      // Stitch text items into visual lines (same y).
-      const lines = [];
       let last = null;
       for (const it of tc.items) {
         const s = String(it.str || "").trim();
         if (!s) continue;
         const y = Math.round(it.transform[5]);
-        if (last && Math.abs(last.y - y) < 3) last.text += " " + s;
-        else {
-          last = { y, text: s };
+        const h = it.height || Math.abs(it.transform[3]) || 0;
+        if (last && Math.abs(last.y - y) < 3) {
+          last.text += " " + s;
+          last.h = Math.max(last.h, h);
+        } else {
+          last = { y, h, text: s };
           lines.push(last);
         }
       }
-      let current = null;
-      let missesInARow = 0;
-      for (const ln of lines) {
-        const t = ln.text.replace(/\s+/g, " ").trim();
-        const words = t.split(" ").length;
-        const isTitle = STAGE_WORDS.test(t) && words <= 5 && t.length < 40 && !/[.?!,;:]$/.test(t);
-        if (isTitle) {
-          const existing = stages.find((s) => s.title.toLowerCase() === t.toLowerCase());
-          current = existing || { title: t, deliverables: [] };
-          if (!existing && stages.length < 8) stages.push(current);
-          missesInARow = 0;
-        } else if (current) {
-          const looksDeliverable = t.length >= 8 && t.length <= 70 && words <= 9 && !/[.?!]$/.test(t) && !/\$|@|\d{4}/.test(t);
-          if (looksDeliverable && current.deliverables.length < 6 && !current.deliverables.some((d) => d.toLowerCase() === t.toLowerCase())) {
-            current.deliverables.push(t);
-            missesInARow = 0;
-          } else if (++missesInARow >= 3) {
-            current = null; // drifted into prose — stop attributing lines to this stage
-          }
-        }
-      }
+      last = null; // don't stitch across pages
     }
   } finally {
     try {
       await doc.destroy?.();
     } catch (_e) {}
   }
-  return stages;
+
+  const clean = (t) => t.replace(/\s+/g, " ").trim();
+  const isPageHeader = (t) => /^\d+\s+fee proposal/i.test(t);
+  const startIdx = lines.findIndex((ln) => /project stages/i.test(clean(ln.text)));
+  if (startIdx === -1) return [];
+  const titleH = lines[startIdx].h; // stage titles share the section heading's size
+
+  const stages = [];
+  let current = null;
+  let mode = "note"; // note | deliverables | done
+  for (let i = startIdx + 1; i < lines.length; i++) {
+    const raw = clean(lines[i].text);
+    if (!raw || isPageHeader(raw)) continue;
+    // A later big-font section ends the stages block.
+    if (/^(terms of service|fee schedule|acceptance|please note)/i.test(raw)) break;
+    const isBig = lines[i].h >= titleH - 0.6;
+    if (isBig) {
+      const title = raw.replace(/\s*[—–-]+\s*$/, "").trim();
+      if (title && title.length < 60 && stages.length < 10) {
+        current = { title, note: "", deliverables: [] };
+        stages.push(current);
+        mode = "note";
+      }
+      continue;
+    }
+    if (!current) continue;
+    if (/^deliverables\s*:?$/i.test(raw)) {
+      mode = "deliverables";
+      continue;
+    }
+    if (/^fee\s*:?$/i.test(raw) || /^\$\s?\d/.test(raw)) {
+      mode = "done";
+      continue;
+    }
+    if (mode === "done") continue;
+    const bullet = raw.match(/^[•·‣▪-]\s*(.+)$/);
+    if (bullet) {
+      if (current.deliverables.length < 12) current.deliverables.push(clean(bullet[1]));
+      mode = "deliverables";
+    } else if (mode === "note" && current.note.length < 500) {
+      current.note = (current.note ? current.note + " " : "") + raw;
+    }
+  }
+  return stages.filter((s) => s.title);
 }
 
 // SHA-256 fingerprint of the original document (hex), so any later tampering is

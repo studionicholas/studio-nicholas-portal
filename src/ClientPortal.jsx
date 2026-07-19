@@ -2833,7 +2833,7 @@ function SignaturePad({ onChange }) {
 // One bubble for the client's Fee tab: the proposal at the top, then (once a
 // proposal is shared) a divider and the review-and-sign section below it — or
 // the signed-and-accepted summary once it's done.
-function SignProposalCard({ proposal, signed, projectName, clientName, clientEmail, onSign, note, emptyText }) {
+function SignProposalCard({ proposal, signed, projectName, clientName, clientEmail, onSign, note, emptyText, onAskQuestion }) {
   const nameParts = (clientName || "").trim().split(/\s+/).filter(Boolean);
   const [first, setFirst] = useState(nameParts.length > 1 ? nameParts[0] : nameParts[0] || "");
   const [last, setLast] = useState(nameParts.length > 1 ? nameParts.slice(1).join(" ") : "");
@@ -3005,6 +3005,16 @@ function SignProposalCard({ proposal, signed, projectName, clientName, clientEma
                   </>
                 )}
               </button>
+              {onAskQuestion && (
+                <button
+                  type="button"
+                  onClick={onAskQuestion}
+                  className="w-full mt-2 rounded-lg py-3 text-[13.5px] transition-opacity hover:opacity-80"
+                  style={{ border: "1px solid rgba(129,22,24,0.4)", background: "#fffdfb", color: "#811618" }}
+                >
+                  Need a change or have a question?
+                </button>
+              )}
             </>
           )}
         </div>
@@ -3610,6 +3620,14 @@ function ClientDashboard({ project, viewerEmail, studioStatus, studioStatusColor
               onSign={onSignProposal}
               note={project.feeProposal?.note}
               emptyText={`Your fee proposal will appear here to review and sign once ${studioFirstName()} has shared it.`}
+              onAskQuestion={
+                features.messages === false
+                  ? null
+                  : () => {
+                      setPrefillMsg("About the fee proposal — ");
+                      setTab("messages");
+                    }
+              }
             />
           )}
 

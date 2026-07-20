@@ -5821,9 +5821,9 @@ function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioSt
   function editMeeting(code, id, data) {
     const instant = zonedToInstant(`${data.date}T${data.time}`, data.timezone);
     const before = (projects[code]?.meetings || []).find((m) => m.id === id);
-    // A new time means everyone has to respond again — clear the old RSVPs so a
-    // stale "declined" (or "accepted") never sticks to a rescheduled meeting.
     const timeChanged = !!before && before.instant !== instant;
+    // Any edit is re-sent to everyone, so everyone's answer starts again —
+    // each person goes back to "Awaiting reply" until they confirm the new details.
     updateProject(code, (p) => ({
       ...p,
       meetings: p.meetings.map((m) =>
@@ -5838,11 +5838,12 @@ function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioSt
               instant,
               message: data.message || "",
               invitees: data.invitees || m.invitees || [],
-              ...(timeChanged ? { rsvps: {}, rsvp: "pending" } : {}),
+              rsvps: {},
+              rsvp: "pending",
             }
           : m
       ),
-      notifications: withNotif(p, "meeting", `Meeting updated: ${data.title} — open Meetings to confirm the new time`),
+      notifications: withNotif(p, "meeting", `Meeting updated: ${data.title} — open Meetings to confirm`),
     }));
 
     const proj = projects[code];
@@ -5858,12 +5859,18 @@ function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioSt
     const emails = meetingPeople(proj, data.invitees).map((c) => (c.email || "").trim().toLowerCase()).filter(Boolean);
     if (emails.length) {
       const when = `${fmtInZone(instant, data.timezone)} ${tzAbbrev(instant, data.timezone)}`;
-      api.notifyPush({ toEmails: emails, title: `${proj?.name || "Your project"} — meeting time changed`, body: `${data.title} is now ${when}`, url: "/" });
+      const where = data.mode === "online" ? "It's an online Teams meeting — the join link is in your portal." : `Where: ${data.location || "to be confirmed"}`;
+      api.notifyPush({
+        toEmails: emails,
+        title: `${proj?.name || "Your project"} — meeting ${timeChanged ? "time changed" : "updated"}`,
+        body: `${data.title} — ${when}`,
+        url: "/",
+      });
       api.notifyEmail({
         toEmails: emails,
-        subject: `Meeting time changed — ${data.title}`,
-        heading: "A meeting time has changed",
-        body: `${data.title} has been moved to ${when}.\n\n${data.mode === "online" ? "It's an online Teams meeting — the join link is in your portal." : `Where: ${data.location || "to be confirmed"}`}\n\nPlease open your portal to accept the new time. If it doesn't suit, just send us a message and we'll find another.`,
+        subject: `${timeChanged ? "New time" : "Updated"} — ${data.title}`,
+        heading: timeChanged ? "A meeting time has changed" : "A meeting has been updated",
+        body: `${data.title} is ${timeChanged ? "now" : "confirmed for"} ${when}.\n\n${where}\n\nPlease open your portal to accept — your previous reply has been reset while you confirm the new details. If it doesn't suit, just send us a message and we'll find another time.`,
         projectName: proj?.name,
         senderName: STUDIO_INFO.contactName || "Studio Nicholas",
         time: emailStamp(),

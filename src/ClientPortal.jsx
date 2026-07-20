@@ -4357,6 +4357,9 @@ function AdminMeetings({ project, onAdd, onEdit, onDelete, onSyncResponses, onRe
               {fmtInZone(m.instant, m.timezone)} {tzAbbrev(m.instant, m.timezone)} · {m.mode === "online" ? "Online" : "In person"}
             </p>
             {m.mode === "in-person" && m.location && <p className="text-[12px] text-stone-400 truncate">{m.location}</p>}
+            <p className="text-[11px] mt-0.5" style={{ color: m.msEventId ? "#576B45" : "#a89d95" }}>
+              {m.msEventId ? "In your calendar — edits resend invitations" : "Not in your calendar — edits won't change it"}
+            </p>
             {m.mode === "online" && m.link && (
               <a href={m.link} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-[12px] text-[#185FA5] hover:underline mt-1">
                 <Video className="w-3 h-3" /> Join Teams meeting
@@ -5847,13 +5850,33 @@ function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioSt
     }));
 
     const proj = projects[code];
-    // Keep the real calendar event in step, so the studio's Outlook shows the new
-    // time and every attendee is emailed an updated invitation by Microsoft.
+    const invited = meetingPeople(proj, data.invitees);
+    const attendees = invited.map((c) => ({ email: c.email, name: c.name }));
+    // Keep the real calendar in step — and never fail silently: say what happened.
     if (before?.msEventId) {
-      const invited = meetingPeople(proj, data.invitees);
+      // Existing Teams event: re-time it. Graph emails everyone a new invitation.
       api
-        .microsoftUpdateEvent({ id: before.msEventId, title: data.title, instant, message: data.message, attendees: invited.map((c) => ({ email: c.email, name: c.name })) })
-        .catch((e) => console.error("Teams meeting update failed", e));
+        .microsoftUpdateEvent({ id: before.msEventId, title: data.title, instant, message: data.message, attendees })
+        .then(() => showToast("Calendar updated — invitations resent"))
+        .catch((e) => {
+          console.error("Teams meeting update failed", e);
+          showToast("Couldn't update the calendar — check Microsoft is connected in Settings");
+        });
+    } else if (data.mode === "online" && !(data.link || "").trim()) {
+      // Online meeting with no calendar event yet (created before Microsoft was
+      // connected, or a Teams create that failed) — make one now.
+      api
+        .microsoftCreateEvent({ title: data.title, instant, message: data.message, attendees })
+        .then((ev) => {
+          if (ev?.joinUrl) updateProject(code, (p) => ({ ...p, meetings: p.meetings.map((m) => (m.id === id ? { ...m, link: ev.joinUrl, msEventId: ev.id } : m)) }));
+          showToast("Added to your calendar — invitations sent");
+        })
+        .catch((e) => {
+          console.error("Teams meeting create failed", e);
+          showToast("Couldn't reach your calendar — check Microsoft is connected in Settings");
+        });
+    } else {
+      showToast(data.mode === "online" ? "Saved — manual link, so your calendar wasn't changed" : "Saved — in-person meeting, so your calendar wasn't changed");
     }
     // Tell them in the portal too (push + email), so a changed time can't be missed.
     const emails = meetingPeople(proj, data.invitees).map((c) => (c.email || "").trim().toLowerCase()).filter(Boolean);

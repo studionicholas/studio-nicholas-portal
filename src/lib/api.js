@@ -389,6 +389,14 @@ export async function microsoftCreateEvent({ title, instant, message, attendees 
   if (data?.error) throw new Error(data.error);
   return data;
 }
+// Re-time / re-title an existing Teams event. Graph emails every attendee an
+// updated invitation so they can accept the new time.
+export async function microsoftUpdateEvent({ id, title, instant, message, attendees }) {
+  const { data, error } = await supabase.functions.invoke("microsoft", { body: { action: "updateEvent", id, title, instant, message, attendees } });
+  if (error) throw error;
+  if (data?.error) throw new Error(data.error);
+  return data;
+}
 export async function microsoftDeleteEvent(id) {
   try {
     await supabase.functions.invoke("microsoft", { body: { action: "deleteEvent", id } });

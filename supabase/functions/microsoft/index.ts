@@ -8,6 +8,10 @@
 //   "disconnect"  {}                  -> clear the stored token
 //   "createEvent" { title, instant, message, attendees:[{email,name}] }
 //                                     -> { id, joinUrl, webLink }
+//   "updateEvent" { id, title, instant, message, attendees }
+//                                     -> re-times the event; Graph emails
+//                                        attendees an updated invitation
+//   "eventStatus" { id }              -> [{ email, response }] per attendee
 //   "deleteEvent" { id }              -> cancels the calendar event
 //
 // Secrets (Edge Functions -> microsoft -> Secrets):
@@ -113,6 +117,22 @@ Deno.serve(async (req) => {
       if (!token) return json({ error: "Microsoft not connected" }, 400);
       const r = await fetch("https://graph.microsoft.com/v1.0/me/events", {
         method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify(eventBody(p)),
+      });
+      const data = await r.json();
+      if (!r.ok) return json({ error: data.error?.message || "Graph error" }, 400);
+      return json({ id: data.id, joinUrl: data.onlineMeeting?.joinUrl || "", webLink: data.webLink || "" });
+    }
+
+    if (action === "updateEvent") {
+      const token = await freshAccess();
+      if (!token) return json({ error: "Microsoft not connected" }, 400);
+      if (!p.id) return json({ error: "No event id" }, 400);
+      // PATCHing start/end (or attendees) makes Graph send every attendee an
+      // UPDATED invitation automatically, so they can accept the new time.
+      const r = await fetch(`https://graph.microsoft.com/v1.0/me/events/${p.id}`, {
+        method: "PATCH",
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
         body: JSON.stringify(eventBody(p)),
       });

@@ -728,6 +728,15 @@ function migrate(projects) {
   return out;
 }
 
+// Everyone who can be invited to a meeting on a project: clients AND builders
+// (both have logins and portals). Pass `invitees` to narrow it to those invited.
+function meetingPeople(project, invitees) {
+  const all = [...(project?.clients || []), ...(project?.builderUsers || [])].filter((c) => c && c.email);
+  if (!invitees || invitees.length === 0) return all;
+  const want = invitees.map((e) => (e || "").toLowerCase());
+  return all.filter((c) => want.includes((c.email || "").toLowerCase()));
+}
+
 // The Programa link for the email a client logged in with.
 function programaForViewer(project, email) {
   const e = (email || "").trim().toLowerCase();
@@ -4323,7 +4332,7 @@ function AdminMeetings({ project, onAdd, onEdit, onDelete, onSyncResponses, onRe
   const nowMs = Date.now();
   const upcoming = [...project.meetings].filter((m) => new Date(m.instant).getTime() >= nowMs).sort((a, b) => new Date(a.instant) - new Date(b.instant));
   const past = [...project.meetings].filter((m) => new Date(m.instant).getTime() < nowMs).sort((a, b) => new Date(b.instant) - new Date(a.instant));
-  const projectClients = (project.clients || []).filter((c) => c.email);
+  const projectClients = meetingPeople(project);
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
   const toggleInvitee = (email) => {
     const has = (form.invitees || []).some((e) => (e || "").toLowerCase() === email.toLowerCase());
@@ -4354,8 +4363,7 @@ function AdminMeetings({ project, onAdd, onEdit, onDelete, onSyncResponses, onRe
               </a>
             )}
             {(() => {
-              const allC = (project.clients || []).filter((c) => c.email);
-              const clients = m.invitees && m.invitees.length ? allC.filter((c) => m.invitees.map((e) => (e || "").toLowerCase()).includes(c.email.toLowerCase())) : allC;
+              const clients = meetingPeople(project, m.invitees);
               if (clients.length === 0) {
                 const r = RSVP_META[m.rsvp || "pending"];
                 return (
@@ -5799,11 +5807,7 @@ function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioSt
     // and no manual link was given (so a pasted link is always respected).
     if (data.mode === "online" && !(data.link || "").trim()) {
       const proj = projects[code];
-      const allC = (proj?.clients || []).filter((c) => c.email);
-      const invited =
-        data.invitees && data.invitees.length
-          ? allC.filter((c) => data.invitees.map((e) => (e || "").toLowerCase()).includes((c.email || "").toLowerCase()))
-          : allC;
+      const invited = meetingPeople(proj, data.invitees);
       api
         .microsoftCreateEvent({ title: data.title, instant, message: data.message, attendees: invited.map((c) => ({ email: c.email, name: c.name })) })
         .then((ev) => {
@@ -5816,6 +5820,10 @@ function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioSt
   }
   function editMeeting(code, id, data) {
     const instant = zonedToInstant(`${data.date}T${data.time}`, data.timezone);
+    const before = (projects[code]?.meetings || []).find((m) => m.id === id);
+    // A new time means everyone has to respond again — clear the old RSVPs so a
+    // stale "declined" (or "accepted") never sticks to a rescheduled meeting.
+    const timeChanged = !!before && before.instant !== instant;
     updateProject(code, (p) => ({
       ...p,
       meetings: p.meetings.map((m) =>
@@ -5830,10 +5838,38 @@ function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioSt
               instant,
               message: data.message || "",
               invitees: data.invitees || m.invitees || [],
+              ...(timeChanged ? { rsvps: {}, rsvp: "pending" } : {}),
             }
           : m
       ),
+      notifications: withNotif(p, "meeting", `Meeting updated: ${data.title} — open Meetings to confirm the new time`),
     }));
+
+    const proj = projects[code];
+    // Keep the real calendar event in step, so the studio's Outlook shows the new
+    // time and every attendee is emailed an updated invitation by Microsoft.
+    if (before?.msEventId) {
+      const invited = meetingPeople(proj, data.invitees);
+      api
+        .microsoftUpdateEvent({ id: before.msEventId, title: data.title, instant, message: data.message, attendees: invited.map((c) => ({ email: c.email, name: c.name })) })
+        .catch((e) => console.error("Teams meeting update failed", e));
+    }
+    // Tell them in the portal too (push + email), so a changed time can't be missed.
+    const emails = meetingPeople(proj, data.invitees).map((c) => (c.email || "").trim().toLowerCase()).filter(Boolean);
+    if (emails.length) {
+      const when = `${fmtInZone(instant, data.timezone)} ${tzAbbrev(instant, data.timezone)}`;
+      api.notifyPush({ toEmails: emails, title: `${proj?.name || "Your project"} — meeting time changed`, body: `${data.title} is now ${when}`, url: "/" });
+      api.notifyEmail({
+        toEmails: emails,
+        subject: `Meeting time changed — ${data.title}`,
+        heading: "A meeting time has changed",
+        body: `${data.title} has been moved to ${when}.\n\n${data.mode === "online" ? "It's an online Teams meeting — the join link is in your portal." : `Where: ${data.location || "to be confirmed"}`}\n\nPlease open your portal to accept the new time. If it doesn't suit, just send us a message and we'll find another.`,
+        projectName: proj?.name,
+        senderName: STUDIO_INFO.contactName || "Studio Nicholas",
+        time: emailStamp(),
+        kind: "notice",
+      });
+    }
   }
   function deleteMeeting(code, id) {
     // If this meeting was created as a Teams meeting, cancel it in the calendar too.

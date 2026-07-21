@@ -4305,7 +4305,7 @@ function AdminMilestones({ project, onAdd, onEdit, onSetStatus, onMove, onDelete
   );
 }
 
-function AdminMeetings({ project, onAdd, onEdit, onDelete, onSyncResponses, onRequest, onEditRequest, onDismissRequest }) {
+function AdminMeetings({ project, onAdd, onEdit, onDelete, onSyncResponses, onRequest, onEditRequest, onDismissRequest, onAddToCalendar }) {
   const [form, setForm] = useState({ title: "", date: "", time: "", timezone: "Australia/Melbourne", mode: "online", link: "", location: "", message: "", invitees: [] });
   const [editingId, setEditingId] = useState(null);
   const [reqOpen, setReqOpen] = useState(false);
@@ -4357,9 +4357,20 @@ function AdminMeetings({ project, onAdd, onEdit, onDelete, onSyncResponses, onRe
               {fmtInZone(m.instant, m.timezone)} {tzAbbrev(m.instant, m.timezone)} · {m.mode === "online" ? "Online" : "In person"}
             </p>
             {m.mode === "in-person" && m.location && <p className="text-[12px] text-stone-400 truncate">{m.location}</p>}
-            <p className="text-[11px] mt-0.5" style={{ color: m.msEventId ? "#576B45" : "#a89d95" }}>
-              {m.msEventId ? "In your calendar — edits resend invitations" : "Not in your calendar — edits won't change it"}
-            </p>
+            <div className="flex flex-wrap items-center gap-2 mt-0.5">
+              <p className="text-[11px]" style={{ color: m.msEventId ? "#576B45" : "#a89d95" }}>
+                {m.msEventId ? "In your calendar — edits resend invitations" : "Not in your calendar — edits won't change it"}
+              </p>
+              {!m.msEventId && onAddToCalendar && (
+                <button
+                  onClick={() => onAddToCalendar(m.id)}
+                  className="text-[11px] rounded-[3px] px-2 py-0.5"
+                  style={{ border: "1px solid #e8d9a8", background: "#F5EED9", color: "#8a6d1d" }}
+                >
+                  Add to calendar &amp; invite
+                </button>
+              )}
+            </div>
             {m.mode === "online" && m.link && (
               <a href={m.link} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-[12px] text-[#185FA5] hover:underline mt-1">
                 <Video className="w-3 h-3" /> Join Teams meeting
@@ -5901,6 +5912,31 @@ function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioSt
       });
     }
   }
+  // Link an existing meeting to a real calendar event (for ones made before
+  // Microsoft was connected, or with a pasted link). Creates the Teams meeting,
+  // invites everyone, and from then on edits/cancellations stay in step.
+  function addMeetingToCalendar(code, id) {
+    const proj = projects[code];
+    const m = (proj?.meetings || []).find((mm) => mm.id === id);
+    if (!m) return;
+    const attendees = meetingPeople(proj, m.invitees).map((c) => ({ email: c.email, name: c.name }));
+    showToast("Creating the calendar event…");
+    api
+      .microsoftCreateEvent({ title: m.title, instant: m.instant, message: m.message, attendees })
+      .then((ev) => {
+        if (!ev?.id) throw new Error("No event returned");
+        updateProject(code, (p) => ({
+          ...p,
+          meetings: p.meetings.map((mm) => (mm.id === id ? { ...mm, msEventId: ev.id, link: ev.joinUrl || mm.link, mode: "online", rsvps: {}, rsvp: "pending" } : mm)),
+        }));
+        showToast("In your calendar — invitations sent");
+      })
+      .catch((e) => {
+        console.error("link to calendar failed", e);
+        showToast("Couldn't reach your calendar — check Microsoft is connected in Settings");
+      });
+  }
+
   function deleteMeeting(code, id) {
     // If this meeting was created as a Teams meeting, cancel it in the calendar too.
     const m = (projects[code]?.meetings || []).find((mm) => mm.id === id);
@@ -6574,7 +6610,7 @@ function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioSt
 
             {adminTab === "meetings" && (
             <AdminSection title="Meetings">
-              <AdminMeetings project={project} onAdd={(d) => addMeeting(project.code, d)} onEdit={(id, d) => editMeeting(project.code, id, d)} onDelete={(id) => deleteMeeting(project.code, id)} onSyncResponses={() => syncMeetingResponses(project.code)} onRequest={(r) => requestMeetingFromClient(project.code, r)} onEditRequest={(id, r) => editRequest(project.code, id, r)} onDismissRequest={(id) => dismissRequest(project.code, id)} />
+              <AdminMeetings project={project} onAdd={(d) => addMeeting(project.code, d)} onEdit={(id, d) => editMeeting(project.code, id, d)} onDelete={(id) => deleteMeeting(project.code, id)} onSyncResponses={() => syncMeetingResponses(project.code)} onAddToCalendar={(id) => addMeetingToCalendar(project.code, id)} onRequest={(r) => requestMeetingFromClient(project.code, r)} onEditRequest={(id, r) => editRequest(project.code, id, r)} onDismissRequest={(id) => dismissRequest(project.code, id)} />
             </AdminSection>
             )}
 

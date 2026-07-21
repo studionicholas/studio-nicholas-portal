@@ -400,6 +400,36 @@ function truncate(s, n = 70) {
   if (!s) return "";
   return s.length > n ? s.slice(0, n) + "…" : s;
 }
+// Turn URLs inside message text into clickable links, keeping the rest as plain
+// text (and preserving line breaks via the parent's whitespace-pre-wrap).
+function linkify(text) {
+  if (!text) return text;
+  const re = /(https?:\/\/[^\s]+|www\.[^\s]+)/gi;
+  const out = [];
+  let last = 0;
+  let m;
+  let key = 0;
+  while ((m = re.exec(text)) !== null) {
+    if (m.index > last) out.push(text.slice(last, m.index));
+    let url = m[0];
+    let trail = "";
+    const t = url.match(/[.,!?;:)\]}"']+$/); // don't swallow trailing punctuation
+    if (t) {
+      trail = t[0];
+      url = url.slice(0, -trail.length);
+    }
+    const href = url.startsWith("http") ? url : `https://${url}`;
+    out.push(
+      <a key={key++} href={href} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="underline break-all" style={{ textUnderlineOffset: 2 }}>
+        {url}
+      </a>
+    );
+    if (trail) out.push(trail);
+    last = re.lastIndex;
+  }
+  if (last < text.length) out.push(text.slice(last));
+  return out.length ? out : text;
+}
 // Pick readable text (ink or white) for a given background colour.
 function textOn(bg) {
   const c = (bg || "").replace("#", "");
@@ -1906,7 +1936,7 @@ function MessagesPanel({ messages, meRole, onSend, onSendNotice, onReact, onPin,
                   </div>
                 ) : (
                   <>
-                    {m.text && <p className={`leading-relaxed break-words whitespace-pre-wrap ${isNotice ? "text-stone-700 max-w-[440px] mx-auto" : ""}`}>{m.text}</p>}
+                    {m.text && <p className={`leading-relaxed break-words whitespace-pre-wrap ${isNotice ? "text-stone-700 max-w-[440px] mx-auto" : ""}`}>{linkify(m.text)}</p>}
                     {m.photos?.length > 0 && (
                       <div className={`grid gap-1.5 ${m.photos.length === 1 ? "grid-cols-1" : "grid-cols-2"} ${m.text ? (isNotice ? "mt-3.5" : "mt-2") : ""} ${isNotice ? "justify-items-center" : ""}`}>
                         {m.photos.map((p, i) => (

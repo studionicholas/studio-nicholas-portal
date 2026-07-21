@@ -2891,7 +2891,8 @@ function SignaturePad({ onChange }) {
 // One bubble for the client's Fee tab: the proposal at the top, then (once a
 // proposal is shared) a divider and the review-and-sign section below it — or
 // the signed-and-accepted summary once it's done.
-function SignProposalCard({ proposal, signed, projectName, clientName, clientEmail, onSign, note, emptyText, onAskQuestion }) {
+function SignProposalCard({ proposal, signed, projectName, clientName, clientEmail, onSign, onActivity, note, emptyText, onAskQuestion }) {
+  const logActivity = (action, which) => onActivity && onActivity(action, which);
   const nameParts = (clientName || "").trim().split(/\s+/).filter(Boolean);
   const [first, setFirst] = useState(nameParts.length > 1 ? nameParts[0] : nameParts[0] || "");
   const [last, setLast] = useState(nameParts.length > 1 ? nameParts.slice(1).join(" ") : "");
@@ -2949,10 +2950,22 @@ function SignProposalCard({ proposal, signed, projectName, clientName, clientEma
               {note && <p className="text-[13px] text-stone-500 leading-relaxed mt-3">{note}</p>}
               {proposal.dataUrl ? (
                 <div className="flex flex-wrap gap-2 mt-4">
-                  <button onClick={() => setPreview({ file: proposal, title: proposal.name || "Fee proposal" })} className="inline-flex items-center gap-1.5 text-[13px] bg-stone-900 text-white rounded-full px-4 py-2 hover:bg-stone-800 transition-colors">
+                  <button
+                    onClick={() => {
+                      logActivity("opened", "proposal");
+                      setPreview({ file: proposal, title: proposal.name || "Fee proposal" });
+                    }}
+                    className="inline-flex items-center gap-1.5 text-[13px] bg-stone-900 text-white rounded-full px-4 py-2 hover:bg-stone-800 transition-colors"
+                  >
                     <FileText className="w-3.5 h-3.5" /> Read the proposal
                   </button>
-                  <button onClick={() => downloadFile(proposal)} className="inline-flex items-center gap-1.5 text-[13px] text-stone-700 border border-stone-300 rounded-full px-4 py-2 hover:bg-stone-100 transition-colors">
+                  <button
+                    onClick={() => {
+                      logActivity("downloaded", "proposal");
+                      downloadFile(proposal);
+                    }}
+                    className="inline-flex items-center gap-1.5 text-[13px] text-stone-700 border border-stone-300 rounded-full px-4 py-2 hover:bg-stone-100 transition-colors"
+                  >
                     <Download className="w-3.5 h-3.5" /> Download
                   </button>
                 </div>
@@ -2986,10 +2999,22 @@ function SignProposalCard({ proposal, signed, projectName, clientName, clientEma
                 </p>
                 {signed.dataUrl && (
                   <div className="flex flex-wrap gap-2 mt-4">
-                    <button onClick={() => setPreview({ file: signed, title: signed.name || "Signed fee proposal" })} className="inline-flex items-center gap-1.5 text-[13px] bg-stone-900 text-white rounded-full px-4 py-2 hover:bg-stone-800 transition-colors">
+                    <button
+                      onClick={() => {
+                        logActivity("opened", "signed copy");
+                        setPreview({ file: signed, title: signed.name || "Signed fee proposal" });
+                      }}
+                      className="inline-flex items-center gap-1.5 text-[13px] bg-stone-900 text-white rounded-full px-4 py-2 hover:bg-stone-800 transition-colors"
+                    >
                       <ExternalLink className="w-3.5 h-3.5" /> View
                     </button>
-                    <button onClick={() => downloadFile(signed)} className="inline-flex items-center gap-1.5 text-[13px] text-stone-700 border border-stone-300 rounded-full px-4 py-2 hover:bg-stone-100 transition-colors">
+                    <button
+                      onClick={() => {
+                        logActivity("downloaded", "signed copy");
+                        downloadFile(signed);
+                      }}
+                      className="inline-flex items-center gap-1.5 text-[13px] text-stone-700 border border-stone-300 rounded-full px-4 py-2 hover:bg-stone-100 transition-colors"
+                    >
                       <Download className="w-3.5 h-3.5" /> Download
                     </button>
                   </div>
@@ -3314,7 +3339,7 @@ function EnablePushBanner({ email }) {
   );
 }
 
-function ClientDashboard({ project, viewerEmail, studioStatus, studioStatusColor, autoStatus, onLogout, onSetEmailNotify, onSendMessage, onReactMessage, onPinMessage, onMarkRead, onMarkNotifs, onDismissNotif, onSeenTab, onUploadSigned, onSignProposal, onRespondMeeting, onRequestMeeting, onEditRequest, onAcceptRequest, onDismissRequest, installOpen }) {
+function ClientDashboard({ project, viewerEmail, studioStatus, studioStatusColor, autoStatus, onLogout, onSetEmailNotify, onSendMessage, onReactMessage, onPinMessage, onMarkRead, onMarkNotifs, onDismissNotif, onSeenTab, onUploadSigned, onSignProposal, onProposalActivity, onRespondMeeting, onRequestMeeting, onEditRequest, onAcceptRequest, onDismissRequest, installOpen }) {
   // Last-viewed tab is remembered per device (client redesign) and restored on
   // open; notification deep-links overwrite it.
   const [tab, setTab] = useState(() => {
@@ -3676,6 +3701,7 @@ function ClientDashboard({ project, viewerEmail, studioStatus, studioStatusColor
               clientName={myClient?.name || project.clientName}
               clientEmail={viewerEmail}
               onSign={onSignProposal}
+              onActivity={onProposalActivity}
               note={project.feeProposal?.note}
               emptyText={`Your fee proposal will appear here to review and sign once ${studioFirstName()} has shared it.`}
               onAskQuestion={
@@ -6711,6 +6737,24 @@ function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioSt
                   hint="The client can also upload their signed copy from their portal."
                 />
               </div>
+
+              {(project.proposalActivity || []).length > 0 && (
+                <div className="mt-5">
+                  <p className="text-[11px] uppercase mb-2" style={{ letterSpacing: "0.12em", color: "#a89d95" }}>Client activity</p>
+                  <div className="rounded-[3px]" style={{ background: "#fffdfb", border: "1px solid #e6d8cf" }}>
+                    {[...project.proposalActivity].reverse().slice(0, 20).map((a, i, arr) => (
+                      <div key={i} className="flex items-center gap-2 px-3.5 py-2.5" style={{ borderBottom: i < arr.length - 1 ? "1px solid #efe4dc" : "none" }}>
+                        <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: a.action === "downloaded" ? "#576b45" : "#b26f52" }} />
+                        <p className="flex-1 min-w-0 text-[13px]" style={{ color: "#55483e" }}>
+                          <span className="text-stone-800">{a.name}</span> {a.action} the {a.which || "proposal"}
+                        </p>
+                        <span className="shrink-0 text-[11px]" style={{ color: "#a89d95" }}>{formatDate(a.at)} · {formatTime(a.at)}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-[11px] mt-1.5" style={{ color: "#a89d95" }}>Every time a client opens or downloads the proposal is logged here.</p>
+                </div>
+              )}
             </AdminSection>
             )}
 
@@ -7520,6 +7564,30 @@ export default function App() {
     [activeCode, session, projects]
   );
 
+  // Log each time the client opens or downloads the fee proposal (or its signed
+  // copy), so the studio can see engagement in the back end. Deduped within a
+  // few seconds so one tap doesn't record twice.
+  const lastActivity = useRef({});
+  const handleProposalActivity = useCallback(
+    (action, which) => {
+      const me = (session?.user?.email || "").trim().toLowerCase();
+      const k = `${action}_${which}_${me}`;
+      const now = Date.now();
+      if (now - (lastActivity.current[k] || 0) < 4000) return;
+      lastActivity.current[k] = now;
+      const p = projects[activeCode];
+      const c = (p?.clients || []).find((x) => (x.email || "").toLowerCase() === me);
+      const name = (c && c.name) || (me ? me.split("@")[0] : "Client");
+      setProjects((prev) => {
+        const proj = prev[activeCode];
+        if (!proj) return prev;
+        const activity = [...(proj.proposalActivity || []), { email: me, name, action, which: which || "proposal", at: new Date().toISOString() }].slice(-60);
+        return { ...prev, [activeCode]: { ...proj, proposalActivity: activity } };
+      });
+    },
+    [activeCode, session, projects]
+  );
+
   const handleRespondMeeting = useCallback(
     (meetingId, rsvp) => {
       const me = (session?.user?.email || "").trim().toLowerCase();
@@ -7655,6 +7723,7 @@ export default function App() {
         onSeenTab={handleSeenTab}
         onUploadSigned={handleUploadSigned}
         onSignProposal={handleSignProposal}
+        onProposalActivity={handleProposalActivity}
         onRespondMeeting={handleRespondMeeting}
         onRequestMeeting={handleRequestMeeting}
         onEditRequest={handleEditRequest}

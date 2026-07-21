@@ -344,6 +344,22 @@ function stageColour(stage) {
   return STAGE_COLOURS[stage] || { bg: "#B7453C", tint: "#E6D0C7" };
 }
 
+// The full official Studio Nicholas brand palette, for the client banner colour.
+// Ordered light → dark; all sit well behind the banner's light title text.
+const BANNER_COLOURS = [
+  "#9BACB6", // aqua
+  "#7fa2ab", // deep aqua
+  "#576B45", // sage / green
+  "#B9925B", // brass / tan
+  "#b26f52", // terracotta / copper
+  "#D5A933", // mustard / gold
+  "#B7453C", // rust
+  "#811618", // dark red / plum
+  "#2a221c", // ink
+  "#1C1A17", // near-black
+];
+const BANNER_DEFAULT = "#9BACB6";
+
 // Colour swatches the studio can pick for a project's status badge.
 // Studio Nicholas brand palette only.
 const STAGE_SWATCHES = [
@@ -3430,7 +3446,7 @@ function ClientDashboard({ project, viewerEmail, studioStatus, studioStatusColor
   // Hero banner (client redesign): a flat brand colour with the project name in
   // italic Selva by default; the studio can switch a project to its photo
   // instead (Details tab). Existing projects keep working either way.
-  const heroColor = project.heroColor || "#7fa2ab";
+  const heroColor = project.heroColor || BANNER_DEFAULT;
   const heroIsPhoto = project.heroStyle === "photo" && project.heroPhoto;
 
   return (
@@ -6354,7 +6370,7 @@ function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioSt
           <>
             {/* Flat-colour banner — same treatment as the client side */}
             {(() => {
-              const heroColor = project.isLead ? "#d5a933" : project.heroColor || "#7fa2ab";
+              const heroColor = project.isLead ? "#d5a933" : project.heroColor || BANNER_DEFAULT;
               const heroIsPhoto = !project.isLead && project.heroStyle === "photo" && project.heroPhoto;
               return (
                 <div className="relative overflow-hidden shrink-0" style={{ height: isDesktop ? 110 : 88, background: heroIsPhoto ? "#1C1A17" : heroColor }}>
@@ -6475,13 +6491,13 @@ function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioSt
             <div className="mb-8">
               <p className="text-[12px] text-stone-400 mb-2">Client banner — a flat colour with the project name (default), or the project photo</p>
               <div className="flex flex-wrap items-center gap-2">
-                {["#7fa2ab", "#576b45", "#b26f52", "#2a221c"].map((c) => (
+                {BANNER_COLOURS.map((c) => (
                   <button
                     key={c}
                     type="button"
                     onClick={() => updateProject(project.code, (p) => ({ ...p, heroStyle: "colour", heroColor: c }))}
                     className="w-7 h-7 rounded-full border-2 transition-transform hover:scale-110"
-                    style={{ backgroundColor: c, borderColor: project.heroStyle !== "photo" && (project.heroColor || "#7fa2ab") === c ? "#1c1917" : "transparent" }}
+                    style={{ backgroundColor: c, borderColor: project.heroStyle !== "photo" && (project.heroColor || BANNER_DEFAULT).toLowerCase() === c.toLowerCase() ? "#1c1917" : "transparent" }}
                     aria-label="Banner colour"
                   />
                 ))}

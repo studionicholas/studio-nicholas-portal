@@ -6370,7 +6370,9 @@ function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioSt
           <>
             {/* Flat-colour banner — same treatment as the client side */}
             {(() => {
-              const heroColor = project.isLead ? "#d5a933" : project.heroColor || BANNER_DEFAULT;
+              // Leads default to amber (the pipeline signal), but an explicitly
+              // chosen banner colour always wins — for leads and projects alike.
+              const heroColor = project.heroColor || (project.isLead ? "#d5a933" : BANNER_DEFAULT);
               const heroIsPhoto = !project.isLead && project.heroStyle === "photo" && project.heroPhoto;
               return (
                 <div className="relative overflow-hidden shrink-0" style={{ height: isDesktop ? 110 : 88, background: heroIsPhoto ? "#1C1A17" : heroColor }}>

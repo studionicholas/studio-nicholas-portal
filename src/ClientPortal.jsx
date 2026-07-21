@@ -6396,8 +6396,7 @@ function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioSt
                     </span>
                   )}
                   <p className="absolute bottom-1.5 left-0 right-0 text-center text-[9px]" style={{ fontStyle: "italic", color: "rgba(255,253,251,0.7)" }}>
-                    {project.code}
-                    {project.address || project.location ? ` · ${project.address || project.location}` : ""}
+                    {project.address || project.location || project.code}
                   </p>
                 </div>
               );

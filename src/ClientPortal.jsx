@@ -6738,21 +6738,24 @@ function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioSt
                 />
               </div>
 
-              {(project.proposalActivity || []).length > 0 && (
+              {project.feeProposal && (
                 <div className="mt-5">
                   <p className="text-[11px] uppercase mb-2" style={{ letterSpacing: "0.12em", color: "#a89d95" }}>Client activity</p>
                   <div className="rounded-[3px]" style={{ background: "#fffdfb", border: "1px solid #e6d8cf" }}>
-                    {[...project.proposalActivity].reverse().slice(0, 20).map((a, i, arr) => (
-                      <div key={i} className="flex items-center gap-2 px-3.5 py-2.5" style={{ borderBottom: i < arr.length - 1 ? "1px solid #efe4dc" : "none" }}>
-                        <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: a.action === "downloaded" ? "#576b45" : "#b26f52" }} />
-                        <p className="flex-1 min-w-0 text-[13px]" style={{ color: "#55483e" }}>
-                          <span className="text-stone-800">{a.name}</span> {a.action} the {a.which || "proposal"}
-                        </p>
-                        <span className="shrink-0 text-[11px]" style={{ color: "#a89d95" }}>{formatDate(a.at)} · {formatTime(a.at)}</span>
-                      </div>
-                    ))}
+                    {(project.proposalActivity || []).length === 0 ? (
+                      <p className="px-3.5 py-3 text-[12.5px]" style={{ color: "#a89d95" }}>Not opened yet — you'll see here each time a client reads or downloads the proposal.</p>
+                    ) : (
+                      [...project.proposalActivity].reverse().slice(0, 20).map((a, i, arr) => (
+                        <div key={i} className="flex items-center gap-2 px-3.5 py-2.5" style={{ borderBottom: i < arr.length - 1 ? "1px solid #efe4dc" : "none" }}>
+                          <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: a.action === "downloaded" ? "#576b45" : "#b26f52" }} />
+                          <p className="flex-1 min-w-0 text-[13px]" style={{ color: "#55483e" }}>
+                            <span className="text-stone-800">{a.name}</span> {a.action} the {a.which || "proposal"}
+                          </p>
+                          <span className="shrink-0 text-[11px]" style={{ color: "#a89d95" }}>{formatDate(a.at)} · {formatTime(a.at)}</span>
+                        </div>
+                      ))
+                    )}
                   </div>
-                  <p className="text-[11px] mt-1.5" style={{ color: "#a89d95" }}>Every time a client opens or downloads the proposal is logged here.</p>
                 </div>
               )}
             </AdminSection>

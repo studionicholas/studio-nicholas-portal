@@ -363,10 +363,13 @@ const BANNER_DEFAULT = "#9BACB6";
 // Colour swatches the studio can pick for a project's status badge.
 // Studio Nicholas brand palette only.
 const STAGE_SWATCHES = [
-  { bg: "#576B45", tint: "#D1D2C9" }, // green
-  { bg: "#D5A933", tint: "#F5EED9" }, // mustard
-  { bg: "#811618", tint: "#D7C1B6" }, // dark red
+  { bg: "#9BACB6", tint: "#E4EBED" }, // aqua
+  { bg: "#576B45", tint: "#D1D2C9" }, // sage / green
+  { bg: "#B9925B", tint: "#EDE3D4" }, // brass / tan
+  { bg: "#b26f52", tint: "#ECDDD4" }, // terracotta / copper
+  { bg: "#D5A933", tint: "#F5EED9" }, // mustard / gold
   { bg: "#B7453C", tint: "#E6D0C7" }, // rust
+  { bg: "#811618", tint: "#D7C1B6" }, // dark red / plum
   { bg: "#1C1A17", tint: "#E0DCD7" }, // ink
   { bg: "#78716c", tint: "#EFE7E1" }, // stone
 ];

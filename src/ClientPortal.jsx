@@ -1982,21 +1982,28 @@ function MessagesPanel({ messages, meRole, onSend, onSendNotice, onReact, onPin,
                 <p className={`text-[11px] mt-1 ${isNotice ? "mt-3 text-stone-400" : mine ? "text-white/50" : "text-stone-400"}`}>
                   {senderLabel(m)} · {formatDate(m.date)} · {formatTime(m.date)}
                   {m.edited && " · edited"}
-                  {showReceipts && m.from === "studio" && !isNotice && (seenPeople.length > 0 ? ` · Seen by ${seenPeople.map(([e]) => personName(e)).join(", ")}` : seen ? " · Seen" : " · Sent")}
                 </p>
-                {isNotice && meRole === "studio" && showReceipts && (
-                  <p className="text-[11px] mt-1.5">
-                    {seenPeople.length > 0 ? (
-                      <span style={{ color: "#576B45" }}>
-                        ✓ Seen by {seenPeople.map(([e, at]) => `${personName(e)} (${formatDate(at)}, ${formatTime(at)})`).join(" · ")}
-                      </span>
-                    ) : (
-                      <span className="text-stone-400">Not seen yet</span>
-                    )}
-                    {awaiting.length > 0 && <span className="text-stone-400">{seenPeople.length > 0 ? " · " : " — "}Awaiting {awaiting.map(personName).join(", ")}</span>}
-                  </p>
-                )}
               </div>
+
+              {/* Read receipt (studio view of your own messages) — who's opened it,
+                  who hasn't. Sits below the bubble so it's clear and readable. */}
+              {meRole === "studio" && showReceipts && m.from === "studio" && (
+                <p className={`text-[11px] mt-1 ${isNotice ? "text-center w-full" : mine ? "text-right" : ""}`}>
+                  {seenPeople.length > 0 ? (
+                    <span style={{ color: "#576b45" }}>
+                      ✓ Seen by {seenPeople.map(([e, at]) => `${personName(e)} · ${formatTime(at)}`).join(", ")}
+                      {awaiting.length > 0 && <span style={{ color: "#a89d95" }}> · awaiting {awaiting.map(personName).join(", ")}</span>}
+                    </span>
+                  ) : seen ? (
+                    <span style={{ color: "#576b45" }}>✓ Read</span>
+                  ) : (
+                    <span style={{ color: "#a89d95" }}>
+                      Delivered · not read yet
+                      {awaiting.length > 1 && ` (${awaiting.map(personName).join(", ")})`}
+                    </span>
+                  )}
+                </p>
+              )}
 
               {m.label && (
                 <div className={`flex mt-1 ${mine ? "justify-end" : "justify-start"}`}>

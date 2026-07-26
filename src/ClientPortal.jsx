@@ -47,6 +47,7 @@ import {
   Camera,
   List,
   Activity,
+  Eye,
 } from "lucide-react";
 
 /* ----------------------------------------------------------------
@@ -4656,6 +4657,8 @@ function AdminMeetings({ project, onAdd, onEdit, onDelete, onSyncResponses, onRe
 function AdminDocSlot({ label, dateLabel, file, onSet, onRemove, hint }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [preview, setPreview] = useState(false);
+  const isPdf = file && (file.dataUrl || "").length > 0 && /\.pdf(\?|$)/i.test(file.name || file.dataUrl || "");
   async function handle(e) {
     const f = (e.target.files || [])[0];
     e.target.value = "";
@@ -4702,6 +4705,11 @@ function AdminDocSlot({ label, dateLabel, file, onSet, onRemove, hint }) {
           </div>
           <div className="flex items-center gap-3 shrink-0">
             {file.dataUrl && (
+              <button onClick={() => (isPdf ? setPreview(true) : openDoc(file))} className="text-stone-400 hover:text-stone-800" aria-label="Preview">
+                <Eye className="w-4 h-4" />
+              </button>
+            )}
+            {file.dataUrl && (
               <button onClick={() => downloadFile(file)} className="text-stone-400 hover:text-stone-800" aria-label="Download">
                 <Download className="w-4 h-4" />
               </button>
@@ -4720,6 +4728,7 @@ function AdminDocSlot({ label, dateLabel, file, onSet, onRemove, hint }) {
       </label>
       {error && <p className="text-[12px] text-red-600 mt-1">{error}</p>}
       {hint && <p className="text-[11px] text-stone-400 mt-1">{hint}</p>}
+      {preview && file && <PdfPreviewModal file={file} title={file.name || label} onClose={() => setPreview(false)} />}
     </div>
   );
 }
@@ -6611,6 +6620,14 @@ function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioSt
 
             <AdminSection title="About & details">
               <div className="space-y-3">
+                <div className="rounded-lg p-3" style={{ background: "#F5EED9", border: "1px solid #e8d9a8" }}>
+                  <BlurField
+                    label="Project number — private, only you see this"
+                    value={project.projectNumber}
+                    onSave={(v) => setField(project.code, "projectNumber", v)}
+                    placeholder="e.g. SN-2026-014"
+                  />
+                </div>
                 <BlurField label="Description (shown on the client's About tab)" textarea value={project.description} onSave={(v) => setField(project.code, "description", v)} placeholder="A short description of the project." />
                 <div className="grid sm:grid-cols-2 gap-3">
                   <BlurField label="Address" value={project.address} onSave={(v) => setField(project.code, "address", v)} placeholder="Full address" />

@@ -3443,20 +3443,38 @@ function ClientDashboard({ project, viewerEmail, studioStatus, studioStatusColor
       return false;
     }
   })();
+  const engageHasSomething = () => {
+    const needPush = api.pushSupported() && api.pushPermission() === "default";
+    const needEmail = !!(myClient && typeof myClient.emailNotify === "undefined");
+    return !isStandalone || needPush || needEmail;
+  };
   function sendWithEngage(text, replyTo, photos) {
     onSendMessage(text, replyTo, photos);
     try {
-      if (!sentBeforeRef.current && !localStorage.getItem("sn_engage_seen")) {
-        const needPush = api.pushSupported() && api.pushPermission() === "default";
-        const needEmail = !!(myClient && typeof myClient.emailNotify === "undefined");
-        if (!isStandalone || needPush || needEmail) {
-          localStorage.setItem("sn_engage_seen", "1");
-          setEngageOpen(true);
-        }
+      if (!sentBeforeRef.current && !localStorage.getItem("sn_engage_seen") && engageHasSomething()) {
+        localStorage.setItem("sn_engage_seen", "1");
+        setEngageOpen(true);
       }
     } catch (_e) {}
     sentBeforeRef.current = true;
   }
+  // Leads: offer the combined "stay in the loop" sheet (home screen + push +
+  // email) as soon as they open their fee-proposal portal — no need to wait for
+  // a first message. Once per device.
+  useEffect(() => {
+    if (!project.isLead) return;
+    let t;
+    try {
+      if (!localStorage.getItem("sn_engage_seen") && engageHasSomething()) {
+        t = setTimeout(() => {
+          localStorage.setItem("sn_engage_seen", "1");
+          setEngageOpen(true);
+        }, 1200);
+      }
+    } catch (_e) {}
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [project.isLead]);
 
   const now = Date.now();
   const myEmailLc = (viewerEmail || "").trim().toLowerCase();
@@ -6166,7 +6184,10 @@ function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioSt
     const proj = projects[code];
     const emails = (proj?.clients || []).map((c) => (c.email || "").trim().toLowerCase()).filter(Boolean);
     if (emails.length) api.notifyPush({ toEmails: emails, title: `${proj.name || "Your project"} — new message`, body: text && text.trim() ? text : "Sent a photo", url: "/" });
-    const em = optedInEmails(proj);
+    // Leads have no push yet (and may not have a login), so a message to a lead
+    // emails EVERY contact — with a "Set up your login" button — so they never
+    // miss it. Live projects still email only those opted in to email updates.
+    const em = proj?.isLead ? emails : optedInEmails(proj);
     if (em.length)
       api.notifyEmail({
         toEmails: em,
@@ -6177,6 +6198,7 @@ function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioSt
         senderName: STUDIO_INFO.contactName || "Studio Nicholas",
         time: emailStamp(),
         kind: "message",
+        setupCta: !!proj?.isLead,
       });
   }
   function reactMessage(code, id, emoji) {
@@ -7070,6 +7092,13 @@ export default function App() {
   useEffect(() => {
     if (!session) return;
     if (api.needsPasswordSetup && !passwordDone) return;
+    // A lead gets ONE combined prompt on their fee proposal instead — don't also
+    // fire the standalone install pop-up. Wait for projects so we know it's a lead.
+    if (role === "client") {
+      if (!projects) return;
+      const proj = activeCode ? projects[activeCode] : Object.values(projects)[0];
+      if (proj?.isLead) return;
+    }
     try {
       const standalone = window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone;
       if (!standalone && !localStorage.getItem("sn_install_seen")) {
@@ -7077,7 +7106,7 @@ export default function App() {
         setInstallOpen(true);
       }
     } catch (e) {}
-  }, [session, passwordDone]);
+  }, [session, passwordDone, role, projects, activeCode]);
 
   // Load the login-page photo + message before anyone signs in (public read).
   useEffect(() => {

@@ -1528,7 +1528,7 @@ function NoticeComposer({ onSend, onCancel, hasPrograma, templates }) {
   );
 }
 
-function MessagesPanel({ messages, meRole, onSend, onSendNotice, onReact, onPin, onLabel, onTagPhoto, onEdit, onDelete, seenSince, showReceipts, showStatus, onToggleStatus, customStatus, onSetCustomStatus, studioStatus, studioStatusColor, autoStatus, prefill, onPrefillUsed, draftKey, clients, myEmail, fallbackClientName, programaUrl, noticeTemplates, fill, slimTools }) {
+function MessagesPanel({ messages, meRole, onSend, onSendNotice, onSendProgramaPing, onReact, onPin, onLabel, onTagPhoto, onEdit, onDelete, seenSince, showReceipts, showStatus, onToggleStatus, customStatus, onSetCustomStatus, studioStatus, studioStatusColor, autoStatus, prefill, onPrefillUsed, draftKey, clients, myEmail, fallbackClientName, programaUrl, noticeTemplates, fill, slimTools }) {
   // The automatic out-of-office note shows (to everyone) during its active hours,
   // unless this project has its own custom status note set.
   const autoNote = customStatus ? null : activeAutoNote(autoStatus);
@@ -1596,6 +1596,7 @@ function MessagesPanel({ messages, meRole, onSend, onSendNotice, onReact, onPin,
   const [editText, setEditText] = useState("");
   const [noticeOpen, setNoticeOpen] = useState(false);
   const [noticeSent, setNoticeSent] = useState(false);
+  const [programaSent, setProgramaSent] = useState(false);
   const [statusOpen, setStatusOpen] = useState(false); // studio: status editor collapsed behind one small button
   const [query, setQuery] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
@@ -1704,6 +1705,23 @@ function MessagesPanel({ messages, meRole, onSend, onSendNotice, onReact, onPin,
               </span>
             ) : (
               <span className="flex-1" />
+            )}
+            {onSendProgramaPing && programaUrl && (
+              <>
+                {programaSent && <span className="shrink-0 text-[11px] text-[#576B45]">Sent ✓</span>}
+                <button
+                  type="button"
+                  onClick={() => {
+                    onSendProgramaPing();
+                    setProgramaSent(true);
+                    setTimeout(() => setProgramaSent(false), 4000);
+                  }}
+                  className="shrink-0 inline-flex items-center gap-1.5 text-[12px] rounded-[3px] px-3 py-1.5"
+                  style={{ border: "1px solid #cfdbdf", background: "#eef3f4", color: "#4a6670" }}
+                >
+                  <ExternalLink className="w-3.5 h-3.5" /> Programa update
+                </button>
+              </>
             )}
             {onSendNotice && !noticeOpen && (
               <>
@@ -1953,6 +1971,18 @@ function MessagesPanel({ messages, meRole, onSend, onSendNotice, onReact, onPin,
                       </div>
                     )}
                   </>
+                )}
+                {!isNotice && m.programaCta && programaUrl && (
+                  <a
+                    href={programaUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                    className="inline-flex items-center gap-1 rounded-full px-3 py-1 text-[12px] mt-2 transition-opacity hover:opacity-90"
+                    style={{ background: "#9BACB6", color: "#1C1A17" }}
+                  >
+                    Open Programa dashboard <ChevronRight className="w-3 h-3" />
+                  </a>
                 )}
                 {isNotice && (
                   <div className="flex flex-wrap items-center justify-center gap-2 mt-3.5">
@@ -6122,6 +6152,34 @@ function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioSt
     }));
   }
 
+  // Quick "I've updated your Programa dashboard" ping — a short message with a
+  // small, per-client Programa link so they can jump straight to it.
+  function sendProgramaPing(code) {
+    const text = "I've just updated your Programa dashboard — tap below to take a look.";
+    updateProject(code, (p) => ({
+      ...p,
+      lastReadStudio: new Date().toISOString(),
+      messages: [...p.messages, { id: uid(), from: "studio", text, programaCta: true, photos: [], date: new Date().toISOString(), replyTo: null, reactions: [], pinned: false }],
+      notifications: withNotif(p, "message", "Your Programa dashboard was updated"),
+    }));
+    const proj = projects[code];
+    const emails = (proj?.clients || []).map((c) => (c.email || "").trim().toLowerCase()).filter(Boolean);
+    if (emails.length) api.notifyPush({ toEmails: emails, title: `${proj?.name || "Your project"} — Programa updated`, body: "Your Programa dashboard has a new update.", url: "/" });
+    const em = proj?.isLead ? emails : optedInEmails(proj);
+    if (em.length)
+      api.notifyEmail({
+        toEmails: em,
+        subject: `Your Programa dashboard was updated — ${proj?.name || "your project"}`,
+        heading: STUDIO_INFO.contactName || "Studio Nicholas",
+        body: "I've just updated your Programa dashboard — open your portal and tap the Programa link to take a look.",
+        projectName: proj?.name,
+        senderName: STUDIO_INFO.contactName || "Studio Nicholas",
+        time: emailStamp(),
+        kind: "message",
+        setupCta: !!proj?.isLead,
+      });
+  }
+
   function setIssuedProposal(code, file) {
     updateProject(code, (p) => ({ ...p, feeProposal: file, notifications: withNotif(p, "fee", "Fee proposal shared") }));
     const proj = projects[code];
@@ -6825,6 +6883,7 @@ function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioSt
                 fallbackClientName={project.clientName}
                 onSend={(text, replyTo, photos) => replyMessage(project.code, text, replyTo, photos)}
                 onSendNotice={(n) => sendNotice(project.code, n)}
+                onSendProgramaPing={() => sendProgramaPing(project.code)}
                 noticeTemplates={noticeTemplates}
                 onReact={(id, emoji) => reactMessage(project.code, id, emoji)}
                 onPin={(id) => pinMessage(project.code, id)}

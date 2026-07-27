@@ -456,7 +456,7 @@ function readFileAsDataURL(file) {
 }
 // Downscale an image file to a reasonable size and return a JPEG data URL.
 // Keeps photos light enough to store inline and sync quickly.
-function resizeImageToDataURL(file, maxDim = 1200, quality = 0.72) {
+function resizeImageToDataURL(file, maxDim = 2200, quality = 0.88) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onerror = reject;
@@ -474,6 +474,8 @@ function resizeImageToDataURL(file, maxDim = 1200, quality = 0.72) {
         canvas.width = width;
         canvas.height = height;
         const ctx = canvas.getContext("2d");
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = "high";
         ctx.drawImage(img, 0, 0, width, height);
         try {
           resolve(canvas.toDataURL("image/jpeg", quality));
@@ -487,7 +489,7 @@ function resizeImageToDataURL(file, maxDim = 1200, quality = 0.72) {
   });
 }
 // Resize an image File to a JPEG Blob (for uploading to storage).
-function resizeImageToBlob(file, maxDim = 1200, quality = 0.72) {
+function resizeImageToBlob(file, maxDim = 2200, quality = 0.88) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onerror = reject;
@@ -504,7 +506,10 @@ function resizeImageToBlob(file, maxDim = 1200, quality = 0.72) {
         const canvas = document.createElement("canvas");
         canvas.width = width;
         canvas.height = height;
-        canvas.getContext("2d").drawImage(img, 0, 0, width, height);
+        const ctx = canvas.getContext("2d");
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = "high";
+        ctx.drawImage(img, 0, 0, width, height);
         canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("toBlob failed"))), "image/jpeg", quality);
       };
       img.src = reader.result;

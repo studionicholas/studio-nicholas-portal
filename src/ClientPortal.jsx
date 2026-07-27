@@ -1666,6 +1666,7 @@ function MessagesPanel({ messages, meRole, onSend, onSendNotice, onReact, onPin,
     setDraft("");
     setReplyTo(null);
     setPhotos([]);
+    if (composerRef.current) composerRef.current.style.height = "auto"; // collapse the box back to one line
   }
 
   async function addPhotos(fileList) {
@@ -2180,7 +2181,7 @@ function MessagesPanel({ messages, meRole, onSend, onSendNotice, onReact, onPin,
         </div>
       )}
 
-      <form onSubmit={submit} className="flex gap-2">
+      <form onSubmit={submit} className="flex items-end gap-2">
         <input
           ref={fileRef}
           type="file"
@@ -2192,21 +2193,26 @@ function MessagesPanel({ messages, meRole, onSend, onSendNotice, onReact, onPin,
         <button
           type="button"
           onClick={() => fileRef.current?.click()}
-          className="shrink-0 px-2.5 rounded-[3px] border transition-colors"
+          className="shrink-0 px-2.5 py-2.5 rounded-[3px] border transition-colors"
           style={{ borderColor: "#e6d8cf", background: "#fffdfb", color: "#7a6f66" }}
           aria-label="Add photos"
         >
           <Camera className="w-4 h-4" />
         </button>
-        <input
+        <textarea
           ref={composerRef}
           value={draft}
-          onChange={(e) => setDraft(e.target.value)}
+          rows={1}
+          onChange={(e) => {
+            setDraft(e.target.value);
+            e.target.style.height = "auto";
+            e.target.style.height = Math.min(e.target.scrollHeight, 120) + "px";
+          }}
           placeholder={meRole === "client" ? `Send a message to ${studioFirstName()}…` : "Reply to client…"}
-          className="flex-1 min-w-0 px-3.5 py-2 rounded-[3px] border text-[13.5px] focus:outline-none focus:ring-2 focus:ring-[#B7453C] focus:border-transparent"
-          style={{ borderColor: "#e6d8cf", background: "#fffdfb", color: "#2a221c" }}
+          className="flex-1 min-w-0 px-3.5 py-2 rounded-[3px] border text-[13.5px] leading-snug resize-none focus:outline-none focus:ring-2 focus:ring-[#B7453C] focus:border-transparent"
+          style={{ borderColor: "#e6d8cf", background: "#fffdfb", color: "#2a221c", maxHeight: 120 }}
         />
-        <button type="submit" className="shrink-0 rounded-[3px] px-3.5 transition-opacity hover:opacity-90" style={{ background: "#576b45", color: "#efefec" }}>
+        <button type="submit" className="shrink-0 self-end rounded-[3px] px-3.5 py-2.5 transition-opacity hover:opacity-90" style={{ background: "#576b45", color: "#efefec" }} aria-label="Send">
           <Send className="w-4 h-4" />
         </button>
       </form>

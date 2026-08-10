@@ -250,6 +250,20 @@ export async function saveLoginSettings(loginImage, loginMessage) {
   if (error) throw error;
 }
 
+// Who has opted in to marketing emails via the portal — read live from Klaviyo
+// (the "Portal Sign up" list) through the klaviyo Edge Function, which holds the
+// PRIVATE key. Returns { configured, members:[{email,name,consent,since}], error }.
+// configured=false means the Klaviyo private key hasn't been added yet.
+export async function fetchMarketingOptIns() {
+  try {
+    const { data, error } = await supabase.functions.invoke("klaviyo", { body: { action: "listMembers" } });
+    if (error) return { configured: false, members: [], error: error.message || String(error) };
+    return data || { configured: false, members: [] };
+  } catch (e) {
+    return { configured: false, members: [], error: e?.message || String(e) };
+  }
+}
+
 /* ---------- Realtime sync ---------- */
 
 // Calls `callback` whenever any project changes (on any device).

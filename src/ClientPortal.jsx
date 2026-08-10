@@ -5099,6 +5099,18 @@ function StudioSettingsPanel({ studioStatus, studioStatusColor, onChangeStatus, 
     setMsStatus({ connected: false, account: "" });
     setMsBusy(false);
   }
+  // Marketing (newsletter) opt-ins — read live from Klaviyo's "Portal Sign up"
+  // list via the klaviyo Edge Function. Loaded once when the panel opens.
+  const [mkt, setMkt] = useState({ loading: true, configured: false, members: [], error: "" });
+  const loadMkt = useCallback(async () => {
+    setMkt((m) => ({ ...m, loading: true, error: "" }));
+    const r = await api.fetchMarketingOptIns();
+    setMkt({ loading: false, configured: !!r.configured, members: r.members || [], error: r.error || "" });
+  }, []);
+  useEffect(() => {
+    loadMkt();
+  }, [loadMkt]);
+
   const [img, setImg] = useState(loginImage || "");
   const [msg, setMsg] = useState(loginMessage || "");
   const [url, setUrl] = useState("");
@@ -5184,6 +5196,12 @@ function StudioSettingsPanel({ studioStatus, studioStatusColor, onChangeStatus, 
       subColor: pPerm === "granted" ? "#576b45" : "#a89d95",
     },
     { id: "notice", title: "Formal notice templates", sub: `${noticeTemplatesOrDefault(noticeTemplates).length} template${noticeTemplatesOrDefault(noticeTemplates).length === 1 ? "" : "s"}`, subColor: "#a89d95" },
+    {
+      id: "audience",
+      title: "Marketing email opt-ins",
+      sub: mkt.loading ? "Checking Klaviyo…" : !mkt.configured ? "Connect Klaviyo to see opt-ins" : `${mkt.members.length} ${mkt.members.length === 1 ? "person has" : "people have"} opted in`,
+      subColor: !mkt.loading && mkt.configured && mkt.members.length ? "#576b45" : "#a89d95",
+    },
     {
       id: "ms",
       title: "Microsoft 365 & Teams",
@@ -5283,6 +5301,68 @@ function StudioSettingsPanel({ studioStatus, studioStatusColor, onChangeStatus, 
           )}
 
           {page === "notice" && <NoticeTemplatesEditor templates={noticeTemplates} onSaveTemplates={onSaveNoticeTemplates} />}
+
+          {page === "audience" && (
+            <div>
+              <div className="flex items-center justify-between gap-3 mb-3">
+                <p className="text-[12px] text-stone-400 flex-1">
+                  People who ticked “keep me updated” when they set up their portal login. Read live from your Klaviyo “Portal Sign up” list.
+                </p>
+                <button
+                  onClick={loadMkt}
+                  disabled={mkt.loading}
+                  className="shrink-0 text-[12px] rounded-lg px-3 py-1.5 border disabled:opacity-50"
+                  style={{ borderColor: "#e6d8cf", background: "#fffdfb", color: "#7a6f66" }}
+                >
+                  {mkt.loading ? "…" : "Refresh"}
+                </button>
+              </div>
+
+              {mkt.loading ? (
+                <p className="text-[13px] text-stone-400">Checking Klaviyo…</p>
+              ) : !mkt.configured ? (
+                <div className="border rounded-lg p-4" style={{ borderColor: "#e6d8cf", background: "#fffdfb" }}>
+                  <p className="text-[14px] text-stone-800">Connect Klaviyo</p>
+                  <p className="text-[12.5px] text-stone-500 mt-1 leading-relaxed">
+                    To read marketing opt-ins the app needs a private Klaviyo key (kept on the server, never in the app).
+                    In Klaviyo go to <span className="text-stone-700">Settings → API keys → Create Private API Key</span> (read access to Lists &amp; Profiles),
+                    then add it in Supabase as an Edge Function secret named <span className="font-mono text-[12px] text-stone-700">KLAVIYO_PRIVATE_KEY</span> and deploy the <span className="font-mono text-[12px] text-stone-700">klaviyo</span> function.
+                  </p>
+                  {mkt.error && <p className="text-[12px] text-red-600 mt-2">{mkt.error}</p>}
+                </div>
+              ) : mkt.error ? (
+                <div className="border rounded-lg p-4" style={{ borderColor: "#e6d8cf", background: "#fffdfb" }}>
+                  <p className="text-[13px] text-red-600">Couldn’t reach Klaviyo: {mkt.error}</p>
+                </div>
+              ) : mkt.members.length === 0 ? (
+                <div className="border rounded-lg p-6 text-center" style={{ borderColor: "#e6d8cf", background: "#fffdfb" }}>
+                  <p className="text-[14px] text-stone-700">No one has opted in yet</p>
+                  <p className="text-[12.5px] text-stone-400 mt-1">Clients appear here the moment they tick the newsletter box at signup.</p>
+                </div>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  {mkt.members.map((m, i) => {
+                    const on = /subscribed/i.test(m.consent) && !/unsub/i.test(m.consent);
+                    return (
+                      <div key={m.email || i} className="flex items-center gap-3 rounded-lg px-3.5 py-3 border" style={{ borderColor: "#e6d8cf", background: "#fffdfb" }}>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[14px] text-stone-800 truncate">{m.name || m.email || "—"}</p>
+                          {m.name && m.email && <p className="text-[12px] text-stone-400 truncate">{m.email}</p>}
+                          {m.since && <p className="text-[11px] text-stone-400 mt-px">Opted in {formatDate(m.since)}</p>}
+                        </div>
+                        <span
+                          className="shrink-0 text-[11px] rounded-full px-2.5 py-1"
+                          style={on ? { background: "#eaf0e3", color: "#576b45" } : { background: "#f3ece7", color: "#a89d95" }}
+                        >
+                          {on ? "Subscribed" : m.consent ? "Unsubscribed" : "On list"}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
 
           {page === "ms" && (
             <div>

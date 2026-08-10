@@ -248,6 +248,12 @@ function chunkMono(text, font, size, maxWidth) {
 // so we can fill the client's details right there. Works for any proposal in the
 // template regardless of which page the block lands on. Returns null if absent.
 async function findAcceptance(bytes) {
+  // The template's "ACCEPTANCE — I HEREBY ACCEPT…" heading is letter-spaced, so
+  // pdf.js reads it as "I H E R E B Y  A C C E P T" and a plain substring test
+  // for "hereby accept" never matches. Instead we normalise away whitespace and
+  // key off the field LABELS (NAME / DATE / SIGNATURE), which are the reliable
+  // markers of the acceptance form regardless of how the heading is spaced.
+  const norm = (s) => String(s).toLowerCase().replace(/\s+/g, "");
   try {
     const doc = await getPdfDocumentSafe(bytes);
     for (let n = 1; n <= doc.numPages; n++) {
@@ -257,17 +263,22 @@ async function findAcceptance(bytes) {
         .filter((it) => it && it.str != null)
         .map((it) => ({
           s: String(it.str).trim().toLowerCase(),
+          n: norm(it.str), // whitespace removed — matches letter-spaced text too
           x: it.transform[4],
           y: it.transform[5],
           w: it.width || 0,
           h: it.height || Math.abs(it.transform[3]) || 9,
         }));
-      if (!items.some((i) => i.s.includes("hereby accept"))) continue;
-      const find = (label) => items.find((i) => i.s === label);
+      const find = (label) => items.find((i) => i.n === label);
       const name = find("name");
       const date = find("date");
       const sig = find("signature");
-      if (name || date || sig) {
+      // The acceptance page is the one carrying the signature field alongside a
+      // name or date field. Confirm it also mentions acceptance to avoid a false
+      // hit on some other page that happens to label a "signature".
+      const pageNorm = items.map((i) => i.n).join("");
+      const looksLikeAcceptance = pageNorm.includes("herebyaccept") || pageNorm.includes("acceptance");
+      if (sig && (name || date) && looksLikeAcceptance) {
         try {
           await doc.destroy();
         } catch (_e) {}

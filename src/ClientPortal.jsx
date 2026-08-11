@@ -2940,8 +2940,10 @@ function SignaturePad({ onChange }) {
 // One bubble for the client's Fee tab: the proposal at the top, then (once a
 // proposal is shared) a divider and the review-and-sign section below it — or
 // the signed-and-accepted summary once it's done.
-function SignProposalCard({ proposal, signed, projectName, clientName, clientEmail, onSign, onActivity, note, emptyText, onAskQuestion }) {
+function SignProposalCard({ proposal, signed, history, projectName, clientName, clientEmail, onSign, onActivity, note, emptyText, onAskQuestion }) {
   const logActivity = (action, which) => onActivity && onActivity(action, which);
+  const priorVersions = Array.isArray(history) ? history : [];
+  const [showHistory, setShowHistory] = useState(false);
   const nameParts = (clientName || "").trim().split(/\s+/).filter(Boolean);
   const [first, setFirst] = useState(nameParts.length > 1 ? nameParts[0] : nameParts[0] || "");
   const [last, setLast] = useState(nameParts.length > 1 ? nameParts.slice(1).join(" ") : "");
@@ -2991,10 +2993,16 @@ function SignProposalCard({ proposal, signed, projectName, clientName, clientEma
           </h3>
           {proposal ? (
             <>
-              <p className="text-[14px] text-stone-700 mt-1 break-words">{proposal.name}</p>
+              <div className="flex items-center gap-2 mt-1 flex-wrap">
+                <p className="text-[14px] text-stone-700 break-words">{proposal.name}</p>
+                {priorVersions.length > 0 && (
+                  <span className="shrink-0 text-[10px] rounded-full px-2 py-0.5" style={{ background: "#F5EED9", color: "#8a6d1d" }}>Latest</span>
+                )}
+              </div>
               <p className="text-[12px] text-stone-400 mt-0.5">
-                Issued {formatDate(proposal.date)}
+                {priorVersions.length > 0 ? "Updated" : "Issued"} {formatDate(proposal.date)}
                 {proposal.size != null && ` · ${formatBytes(proposal.size)}`}
+                {priorVersions.length > 0 && " · replaces the earlier version"}
               </p>
               {note && <p className="text-[13px] text-stone-500 leading-relaxed mt-3">{note}</p>}
               {proposal.dataUrl ? (
@@ -3092,7 +3100,7 @@ function SignProposalCard({ proposal, signed, projectName, clientName, clientEma
                       setError("");
                     }}
                     placeholder="First name"
-                    className="w-full mt-1 px-3 py-2 rounded-lg border border-stone-300 text-[14px] focus:outline-none focus:ring-2 focus:ring-[#B7453C]"
+                    className="w-full mt-1 px-3 py-2 rounded-lg border border-stone-300 text-[14px] focus:outline-none focus:ring-2 focus:ring-[#576B45]"
                   />
                 </div>
                 <div>
@@ -3104,7 +3112,7 @@ function SignProposalCard({ proposal, signed, projectName, clientName, clientEma
                       setError("");
                     }}
                     placeholder="Last name"
-                    className="w-full mt-1 px-3 py-2 rounded-lg border border-stone-300 text-[14px] focus:outline-none focus:ring-2 focus:ring-[#B7453C]"
+                    className="w-full mt-1 px-3 py-2 rounded-lg border border-stone-300 text-[14px] focus:outline-none focus:ring-2 focus:ring-[#576B45]"
                   />
                 </div>
               </div>
@@ -3129,7 +3137,8 @@ function SignProposalCard({ proposal, signed, projectName, clientName, clientEma
               <button
                 onClick={submit}
                 disabled={busy}
-                className="w-full mt-4 bg-stone-900 text-white rounded-lg py-3 text-[14px] hover:bg-stone-800 transition-colors disabled:opacity-60 flex items-center justify-center gap-2"
+                style={{ background: "#576B45" }}
+                className="w-full mt-4 text-white rounded-lg py-3 text-[14px] transition-opacity hover:opacity-90 disabled:opacity-60 flex items-center justify-center gap-2"
               >
                 {busy ? "Preparing your signed copy…" : (
                   <>
@@ -3148,6 +3157,40 @@ function SignProposalCard({ proposal, signed, projectName, clientName, clientEma
                 </button>
               )}
             </>
+          )}
+        </div>
+      )}
+
+      {priorVersions.length > 0 && (
+        <div className="mt-5 pt-5 border-t border-stone-200">
+          <button type="button" onClick={() => setShowHistory((v) => !v)} className="w-full flex items-center justify-between text-left">
+            <span className="text-[13px] text-stone-500">Previous proposals ({priorVersions.length})</span>
+            <ChevronRight className={`w-4 h-4 text-stone-400 transition-transform ${showHistory ? "rotate-90" : ""}`} />
+          </button>
+          {showHistory && (
+            <div className="mt-3 space-y-2">
+              {[...priorVersions].reverse().map((h, i) => {
+                const file = h.signed && h.signed.dataUrl ? h.signed : h;
+                const label = h.v ? `Version ${h.v}` : "Earlier version";
+                return (
+                  <div key={h.id || i} className="flex items-center gap-3 rounded-lg px-3.5 py-2.5" style={{ background: "#fbf8f5", border: "1px solid #eee5de" }}>
+                    <span className="shrink-0 flex items-center justify-center rounded-[3px]" style={{ width: 30, height: 38, background: "#f0e8e2", color: "#b26f52", fontSize: 8, letterSpacing: "0.06em" }}>PDF</span>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[13px] text-stone-700 truncate">{label} · {formatDate(h.date)}</p>
+                      <p className="text-[11px]" style={{ color: h.signed ? "#8a6d1d" : "#a89d95" }}>
+                        {h.signed ? `You signed this on ${formatDate(h.signed.date)}` : "Superseded — not signed"}
+                      </p>
+                    </div>
+                    {file.dataUrl && (
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <button onClick={() => { logActivity("opened", h.signed ? "an earlier signed copy" : "an earlier version"); setPreview({ file, title: file.name || label }); }} className="text-[12px] text-stone-600 border border-stone-300 rounded-full px-3 py-1.5 hover:bg-stone-100">View</button>
+                        <button onClick={() => downloadFile(file)} className="text-stone-400 hover:text-stone-700" aria-label="Download"><Download className="w-3.5 h-3.5" /></button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           )}
         </div>
       )}
@@ -3764,6 +3807,7 @@ function ClientDashboard({ project, viewerEmail, studioStatus, studioStatusColor
             <SignProposalCard
               proposal={project.feeProposal}
               signed={project.feeProposalSigned}
+              history={project.feeProposalHistory}
               projectName={project.name}
               clientName={myClient?.name || project.clientName}
               clientEmail={viewerEmail}
@@ -4695,7 +4739,7 @@ function AdminMeetings({ project, onAdd, onEdit, onDelete, onSyncResponses, onRe
   );
 }
 
-function AdminDocSlot({ label, dateLabel, file, onSet, onRemove, hint }) {
+function AdminDocSlot({ label, dateLabel, file, onSet, onRemove, hint, replaceLabel = "Replace", badge }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [preview, setPreview] = useState(false);
@@ -4736,7 +4780,10 @@ function AdminDocSlot({ label, dateLabel, file, onSet, onRemove, hint }) {
           <div className="flex items-center gap-3 min-w-0">
             <FileText className="w-4 h-4 text-stone-400 shrink-0" />
             <div className="min-w-0">
-              <p className="text-[14px] text-stone-800 truncate">{file.name}</p>
+              <div className="flex items-center gap-2">
+                <p className="text-[14px] text-stone-800 truncate">{file.name}</p>
+                {badge && <span className="shrink-0 text-[10px] rounded-full px-2 py-0.5" style={{ background: "#eaf0e3", color: "#576b45" }}>{badge}</span>}
+              </div>
               <p className="text-[12px] text-stone-400">
                 {dateLabel} {formatDate(file.date)}
                 {file.size != null && ` · ${formatBytes(file.size)}`}
@@ -4764,7 +4811,7 @@ function AdminDocSlot({ label, dateLabel, file, onSet, onRemove, hint }) {
         <p className="text-[13px] text-stone-400 mb-2">Not uploaded yet.</p>
       )}
       <label className="inline-flex items-center gap-1.5 text-[13px] text-stone-600 border border-stone-300 rounded-lg px-3 py-2 cursor-pointer hover:bg-stone-100">
-        <Upload className="w-3.5 h-3.5" /> {busy ? "Uploading…" : file ? "Replace" : "Upload"}
+        <Upload className="w-3.5 h-3.5" /> {busy ? "Uploading…" : file ? replaceLabel : "Upload"}
         <input type="file" onChange={handle} className="hidden" disabled={busy} />
       </label>
       {error && <p className="text-[12px] text-red-600 mt-1">{error}</p>}
@@ -5672,6 +5719,7 @@ function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioSt
   const [view, setView] = useState(() => (["home", "project", "settings"].includes(savedSession?.view) ? savedSession.view : "home"));
   const [adminTab, setAdminTab] = useState(() => (ADMIN_TABS.some((t) => t.id === savedSession?.tab) ? savedSession.tab : "details"));
   const [settingsPage, setSettingsPage] = useState(savedSession?.settingsPage || null);
+  const [historyPreview, setHistoryPreview] = useState(null); // { file, title } for previewing a previous fee-proposal version
   const [isDesktop, setIsDesktop] = useState(() => typeof window !== "undefined" && window.innerWidth >= 900);
   const [showNewProject, setShowNewProject] = useState(false);
   const [showNewLead, setShowNewLead] = useState(false);
@@ -6265,20 +6313,46 @@ function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioSt
       });
   }
 
+  // Issue a fee proposal, or add a NEW VERSION. Adding a version archives the
+  // current proposal (with its signed copy, if any) into feeProposalHistory,
+  // makes the new file the latest, and clears the signed state so the client is
+  // asked to sign the newest one. Earlier versions stay viewable to both sides.
   function setIssuedProposal(code, file) {
-    updateProject(code, (p) => ({ ...p, feeProposal: file, notifications: withNotif(p, "fee", "Fee proposal shared") }));
     const proj = projects[code];
+    const hist = proj?.feeProposalHistory || [];
+    const isUpdate = !!proj?.feeProposal;
+    const v = isUpdate ? (proj.feeProposal.v || hist.length + 1) + 1 : hist.length + 1;
+    updateProject(code, (p) => {
+      const h = p.feeProposalHistory || [];
+      const nextHist = p.feeProposal
+        ? [...h, { ...p.feeProposal, v: p.feeProposal.v || h.length + 1, signed: p.feeProposalSigned || null }]
+        : h;
+      return {
+        ...p,
+        feeProposal: { ...file, v },
+        feeProposalSigned: null,
+        feeProposalHistory: nextHist,
+        notifications: withNotif(p, "fee", isUpdate ? "Updated fee proposal shared" : "Fee proposal shared"),
+      };
+    });
     const emails = (proj?.clients || []).map((c) => (c.email || "").trim().toLowerCase()).filter(Boolean);
     if (emails.length)
-      api.notifyPush({ toEmails: emails, title: `${proj?.name || "Your project"} — fee proposal`, body: "Your fee proposal is ready to review and sign.", url: "/" });
+      api.notifyPush({
+        toEmails: emails,
+        title: `${proj?.name || "Your project"} — ${isUpdate ? "updated fee proposal" : "fee proposal"}`,
+        body: isUpdate ? "An updated fee proposal is ready to review and sign." : "Your fee proposal is ready to review and sign.",
+        url: "/",
+      });
     // A fee proposal is important/transactional, so email every client on the
     // project (not only those opted in to general update emails).
     if (emails.length)
       api.notifyEmail({
         toEmails: emails,
-        subject: `Your fee proposal is ready — ${proj?.name || "your project"}`,
-        heading: "Your fee proposal is ready to sign",
-        body: "We've shared your fee proposal in your portal — open it to review and sign. First time here? Use the “Set up your login” button below to create your password, then your proposal will be waiting in the Fee tab.",
+        subject: isUpdate ? `Your updated fee proposal is ready to sign — ${proj?.name || "your project"}` : `Your fee proposal is ready — ${proj?.name || "your project"}`,
+        heading: isUpdate ? "An updated fee proposal is ready" : "Your fee proposal is ready to sign",
+        body: isUpdate
+          ? "We've shared an updated fee proposal in your portal — open it to review and sign. Your earlier version is still there if you'd like to compare."
+          : "We've shared your fee proposal in your portal — open it to review and sign. First time here? Use the “Set up your login” button below to create your password, then your proposal will be waiting in the Fee tab.",
         projectName: proj?.name,
         senderName: STUDIO_INFO.contactName || "Studio Nicholas",
         time: emailStamp(),
@@ -6286,8 +6360,19 @@ function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioSt
         setupCta: true,
       });
   }
+  // Removing the current version un-does the last "add version": it restores the
+  // previous version (and its signed copy) as the latest again. If there's no
+  // history, it just clears the proposal.
   function removeIssuedProposal(code) {
-    updateProject(code, (p) => ({ ...p, feeProposal: null }));
+    updateProject(code, (p) => {
+      const h = p.feeProposalHistory || [];
+      if (h.length) {
+        const prev = h[h.length - 1];
+        const { signed, ...prop } = prev;
+        return { ...p, feeProposal: prop, feeProposalSigned: signed || null, feeProposalHistory: h.slice(0, -1) };
+      }
+      return { ...p, feeProposal: null, feeProposalSigned: null };
+    });
   }
   function setSignedProposal(code, file) {
     // The studio uploading it themselves shouldn't notify the studio.
@@ -6916,13 +7001,42 @@ function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioSt
               </div>
               <div className="space-y-4">
                 <AdminDocSlot
-                  label="Issued fee proposal"
-                  dateLabel="Issued"
+                  label={project.feeProposal ? `Current fee proposal · Version ${project.feeProposal.v || (project.feeProposalHistory?.length || 0) + 1}` : "Fee proposal"}
+                  dateLabel={(project.feeProposalHistory?.length || 0) > 0 ? "Updated" : "Issued"}
                   file={project.feeProposal}
+                  badge={project.feeProposal ? (project.feeProposalSigned ? "Signed" : "Current") : null}
+                  replaceLabel="Add new version"
                   onSet={(f) => setIssuedProposal(project.code, f)}
                   onRemove={() => removeIssuedProposal(project.code)}
-                  hint="Sharing adds it to the client's notifications."
+                  hint="“Add new version” keeps the old one, emails + notifies every client, and asks them to sign the newest. “Remove” restores the previous version."
                 />
+                {(project.feeProposalHistory || []).length > 0 && (
+                  <div>
+                    <p className="text-[11px] uppercase mb-2" style={{ letterSpacing: "0.12em", color: "#a89d95" }}>Previous versions</p>
+                    <div className="space-y-2">
+                      {[...project.feeProposalHistory].reverse().map((h, i) => {
+                        const f = h.signed && h.signed.dataUrl ? h.signed : h;
+                        const isPdf = f && /\.pdf(\?|$)/i.test(f.name || f.dataUrl || "");
+                        return (
+                          <div key={h.id || i} className="flex items-center justify-between gap-3 border border-stone-200 rounded-lg px-4 py-2.5 bg-white">
+                            <div className="min-w-0">
+                              <p className="text-[13.5px] text-stone-700 truncate">{h.v ? `Version ${h.v}` : "Earlier version"} · {h.name}</p>
+                              <p className="text-[11.5px]" style={{ color: h.signed ? "#576b45" : "#a89d95" }}>
+                                Issued {formatDate(h.date)}{h.signed ? ` · signed ${formatDate(h.signed.date)}` : " · superseded, unsigned"}
+                              </p>
+                            </div>
+                            {f.dataUrl && (
+                              <div className="flex items-center gap-3 shrink-0">
+                                <button onClick={() => (isPdf ? setHistoryPreview({ file: f, title: f.name }) : openDoc(f))} className="text-stone-400 hover:text-stone-800" aria-label="Preview"><Eye className="w-4 h-4" /></button>
+                                <button onClick={() => downloadFile(f)} className="text-stone-400 hover:text-stone-800" aria-label="Download"><Download className="w-4 h-4" /></button>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
                 <AdminDocSlot
                   label="Signed copy"
                   dateLabel="Uploaded"
@@ -6953,6 +7067,7 @@ function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioSt
                   </div>
                 </div>
               )}
+              {historyPreview && <PdfPreviewModal file={historyPreview.file} title={historyPreview.title} onClose={() => setHistoryPreview(null)} />}
             </AdminSection>
             )}
 

@@ -3431,7 +3431,7 @@ function EnablePushBanner({ email }) {
   );
 }
 
-function ClientDashboard({ project, viewerEmail, studioStatus, studioStatusColor, autoStatus, onLogout, onSetEmailNotify, onSendMessage, onReactMessage, onPinMessage, onMarkRead, onMarkNotifs, onDismissNotif, onSeenTab, onUploadSigned, onSignProposal, onProposalActivity, onRespondMeeting, onRequestMeeting, onEditRequest, onAcceptRequest, onDismissRequest, installOpen }) {
+function ClientDashboard({ project, viewerEmail, studioStatus, studioStatusColor, autoStatus, onLogout, onSetEmailNotify, onSendMessage, onReactMessage, onPinMessage, onMarkRead, onMarkNotifs, onDismissNotif, onSeenTab, onUploadSigned, onSignProposal, onProposalActivity, onRespondMeeting, onRequestMeeting, onEditRequest, onAcceptRequest, onDismissRequest, installOpen, preview }) {
   // Last-viewed tab is remembered per device (client redesign) and restored on
   // open; notification deep-links overwrite it.
   const [tab, setTab] = useState(() => {
@@ -3481,6 +3481,7 @@ function ClientDashboard({ project, viewerEmail, studioStatus, studioStatusColor
     // Once the install popup is out of the way, prompt for notifications if the
     // device supports them and the user hasn't decided yet. Leads aren't asked
     // at login — they get one combined prompt after their first message instead.
+    if (preview) return; // studio "view as client" preview: never pop prompts
     if (!installOpen && !pushAsked && !project.isLead && api.pushSupported() && api.pushPermission() === "default") {
       setShowNotifPrompt(true);
     }
@@ -3505,10 +3506,11 @@ function ClientDashboard({ project, viewerEmail, studioStatus, studioStatusColor
   // not yet decided, not yet dismissed). Otherwise the email popup is free to show.
   const pushPending = api.pushSupported() && api.pushPermission() === "default" && !pushAsked;
   useEffect(() => {
+    if (preview) return; // no prompts in studio preview
     if (!installOpen && !pushPending && !showNotifPrompt && emailUndecided && !project.isLead) {
       setShowEmailPrompt(true);
     }
-  }, [installOpen, pushPending, showNotifPrompt, emailUndecided, project.isLead]);
+  }, [installOpen, pushPending, showNotifPrompt, emailUndecided, project.isLead, preview]);
   function decideEmail(value) {
     onSetEmailNotify(value);
     setShowEmailPrompt(false);
@@ -3547,6 +3549,7 @@ function ClientDashboard({ project, viewerEmail, studioStatus, studioStatusColor
   // email) as soon as they open their fee-proposal portal — no need to wait for
   // a first message. Once per device.
   useEffect(() => {
+    if (preview) return; // no engage sheet in studio preview
     if (!project.isLead) return;
     let t;
     try {
@@ -5701,7 +5704,7 @@ function AdminBell({ projects, onOpen, boxed }) {
   );
 }
 
-function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioStatusColor, onChangeStatus, onChangeStatusColor, onSaveStatus, loginImage, loginMessage, studioInfo, onSaveInfo, autoReply, onSaveAutoReply, noticeTemplates, onSaveNoticeTemplates, onSaveLogin, onLogout }) {
+function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioStatusColor, onChangeStatus, onChangeStatusColor, onSaveStatus, loginImage, loginMessage, studioInfo, onSaveInfo, autoReply, onSaveAutoReply, noticeTemplates, onSaveNoticeTemplates, onSaveLogin, onLogout, onPreviewClient }) {
   // "Rooms" navigation (admin redesign): a view machine (home | project |
   // settings) that reopens exactly where you left off — the location is
   // persisted per device and restored on every open.
@@ -6718,11 +6721,21 @@ function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioSt
                       <ChevronLeft className="w-5 h-5" />
                     </button>
                   )}
-                  {project.stage && (
-                    <span className="absolute top-2.5 right-3 text-[9px] sm:text-[11px] px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full whitespace-nowrap" style={{ background: chip.t, color: chip.c }}>
-                      {project.stage}
-                    </span>
-                  )}
+                  <div className="absolute top-2.5 right-3 flex items-center gap-1.5">
+                    {project.stage && (
+                      <span className="text-[9px] sm:text-[11px] px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full whitespace-nowrap" style={{ background: chip.t, color: chip.c }}>
+                        {project.stage}
+                      </span>
+                    )}
+                    <button
+                      onClick={() => onPreviewClient && onPreviewClient(project.code)}
+                      className="flex items-center gap-1 rounded-full whitespace-nowrap"
+                      style={{ background: "rgba(255,253,251,0.92)", color: "#2a221c", fontSize: isDesktop ? 11 : 9, padding: isDesktop ? "4px 10px" : "3px 8px" }}
+                      title="See exactly what your client sees"
+                    >
+                      <Eye className="w-3 h-3" /> {isDesktop ? "View as client" : "Preview"}
+                    </button>
+                  </div>
                   <p className="absolute bottom-1.5 left-0 right-0 text-center text-[9px]" style={{ fontStyle: "italic", color: "rgba(255,253,251,0.7)" }}>
                     {project.address || project.location || project.code}
                   </p>
@@ -7337,6 +7350,7 @@ export default function App() {
   const [saveError, setSaveError] = useState("");
   const [passwordDone, setPasswordDone] = useState(false);
   const [installOpen, setInstallOpen] = useState(false);
+  const [previewCode, setPreviewCode] = useState(null); // studio "view as client" — code of the project to preview, or null
 
   const applyingRemote = useRef(false); // guards the projects save effect
   const applyingStatus = useRef(false); // guards the status save effect
@@ -8020,6 +8034,7 @@ export default function App() {
         onSaveNoticeTemplates={handleSaveNoticeTemplates}
         onSaveLogin={handleSaveLogin}
         onLogout={handleSignOut}
+        onPreviewClient={setPreviewCode}
       />
     );
   } else {
@@ -8082,6 +8097,58 @@ export default function App() {
         </div>
       )}
       {content}
+      {role === "admin" && previewCode && projects && projects[previewCode] && (() => {
+        const pj = projects[previewCode];
+        const firstEmail = ((pj.clients || [])[0]?.email || "").trim();
+        const noop = () => {};
+        const rejectSign = () => Promise.reject(new Error("This is a preview of your client's view — your client signs here."));
+        const isWaiting = !pj.isLead && pj.unpublished && pj.feeProposalSigned;
+        return (
+          <div className="fixed inset-0 z-[70] flex flex-col" style={{ background: "#f7f2ef" }}>
+            <div className="flex items-center justify-between gap-3 px-4 py-2 shrink-0" style={{ background: "#2a221c", color: "#f7f2ef" }}>
+              <span className="text-[12.5px] truncate flex items-center gap-2 min-w-0">
+                <Eye className="w-3.5 h-3.5 shrink-0" />
+                <span className="truncate">Client preview — {pj.name}{firstEmail ? ` · as ${firstEmail}` : ""}</span>
+              </span>
+              <button onClick={() => setPreviewCode(null)} className="shrink-0 text-[12.5px] rounded px-3 py-1.5" style={{ background: "#576B45", color: "#fff" }}>
+                Exit preview
+              </button>
+            </div>
+            <div className="flex-1 overflow-auto min-h-0">
+              {isWaiting ? (
+                <LeadWaiting project={pj} onLogout={() => setPreviewCode(null)} />
+              ) : (
+                <ClientDashboard
+                  project={pj}
+                  viewerEmail={firstEmail}
+                  studioStatus={studioStatus}
+                  studioStatusColor={studioStatusColor}
+                  autoStatus={autoReply}
+                  onLogout={() => setPreviewCode(null)}
+                  onSetEmailNotify={noop}
+                  onSendMessage={noop}
+                  onReactMessage={noop}
+                  onPinMessage={noop}
+                  onMarkRead={noop}
+                  onMarkNotifs={noop}
+                  onDismissNotif={noop}
+                  onSeenTab={noop}
+                  onUploadSigned={noop}
+                  onSignProposal={rejectSign}
+                  onProposalActivity={noop}
+                  onRespondMeeting={noop}
+                  onRequestMeeting={noop}
+                  onEditRequest={noop}
+                  onAcceptRequest={noop}
+                  onDismissRequest={noop}
+                  installOpen={true}
+                  preview={true}
+                />
+              )}
+            </div>
+          </div>
+        );
+      })()}
       {installOpen && (
         <div className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center px-4 pb-6 sm:pb-0">
           <div className="bg-white rounded-2xl max-w-sm w-full p-6">

@@ -1329,7 +1329,7 @@ function NotifBell({ notifications, onOpen, onNavigate, onDismiss, boxed }) {
         onClick={() => {
           const next = !open;
           setOpen(next);
-          if (next) onOpen();
+          if (next && onOpen) onOpen();
         }}
         className={boxed ? "relative w-10 h-10 flex items-center justify-center" : "relative text-stone-500 hover:text-stone-800"}
         style={boxed ? { color: "#7a6f66" } : undefined}
@@ -3609,9 +3609,15 @@ function ClientDashboard({ project, viewerEmail, studioStatus, studioStatusColor
   const me = (viewerEmail || "").trim().toLowerCase();
   const needsSeenStamp = activeTab === "messages" && !!me && (project.messages || []).some((m) => m.from === "studio" && !(m.seenBy && m.seenBy[me]));
   useEffect(() => {
-    if (!activeTab || (unreadHere === 0 && !needsSeenStamp)) return;
-    if (activeTab === "messages") onMarkRead();
-    else if (unreadHere > 0) onSeenTab(activeTab);
+    if (!activeTab) return;
+    if (activeTab === "messages") {
+      if (unreadHere > 0 || needsSeenStamp) onMarkRead();
+      // Reading the thread also clears any "new message" alerts from the bell —
+      // so a message notification disappears once they've actually seen it.
+      onSeenTab("messages");
+    } else if (unreadHere > 0) {
+      onSeenTab(activeTab);
+    }
   }, [activeTab, unreadHere, needsSeenStamp, onMarkRead, onSeenTab]);
 
   // Hero banner (client redesign): a flat brand colour with the project name in
@@ -3634,7 +3640,6 @@ function ClientDashboard({ project, viewerEmail, studioStatus, studioStatusColor
             </button>
             <NotifBell
               notifications={project.notifications}
-              onOpen={onMarkNotifs}
               onNavigate={(type) => setTab(NOTIF_TAB[type] || "updates")}
               onDismiss={onDismissNotif}
               boxed
@@ -6148,7 +6153,7 @@ function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioSt
     if (before?.msEventId) {
       // Existing Teams event: re-time it. Graph emails everyone a new invitation.
       api
-        .microsoftUpdateEvent({ id: before.msEventId, title: data.title, instant, message: data.message, attendees })
+        .microsoftUpdateEvent({ id: before.msEventId, title: data.title, instant, message: data.message, attendees, online: data.mode === "online", location: data.location || "" })
         .then(() => showToast("Calendar updated — invitations resent"))
         .catch((e) => {
           console.error("Teams meeting update failed", e);
@@ -6201,16 +6206,19 @@ function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioSt
     const m = (proj?.meetings || []).find((mm) => mm.id === id);
     if (!m) return;
     const attendees = meetingPeople(proj, m.invitees).map((c) => ({ email: c.email, name: c.name }));
+    const online = m.mode === "online";
     showToast("Creating the calendar event…");
     api
-      .microsoftCreateEvent({ title: m.title, instant: m.instant, message: m.message, attendees })
+      .microsoftCreateEvent({ title: m.title, instant: m.instant, message: m.message, attendees, online, location: m.location || "" })
       .then((ev) => {
         if (!ev?.id) throw new Error("No event returned");
+        // Keep the meeting's own mode — an in-person meeting stays in-person (a
+        // calendar event with its address), only online ones get a Teams link.
         updateProject(code, (p) => ({
           ...p,
-          meetings: p.meetings.map((mm) => (mm.id === id ? { ...mm, msEventId: ev.id, link: ev.joinUrl || mm.link, mode: "online", rsvps: {}, rsvp: "pending" } : mm)),
+          meetings: p.meetings.map((mm) => (mm.id === id ? { ...mm, msEventId: ev.id, link: online ? ev.joinUrl || mm.link : "", rsvps: {}, rsvp: "pending" } : mm)),
         }));
-        showToast("In your calendar — invitations sent");
+        showToast(online ? "In your calendar — invitations sent" : "In your calendar (in person) — invitations sent");
       })
       .catch((e) => {
         console.error("link to calendar failed", e);

@@ -397,16 +397,16 @@ export async function microsoftDisconnect() {
   await supabase.functions.invoke("microsoft", { body: { action: "disconnect" } });
 }
 // Create a Teams meeting + calendar event; returns { id, joinUrl, webLink }.
-export async function microsoftCreateEvent({ title, instant, message, attendees }) {
-  const { data, error } = await supabase.functions.invoke("microsoft", { body: { action: "createEvent", title, instant, message, attendees } });
+export async function microsoftCreateEvent({ title, instant, message, attendees, online = true, location = "" }) {
+  const { data, error } = await supabase.functions.invoke("microsoft", { body: { action: "createEvent", title, instant, message, attendees, online, location } });
   if (error) throw error;
   if (data?.error) throw new Error(data.error);
   return data;
 }
 // Re-time / re-title an existing Teams event. Graph emails every attendee an
 // updated invitation so they can accept the new time.
-export async function microsoftUpdateEvent({ id, title, instant, message, attendees }) {
-  const { data, error } = await supabase.functions.invoke("microsoft", { body: { action: "updateEvent", id, title, instant, message, attendees } });
+export async function microsoftUpdateEvent({ id, title, instant, message, attendees, online = true, location = "" }) {
+  const { data, error } = await supabase.functions.invoke("microsoft", { body: { action: "updateEvent", id, title, instant, message, attendees, online, location } });
   if (error) throw error;
   if (data?.error) throw new Error(data.error);
   return data;

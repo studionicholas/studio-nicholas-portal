@@ -70,18 +70,26 @@ async function freshAccess(): Promise<string | null> {
   return data.access_token;
 }
 
-function eventBody(o: { title?: string; instant?: string; message?: string; attendees?: { email: string; name?: string }[] }) {
+function eventBody(o: { title?: string; instant?: string; message?: string; attendees?: { email: string; name?: string }[]; online?: boolean; location?: string }) {
   const startMs = o.instant ? Date.parse(o.instant) : Date.now();
   const fmt = (ms: number) => new Date(ms).toISOString().replace(/\.\d{3}Z$/, ""); // UTC, no millis/Z
-  return {
+  const base = {
     subject: o.title || "Studio Nicholas meeting",
     body: { contentType: "HTML", content: o.message || "" },
     start: { dateTime: fmt(startMs), timeZone: "UTC" },
     end: { dateTime: fmt(startMs + 60 * 60 * 1000), timeZone: "UTC" },
     attendees: (o.attendees || []).filter((a) => a.email).map((a) => ({ emailAddress: { address: a.email, name: a.name || a.email }, type: "required" })),
-    isOnlineMeeting: true,
-    onlineMeetingProvider: "teamsForBusiness",
   };
+  // In-person meeting: a normal calendar event with a location (NOT a Teams
+  // online meeting). `online` defaults to true to preserve existing behaviour.
+  if (o.online === false) {
+    return {
+      ...base,
+      isOnlineMeeting: false,
+      location: o.location ? { displayName: o.location } : undefined,
+    };
+  }
+  return { ...base, isOnlineMeeting: true, onlineMeetingProvider: "teamsForBusiness" };
 }
 
 Deno.serve(async (req) => {

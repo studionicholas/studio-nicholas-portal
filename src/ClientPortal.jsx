@@ -4570,6 +4570,16 @@ function AdminMeetings({ project, onAdd, onEdit, onDelete, onSyncResponses, onRe
                 <Video className="w-3 h-3" /> Join Teams meeting
               </a>
             )}
+            {m.mode === "in-person" && m.location && (
+              <a
+                href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(m.location)}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 text-[12px] text-stone-600 hover:underline mt-1"
+              >
+                <MapPin className="w-3 h-3" /> Get directions
+              </a>
+            )}
             {(() => {
               const clients = meetingPeople(project, m.invitees);
               if (clients.length === 0) {

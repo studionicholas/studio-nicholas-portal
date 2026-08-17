@@ -25,6 +25,7 @@ import {
   Check,
   Calendar,
   Clock,
+  RefreshCw,
   MapPin,
   Video,
   Bell,
@@ -4517,11 +4518,26 @@ function AdminMeetings({ project, onAdd, onEdit, onDelete, onSyncResponses, onRe
     setEditingId(null);
     if (typeof window !== "undefined") window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" });
   }
-  // On opening this project's meetings, pull calendar (Teams) responses in.
+  // Pull calendar (Teams/Outlook) responses in when the Meetings tab opens, then
+  // keep them fresh while it's open — so a client accepting via the calendar
+  // invite shows up here without the studio having to reopen the tab.
+  const [syncing, setSyncing] = useState(false);
   useEffect(() => {
-    if ((project.meetings || []).some((m) => m.msEventId)) onSyncResponses && onSyncResponses();
+    if (!(project.meetings || []).some((m) => m.msEventId) || !onSyncResponses) return;
+    onSyncResponses();
+    const t = setInterval(() => onSyncResponses(), 45000);
+    return () => clearInterval(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [project.code]);
+  async function checkReplies() {
+    if (!onSyncResponses) return;
+    setSyncing(true);
+    try {
+      await onSyncResponses();
+    } finally {
+      setSyncing(false);
+    }
+  }
   // Split into upcoming (soonest first) and past (most recent first).
   const nowMs = Date.now();
   const upcoming = [...project.meetings].filter((m) => new Date(m.instant).getTime() >= nowMs).sort((a, b) => new Date(a.instant) - new Date(b.instant));
@@ -4649,6 +4665,14 @@ function AdminMeetings({ project, onAdd, onEdit, onDelete, onSyncResponses, onRe
       ))}
 
       {project.meetings.length === 0 && requests.length === 0 && <p className="text-[13px] text-stone-400 pt-1">No meetings yet.</p>}
+      {(project.meetings || []).some((m) => m.msEventId) && (
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-[11px] text-stone-400">Calendar replies refresh automatically.</p>
+          <button type="button" onClick={checkReplies} disabled={syncing} className="inline-flex items-center gap-1.5 text-[12px] text-stone-600 border border-stone-300 rounded-lg px-2.5 py-1.5 hover:bg-stone-100 disabled:opacity-50">
+            <RefreshCw className={`w-3.5 h-3.5 ${syncing ? "animate-spin" : ""}`} /> {syncing ? "Checking…" : "Check for replies"}
+          </button>
+        </div>
+      )}
       {upcoming.map(renderMeeting)}
       {past.length > 0 && (
         <div className="pt-1">

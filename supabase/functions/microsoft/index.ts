@@ -80,14 +80,13 @@ function eventBody(o: { title?: string; instant?: string; message?: string; atte
     end: { dateTime: fmt(startMs + 60 * 60 * 1000), timeZone: "UTC" },
     attendees: (o.attendees || []).filter((a) => a.email).map((a) => ({ emailAddress: { address: a.email, name: a.name || a.email }, type: "required" })),
   };
-  // In-person meeting: a normal calendar event with a location (NOT a Teams
-  // online meeting). `online` defaults to true to preserve existing behaviour.
+  // In-person meeting: a normal calendar event with the address as its location
+  // (NOT a Teams online meeting). `online` defaults to true to preserve existing
+  // behaviour. We deliberately do NOT send isOnlineMeeting:false — on some
+  // tenants PATCHing that value is rejected and drops the whole update (address
+  // included); omitting it still creates a brand-new event without a Teams link.
   if (o.online === false) {
-    return {
-      ...base,
-      isOnlineMeeting: false,
-      location: o.location ? { displayName: o.location } : undefined,
-    };
+    return o.location ? { ...base, location: { displayName: o.location } } : base;
   }
   return { ...base, isOnlineMeeting: true, onlineMeetingProvider: "teamsForBusiness" };
 }

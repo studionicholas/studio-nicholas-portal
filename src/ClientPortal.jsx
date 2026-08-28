@@ -6416,18 +6416,18 @@ function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioSt
       showToast("No client email on this project to remind.");
       return;
     }
-    updateProject(code, (p) => ({ ...p, notifications: withNotif(p, "fee", "A friendly reminder: your fee proposal is waiting to be signed") }));
+    updateProject(code, (p) => ({ ...p, notifications: withNotif(p, "fee", "A friendly reminder: your fee proposal is ready to review and sign") }));
     api.notifyPush({
       toEmails: emails,
       title: `${proj.name || "Your project"} — fee proposal reminder`,
-      body: "A friendly reminder that your fee proposal is waiting to review and sign.",
+      body: "A friendly reminder that your fee proposal is ready to review and sign.",
       url: "/",
     });
     api.notifyEmail({
       toEmails: emails,
       subject: `A friendly reminder — your fee proposal (${proj.name || "your project"})`,
       heading: "A friendly reminder",
-      body: "Just a gentle nudge that your fee proposal is waiting in your portal to review and sign whenever you're ready. If you have any questions at all, simply reply to this email or send us a message in your portal — we're happy to help.",
+      body: "Just a friendly reminder that your fee proposal is ready in your portal to review and sign whenever suits you. If you have any questions at all, simply reply to this email or send us a message in your portal — we're happy to help.",
       projectName: proj.name,
       senderName: STUDIO_INFO.contactName || "Studio Nicholas",
       time: emailStamp(),

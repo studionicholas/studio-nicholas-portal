@@ -6405,6 +6405,37 @@ function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioSt
         setupCta: true,
       });
   }
+  // Nudge the client to review + sign the proposal that's already in their portal
+  // — a friendly reminder that re-sends the email + push (and a bell notification)
+  // without changing or re-uploading anything.
+  function sendProposalReminder(code) {
+    const proj = projects[code];
+    if (!proj?.feeProposal) return;
+    const emails = (proj.clients || []).map((c) => (c.email || "").trim().toLowerCase()).filter(Boolean);
+    if (!emails.length) {
+      showToast("No client email on this project to remind.");
+      return;
+    }
+    updateProject(code, (p) => ({ ...p, notifications: withNotif(p, "fee", "A friendly reminder: your fee proposal is waiting to be signed") }));
+    api.notifyPush({
+      toEmails: emails,
+      title: `${proj.name || "Your project"} — fee proposal reminder`,
+      body: "A friendly reminder that your fee proposal is waiting to review and sign.",
+      url: "/",
+    });
+    api.notifyEmail({
+      toEmails: emails,
+      subject: `A friendly reminder — your fee proposal (${proj.name || "your project"})`,
+      heading: "A friendly reminder",
+      body: "Just a gentle nudge that your fee proposal is waiting in your portal to review and sign whenever you're ready. If you have any questions at all, simply reply to this email or send us a message in your portal — we're happy to help.",
+      projectName: proj.name,
+      senderName: STUDIO_INFO.contactName || "Studio Nicholas",
+      time: emailStamp(),
+      kind: "update",
+      setupCta: true,
+    });
+    showToast("Friendly reminder sent");
+  }
   // Removing the current version un-does the last "add version": it restores the
   // previous version (and its signed copy) as the latest again. If there's no
   // history, it just clears the proposal.
@@ -7065,6 +7096,18 @@ function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioSt
                   onRemove={() => removeIssuedProposal(project.code)}
                   hint="“Add new version” keeps the old one, emails + notifies every client, and asks them to sign the newest. “Remove” restores the previous version."
                 />
+                {project.feeProposal && !project.feeProposalSigned && (
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <button
+                      onClick={() => window.confirm("Send the client a friendly reminder to review and sign their fee proposal?") && sendProposalReminder(project.code)}
+                      className="inline-flex items-center gap-1.5 text-[13px] rounded-lg px-3.5 py-2"
+                      style={{ background: "#576b45", color: "#efefec" }}
+                    >
+                      <Mail className="w-3.5 h-3.5" /> Send a friendly reminder
+                    </button>
+                    <span className="text-[11px] text-stone-400">Re-sends the email + notification. Doesn't change the proposal.</span>
+                  </div>
+                )}
                 {(project.feeProposalHistory || []).length > 0 && (
                   <div>
                     <p className="text-[11px] uppercase mb-2" style={{ letterSpacing: "0.12em", color: "#a89d95" }}>Previous versions</p>

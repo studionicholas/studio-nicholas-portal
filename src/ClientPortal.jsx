@@ -1603,6 +1603,9 @@ function MessagesPanel({ messages, meRole, onSend, onSendNotice, onSendProgramaP
   const [noticeOpen, setNoticeOpen] = useState(false);
   const [noticeSent, setNoticeSent] = useState(false);
   const [programaSent, setProgramaSent] = useState(false);
+  const PROGRAMA_DEFAULT = "I've just updated your Programa dashboard — tap below to take a look.";
+  const [programaOpen, setProgramaOpen] = useState(false); // studio: edit the wording before sending a Programa update
+  const [programaText, setProgramaText] = useState(PROGRAMA_DEFAULT);
   const [statusOpen, setStatusOpen] = useState(false); // studio: status editor collapsed behind one small button
   const [query, setQuery] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
@@ -1712,15 +1715,15 @@ function MessagesPanel({ messages, meRole, onSend, onSendNotice, onSendProgramaP
             ) : (
               <span className="flex-1" />
             )}
-            {onSendProgramaPing && programaUrl && (
+            {onSendProgramaPing && programaUrl && !programaOpen && (
               <>
                 {programaSent && <span className="shrink-0 text-[11px] text-[#576B45]">Sent ✓</span>}
                 <button
                   type="button"
                   onClick={() => {
-                    onSendProgramaPing();
-                    setProgramaSent(true);
-                    setTimeout(() => setProgramaSent(false), 4000);
+                    setProgramaText(PROGRAMA_DEFAULT);
+                    setProgramaOpen(true);
+                    setProgramaSent(false);
                   }}
                   className="shrink-0 inline-flex items-center gap-1.5 text-[12px] rounded-[3px] px-3 py-1.5"
                   style={{ border: "1px solid #cfdbdf", background: "#eef3f4", color: "#4a6670" }}
@@ -2185,6 +2188,42 @@ function MessagesPanel({ messages, meRole, onSend, onSendNotice, onSendProgramaP
             setNoticeSent(true);
           }}
         />
+      )}
+
+      {meRole === "studio" && onSendProgramaPing && programaOpen && (
+        <div className="mb-3 rounded-lg p-3.5" style={{ border: "1px solid #cfdbdf", background: "#f5f8f9" }}>
+          <div className="flex items-center gap-2 mb-2">
+            <ExternalLink className="w-4 h-4" style={{ color: "#4a6670" }} />
+            <p className="text-[13px]" style={{ color: "#3f5860" }}>Programa update — edit the message, then send</p>
+          </div>
+          <textarea
+            value={programaText}
+            onChange={(e) => setProgramaText(e.target.value)}
+            rows={3}
+            placeholder="Write your message…"
+            className="w-full px-3 py-2 rounded-lg border text-[14px] focus:outline-none focus:ring-2 resize-none"
+            style={{ borderColor: "#cfdbdf", background: "#fff" }}
+          />
+          <p className="text-[11px] mt-1" style={{ color: "#8aa0a7" }}>A tappable link to the Programa dashboard is added below your message automatically.</p>
+          <div className="flex items-center gap-2 mt-2.5">
+            <button
+              type="button"
+              onClick={() => {
+                onSendProgramaPing(programaText.trim() || PROGRAMA_DEFAULT);
+                setProgramaOpen(false);
+                setProgramaSent(true);
+                setTimeout(() => setProgramaSent(false), 4000);
+              }}
+              className="inline-flex items-center gap-1.5 text-[13px] rounded-lg px-4 py-2"
+              style={{ background: "#4a6670", color: "#fff" }}
+            >
+              <ExternalLink className="w-3.5 h-3.5" /> Send Programa update
+            </button>
+            <button type="button" onClick={() => setProgramaOpen(false)} className="text-[13px] text-stone-500 px-3 py-2 hover:text-stone-800">
+              Cancel
+            </button>
+          </div>
+        </div>
       )}
 
       {replyTo && (
@@ -6332,8 +6371,8 @@ function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioSt
 
   // Quick "I've updated your Programa dashboard" ping — a short message with a
   // small, per-client Programa link so they can jump straight to it.
-  function sendProgramaPing(code) {
-    const text = "I've just updated your Programa dashboard — tap below to take a look.";
+  function sendProgramaPing(code, customText) {
+    const text = (customText && customText.trim()) || "I've just updated your Programa dashboard — tap below to take a look.";
     updateProject(code, (p) => ({
       ...p,
       lastReadStudio: new Date().toISOString(),
@@ -6349,7 +6388,7 @@ function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioSt
         toEmails: em,
         subject: `Your Programa dashboard was updated — ${proj?.name || "your project"}`,
         heading: STUDIO_INFO.contactName || "Studio Nicholas",
-        body: "I've just updated your Programa dashboard — open your portal and tap the Programa link to take a look.",
+        body: text,
         projectName: proj?.name,
         senderName: STUDIO_INFO.contactName || "Studio Nicholas",
         time: emailStamp(),
@@ -7181,7 +7220,7 @@ function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioSt
                 fallbackClientName={project.clientName}
                 onSend={(text, replyTo, photos) => replyMessage(project.code, text, replyTo, photos)}
                 onSendNotice={(n) => sendNotice(project.code, n)}
-                onSendProgramaPing={() => sendProgramaPing(project.code)}
+                onSendProgramaPing={(text) => sendProgramaPing(project.code, text)}
                 noticeTemplates={noticeTemplates}
                 onReact={(id, emoji) => reactMessage(project.code, id, emoji)}
                 onPin={(id) => pinMessage(project.code, id)}

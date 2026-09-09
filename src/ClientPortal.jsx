@@ -6979,6 +6979,12 @@ function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioSt
 
             <AdminSection title="About & details">
               <div className="space-y-3">
+                <BlurField
+                  label="Project name — shown on the banner (yours and the client's)"
+                  value={project.name}
+                  onSave={(v) => v.trim() && setField(project.code, "name", v.trim())}
+                  placeholder="Project name"
+                />
                 <div className="rounded-lg p-3" style={{ background: "#F5EED9", border: "1px solid #e8d9a8" }}>
                   <BlurField
                     label="Project number — private, only you see this"

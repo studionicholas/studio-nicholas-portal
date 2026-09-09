@@ -441,6 +441,22 @@ function textOn(bg) {
   const b = parseInt(c.slice(4, 6), 16);
   return 0.299 * r + 0.587 * g + 0.114 * b > 150 ? "#1C1A17" : "#ffffff";
 }
+// A small flat-colour tile (the project's banner colour) with the project's
+// initial — used in the admin project lists instead of a photo thumbnail, so the
+// sidebar matches the flat-colour project banner.
+function ProjectSwatch({ project, size = 36 }) {
+  const c = project.heroColor || (project.isLead ? "#d5a933" : BANNER_DEFAULT);
+  const initial = ((project.name || "").trim().charAt(0) || "•").toUpperCase();
+  return (
+    <span
+      className="rounded-[3px] shrink-0 flex items-center justify-center"
+      style={{ width: size, height: size, background: c, color: textOn(c), fontSize: Math.round(size * 0.42), fontStyle: "italic", fontWeight: 300, lineHeight: 1 }}
+      aria-hidden="true"
+    >
+      {initial}
+    </span>
+  );
+}
 function formatBytes(b) {
   if (b == null) return "";
   if (b < 1024) return `${b} B`;
@@ -6681,7 +6697,7 @@ function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioSt
                     className="flex items-center gap-2.5 pl-2 pr-2.5 py-[9px] rounded-[3px] text-left"
                     style={{ background: active ? "#f2e9e2" : "transparent", borderLeft: `3px solid ${active ? "#b26f52" : "transparent"}` }}
                   >
-                    <img src={p.heroPhoto} alt="" className="w-9 h-9 object-cover rounded-[3px] shrink-0" style={{ background: "#ece3dc" }} />
+                    <ProjectSwatch project={p} size={36} />
                     <div className="flex-1 min-w-0">
                       <p className="text-[14.5px] truncate leading-tight" style={{ fontStyle: "italic", fontWeight: 300 }}>{p.name}</p>
                       <p className="text-[11px] mt-px" style={{ color: p.unpublished ? "#8a6d1d" : "#a89d95" }}>{p.unpublished ? "Not published" : p.code}</p>
@@ -6767,7 +6783,7 @@ function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioSt
                   const unread = unreadForStudio(p);
                   return (
                     <button key={p.code} onClick={() => openProject(p.code)} className="flex items-center gap-3 rounded-[3px] px-3 py-2.5 text-left" style={{ background: "#fffdfb", border: "1px solid #e6d8cf" }}>
-                      <img src={p.heroPhoto} alt="" className="w-[50px] h-[50px] object-cover rounded-[3px] shrink-0" style={{ background: "#ece3dc" }} />
+                      <ProjectSwatch project={p} size={50} />
                       <div className="flex-1 min-w-0">
                         <p className="text-[16px] truncate leading-snug" style={{ fontStyle: "italic", fontWeight: 300 }}>{p.name}</p>
                         <p className="text-[11.5px] mt-0.5" style={{ color: p.unpublished ? "#8a6d1d" : "#a89d95" }}>

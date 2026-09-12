@@ -6390,8 +6390,11 @@ function AdminSurveyPanel({ project, templates, onSend, onSaveSurvey }) {
   const [draft, setDraft] = useState(() => project.survey || { name: `${project.name || "Project"} — survey`, intro: "", questions: [] });
   const [saved, setSaved] = useState(false);
   const [view, setView] = useState(null); // { survey, answers }
+  const [buildOpen, setBuildOpen] = useState(false);
+  const [resultsOpen, setResultsOpen] = useState(false);
   const update = (patch) => { setDraft((d) => ({ ...d, ...patch })); setSaved(false); };
   const sent = (project.messages || []).filter((m) => m.survey).slice().reverse();
+  const completed = sent.filter((m) => m.surveyResponse).length;
   const clean = () => ({
     name: (draft.name || "Survey").trim(),
     intro: (draft.intro || "").trim(),
@@ -6407,60 +6410,86 @@ function AdminSurveyPanel({ project, templates, onSend, onSaveSurvey }) {
     onSend({ id: uid(), ...s });
   };
   const tmplList = (templates || []).filter((t) => (t.questions || []).length);
+  const nQ = (draft.questions || []).filter((q) => (q.text || "").trim()).length;
   return (
-    <div>
-      {sent.length > 0 && (
-        <div className="space-y-2 mb-4">
-          <p className="text-[11px] uppercase tracking-wide" style={{ color: "#a89d95", letterSpacing: "0.06em" }}>Sent to this project</p>
-          {sent.map((m) => {
-            const total = (m.survey.questions || []).length;
-            const done = !!m.surveyResponse;
-            return (
-              <div key={m.id} className="flex items-center justify-between gap-3 border border-stone-200 rounded-lg px-4 py-3 bg-white">
-                <div className="min-w-0">
-                  <p className="text-[14px] text-stone-800 truncate">{m.survey.name}</p>
-                  <p className="text-[12px]" style={{ color: done ? "#576b45" : "#a89d95" }}>
-                    {done ? `Completed ${formatDate(m.surveyResponse.submittedAt)} · ${answeredCount(m.survey.questions, m.surveyResponse.answers)}/${total} answered` : `Sent ${formatDate(m.date)} · awaiting response`}
-                  </p>
-                </div>
-                {done && (
-                  <button onClick={() => setView({ survey: m.survey, answers: m.surveyResponse.answers })} className="shrink-0 text-[12px] rounded-lg px-3 py-1.5" style={{ border: "1px solid #cfdbdf", background: "#eef3f4", color: "#4a6670" }}>View answers</button>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      <p className="text-[12px] text-stone-400 mb-2">Build this project's survey below, then send it. The client answers it in their Messages, one question at a time.</p>
-      <div className="space-y-2.5">
-        <input value={draft.name} onChange={(e) => update({ name: e.target.value })} placeholder="Survey name" className="w-full px-3 py-2 rounded-lg border border-stone-300 text-[14px] focus:outline-none focus:ring-2 focus:ring-[#576B45]" />
-        <input value={draft.intro || ""} onChange={(e) => update({ intro: e.target.value })} placeholder="Short intro (optional)" className="w-full px-3 py-2 rounded-lg border border-stone-300 text-[13px] focus:outline-none focus:ring-2 focus:ring-[#576B45]" />
-        {tmplList.length > 0 && (
-          <select
-            value=""
-            onChange={(e) => {
-              const t = tmplList.find((x) => x.id === e.target.value);
-              if (t) update({ name: t.name, intro: t.intro || "", questions: (t.questions || []).map((q) => ({ ...q, id: uid(), options: q.options ? [...q.options] : undefined })) });
-            }}
-            className="w-full px-3 py-2 rounded-lg border border-stone-300 text-[13px] bg-white focus:outline-none"
-          >
-            <option value="">Start from a saved survey…</option>
-            {tmplList.map((t) => (
-              <option key={t.id} value={t.id}>{t.name} ({(t.questions || []).length} q)</option>
-            ))}
-          </select>
-        )}
-        <SurveyQuestionList questions={draft.questions} onChange={(qs) => update({ questions: qs })} />
-      </div>
-
-      <div className="flex flex-wrap items-center gap-2 mt-3">
-        <button onClick={send} disabled={!(draft.questions || []).some((q) => (q.text || "").trim())} className="inline-flex items-center gap-1.5 text-[13px] rounded-lg px-3.5 py-2 disabled:opacity-50" style={{ background: "#576b45", color: "#efefec" }}>
-          <FileText className="w-3.5 h-3.5" /> Send survey to client
+    <div className="space-y-2">
+      {/* Build & send — collapsed drop-down so it doesn't take up space */}
+      <div className="border border-stone-200 rounded-lg bg-white">
+        <button onClick={() => setBuildOpen((o) => !o)} className="w-full flex items-center gap-2 px-3.5 py-3 text-left">
+          <ChevronRight className={`w-4 h-4 text-stone-400 transition-transform ${buildOpen ? "rotate-90" : ""}`} />
+          <span className="flex-1 text-[14px] text-stone-800">Build &amp; send survey</span>
+          <span className="text-[11px] text-stone-400">{nQ} question{nQ === 1 ? "" : "s"}</span>
         </button>
-        <button onClick={save} className="text-[13px] rounded-lg px-3.5 py-2" style={{ border: "1px solid #e6d8cf", background: "#fffdfb", color: "#7a6f66" }}>Save questions</button>
-        {saved && <span className="text-[12px] text-[#576B45]">Saved ✓</span>}
+        {buildOpen && (
+          <div className="px-3.5 pb-3.5 border-t border-stone-100 pt-3">
+            <p className="text-[12px] text-stone-400 mb-2">Build this project's survey, then send it. The client answers it in their Messages, one question at a time.</p>
+            <div className="space-y-2.5">
+              <input value={draft.name} onChange={(e) => update({ name: e.target.value })} placeholder="Survey name" className="w-full px-3 py-2 rounded-lg border border-stone-300 text-[14px] focus:outline-none focus:ring-2 focus:ring-[#576B45]" />
+              <input value={draft.intro || ""} onChange={(e) => update({ intro: e.target.value })} placeholder="Short intro (optional)" className="w-full px-3 py-2 rounded-lg border border-stone-300 text-[13px] focus:outline-none focus:ring-2 focus:ring-[#576B45]" />
+              {tmplList.length > 0 && (
+                <select
+                  value=""
+                  onChange={(e) => {
+                    const t = tmplList.find((x) => x.id === e.target.value);
+                    if (t) update({ name: t.name, intro: t.intro || "", questions: (t.questions || []).map((q) => ({ ...q, id: uid(), options: q.options ? [...q.options] : undefined })) });
+                  }}
+                  className="w-full px-3 py-2 rounded-lg border border-stone-300 text-[13px] bg-white focus:outline-none"
+                >
+                  <option value="">Start from a saved survey…</option>
+                  {tmplList.map((t) => (
+                    <option key={t.id} value={t.id}>{t.name} ({(t.questions || []).length} q)</option>
+                  ))}
+                </select>
+              )}
+              <SurveyQuestionList questions={draft.questions} onChange={(qs) => update({ questions: qs })} />
+            </div>
+            <div className="flex flex-wrap items-center gap-2 mt-3">
+              <button onClick={send} disabled={!(draft.questions || []).some((q) => (q.text || "").trim())} className="inline-flex items-center gap-1.5 text-[13px] rounded-lg px-3.5 py-2 disabled:opacity-50" style={{ background: "#576b45", color: "#efefec" }}>
+                <FileText className="w-3.5 h-3.5" /> Send survey to client
+              </button>
+              <button onClick={save} className="text-[13px] rounded-lg px-3.5 py-2" style={{ border: "1px solid #e6d8cf", background: "#fffdfb", color: "#7a6f66" }}>Save questions</button>
+              {saved && <span className="text-[12px] text-[#576B45]">Saved ✓</span>}
+            </div>
+          </div>
+        )}
       </div>
+
+      {/* Results — collapsed drop-down; view each client's answers here */}
+      <div className="border border-stone-200 rounded-lg bg-white">
+        <button onClick={() => setResultsOpen((o) => !o)} className="w-full flex items-center gap-2 px-3.5 py-3 text-left">
+          <ChevronRight className={`w-4 h-4 text-stone-400 transition-transform ${resultsOpen ? "rotate-90" : ""}`} />
+          <span className="flex-1 text-[14px] text-stone-800">Results</span>
+          <span className="text-[11px]" style={{ color: completed > 0 ? "#576b45" : "#a89d95" }}>{sent.length === 0 ? "None sent" : `${completed}/${sent.length} completed`}</span>
+        </button>
+        {resultsOpen && (
+          <div className="px-3.5 pb-3.5 border-t border-stone-100 pt-3">
+            {sent.length === 0 ? (
+              <p className="text-[13px] text-stone-400">No surveys sent yet. Build one above and send it.</p>
+            ) : (
+              <div className="space-y-2">
+                {sent.map((m) => {
+                  const total = (m.survey.questions || []).length;
+                  const done = !!m.surveyResponse;
+                  return (
+                    <div key={m.id} className="flex items-center justify-between gap-3 border border-stone-200 rounded-lg px-4 py-3" style={{ background: "#fbf7f3" }}>
+                      <div className="min-w-0">
+                        <p className="text-[14px] text-stone-800 truncate">{m.survey.name}</p>
+                        <p className="text-[12px]" style={{ color: done ? "#576b45" : "#a89d95" }}>
+                          {done ? `Completed ${formatDate(m.surveyResponse.submittedAt)} · ${answeredCount(m.survey.questions, m.surveyResponse.answers)}/${total} answered` : `Sent ${formatDate(m.date)} · awaiting response`}
+                        </p>
+                      </div>
+                      {done && (
+                        <button onClick={() => setView({ survey: m.survey, answers: m.surveyResponse.answers })} className="shrink-0 text-[12px] rounded-lg px-3 py-1.5" style={{ border: "1px solid #cfdbdf", background: "#eef3f4", color: "#4a6670" }}>View answers</button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
       {view && <SurveyModal survey={view.survey} initialAnswers={view.answers} readOnly onClose={() => setView(null)} />}
     </div>
   );

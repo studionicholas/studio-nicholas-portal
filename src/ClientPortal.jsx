@@ -1583,10 +1583,16 @@ function answeredCount(questions, answers) {
 }
 function surveyValueLabel(q, answers) {
   const v = answers?.[q.id];
-  if (v == null || (Array.isArray(v) && v.length === 0) || String(v).trim() === "") return "—";
-  if (q.type === "rating") return `${v} / 5`;
-  if (Array.isArray(v)) return v.join(", ");
-  return String(v);
+  const other = answers?.[q.id + "::other"];
+  const comment = answers?.[q.id + "::comment"];
+  const showOther = (x) => (x === "__other" ? `Other: ${other && String(other).trim() ? other : "…"}` : x);
+  let base;
+  if (v == null || (Array.isArray(v) && v.length === 0) || String(v).trim() === "") base = "—";
+  else if (q.type === "rating") base = `${v} / 5`;
+  else if (Array.isArray(v)) base = v.map(showOther).join(", ");
+  else base = showOther(String(v));
+  if (comment && String(comment).trim()) base = (base === "—" ? "" : base + " · ") + `Note: ${comment}`;
+  return base;
 }
 
 // The one-question-at-a-time take flow (and, in readOnly mode, the answer recap).
@@ -1623,31 +1629,47 @@ function SurveyModal({ survey, initialAnswers, readOnly, onClose, onSubmit }) {
     onClose();
   }
 
+  const otherStyle = (on) => (on ? { border: "1px solid #576b45", background: "#eaf0e3", color: "#576b45" } : { border: "1px solid #d9d0c8", color: "#57514a", background: "#fff" });
   function renderInput(q) {
     const v = answers[q.id];
     if (q.type === "single") {
       return (
         <div className="flex flex-col gap-2">
           {(q.options || []).map((opt) => (
-            <button key={opt} onClick={() => setA(q.id, opt)} className="text-left text-[14px] rounded-lg px-3.5 py-2.5" style={v === opt ? { border: "1px solid #576b45", background: "#eaf0e3", color: "#576b45" } : { border: "1px solid #d9d0c8", color: "#57514a", background: "#fff" }}>
+            <button key={opt} onClick={() => setA(q.id, opt)} className="text-left text-[14px] rounded-lg px-3.5 py-2.5" style={otherStyle(v === opt)}>
               {opt}
             </button>
           ))}
+          <button onClick={() => setA(q.id, "__other")} className="text-left text-[14px] rounded-lg px-3.5 py-2.5" style={otherStyle(v === "__other")}>
+            Other…
+          </button>
+          {v === "__other" && (
+            <input value={answers[q.id + "::other"] || ""} onChange={(e) => setA(q.id + "::other", e.target.value)} placeholder="Type your own answer…" autoFocus className="w-full px-3.5 py-2.5 rounded-lg border text-[14px] focus:outline-none focus:ring-2 focus:ring-[#576B45]" style={{ borderColor: "#d9d0c8" }} />
+          )}
         </div>
       );
     }
     if (q.type === "multi") {
       const arr = Array.isArray(v) ? v : [];
+      const otherOn = arr.includes("__other");
       return (
-        <div className="flex flex-wrap gap-2">
-          {(q.options || []).map((opt) => {
-            const on = arr.includes(opt);
-            return (
-              <button key={opt} onClick={() => setA(q.id, on ? arr.filter((x) => x !== opt) : [...arr, opt])} className="text-[13px] rounded-full px-3.5 py-2" style={on ? { border: "1px solid #576b45", background: "#eaf0e3", color: "#576b45" } : { border: "1px solid #d9d0c8", color: "#57514a", background: "#fff" }}>
-                {opt}
-              </button>
-            );
-          })}
+        <div>
+          <div className="flex flex-wrap gap-2">
+            {(q.options || []).map((opt) => {
+              const on = arr.includes(opt);
+              return (
+                <button key={opt} onClick={() => setA(q.id, on ? arr.filter((x) => x !== opt) : [...arr, opt])} className="text-[13px] rounded-full px-3.5 py-2" style={otherStyle(on)}>
+                  {opt}
+                </button>
+              );
+            })}
+            <button onClick={() => setA(q.id, otherOn ? arr.filter((x) => x !== "__other") : [...arr, "__other"])} className="text-[13px] rounded-full px-3.5 py-2" style={otherStyle(otherOn)}>
+              Other…
+            </button>
+          </div>
+          {otherOn && (
+            <input value={answers[q.id + "::other"] || ""} onChange={(e) => setA(q.id + "::other", e.target.value)} placeholder="Type your own answer…" autoFocus className="w-full mt-2 px-3.5 py-2.5 rounded-lg border text-[14px] focus:outline-none focus:ring-2 focus:ring-[#576B45]" style={{ borderColor: "#d9d0c8" }} />
+          )}
         </div>
       );
     }
@@ -1712,6 +1734,10 @@ function SurveyModal({ survey, initialAnswers, readOnly, onClose, onSubmit }) {
                 <p className="text-[10px] uppercase tracking-wide mb-2" style={{ color: "#b6aca2", letterSpacing: "0.08em" }}>{SURVEY_TYPE_LABEL[q.type] || ""}</p>
                 <p className="text-[18px] leading-snug mb-4" style={{ fontStyle: "italic", fontWeight: 300 }}>{q.text}</p>
                 {renderInput(q)}
+                <div className="mt-4 pt-3" style={{ borderTop: "1px dashed #e6d8cf" }}>
+                  <p className="text-[11px] mb-1" style={{ color: "#a89d95" }}>Anything to add? (optional)</p>
+                  <textarea value={answers[q.id + "::comment"] || ""} onChange={(e) => setA(q.id + "::comment", e.target.value)} rows={2} placeholder="Add a comment…" className="w-full px-3.5 py-2.5 rounded-lg border text-[13.5px] focus:outline-none focus:ring-2 focus:ring-[#576B45] resize-none" style={{ borderColor: "#e6d8cf", background: "#fffdfb" }} />
+                </div>
               </div>
             )
           )}
@@ -6307,17 +6333,85 @@ function AdminBell({ projects, onOpen, boxed }) {
   );
 }
 
-// Per-project survey hub, shown in the Details tab. Send a survey to this
-// project, see whether it's been completed, and read the answers — all here.
+// Reusable question-rows editor (used by the per-project survey builder and the
+// Settings templates). Choice questions automatically offer an "Other" write-in
+// to the client, and every question lets the client add an optional comment.
+function SurveyQuestionList({ questions, onChange }) {
+  const qs = questions || [];
+  const update = (i, patch) => onChange(qs.map((q, k) => (k === i ? { ...q, ...patch } : q)));
+  const remove = (i) => onChange(qs.filter((_, k) => k !== i));
+  const move = (i, dir) => {
+    const j = i + dir;
+    if (j < 0 || j >= qs.length) return;
+    const a = [...qs];
+    [a[i], a[j]] = [a[j], a[i]];
+    onChange(a);
+  };
+  const add = () => onChange([...qs, { id: uid(), type: "single", text: "", options: ["", ""] }]);
+  return (
+    <div className="space-y-2">
+      {qs.map((q, i) => (
+        <div key={q.id} className="rounded-lg p-3 space-y-2" style={{ background: "#faf6f2", border: "1px solid #eee2d9" }}>
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] text-stone-400 w-5">{i + 1}.</span>
+            <select value={q.type} onChange={(e) => update(i, { type: e.target.value, ...(((e.target.value === "single" || e.target.value === "multi") && !q.options) ? { options: ["", ""] } : {}) })} className="text-[12px] rounded-md border border-stone-300 bg-white px-2 py-1.5 focus:outline-none">
+              {Object.keys(SURVEY_TYPE_LABEL).map((t) => (
+                <option key={t} value={t}>{SURVEY_TYPE_LABEL[t]}</option>
+              ))}
+            </select>
+            <div className="flex-1" />
+            <button onClick={() => move(i, -1)} className="text-stone-300 hover:text-stone-700 text-[13px] px-1" aria-label="Move up">↑</button>
+            <button onClick={() => move(i, 1)} className="text-stone-300 hover:text-stone-700 text-[13px] px-1" aria-label="Move down">↓</button>
+            <button onClick={() => remove(i)} className="text-stone-300 hover:text-red-600" aria-label="Remove question"><Trash2 className="w-3.5 h-3.5" /></button>
+          </div>
+          <textarea value={q.text} onChange={(e) => update(i, { text: e.target.value })} rows={2} placeholder="Question text" className="w-full px-3 py-2 rounded-lg border border-stone-300 text-[13.5px] focus:outline-none focus:ring-2 focus:ring-[#576B45] resize-none" />
+          {(q.type === "single" || q.type === "multi") && (
+            <div className="space-y-1.5 pl-6">
+              {(q.options || []).map((opt, oi) => (
+                <div key={oi} className="flex items-center gap-2">
+                  <input value={opt} onChange={(e) => update(i, { options: q.options.map((o, k) => (k === oi ? e.target.value : o)) })} placeholder={`Option ${oi + 1}`} className="flex-1 px-2.5 py-1.5 rounded-md border border-stone-300 text-[13px] focus:outline-none focus:ring-1 focus:ring-[#576B45]" />
+                  <button onClick={() => update(i, { options: q.options.filter((_, k) => k !== oi) })} className="text-stone-300 hover:text-red-600" aria-label="Remove option"><X className="w-3.5 h-3.5" /></button>
+                </div>
+              ))}
+              <button onClick={() => update(i, { options: [...(q.options || []), ""] })} className="text-[12px] text-[#576B45]">+ Add option</button>
+              <p className="text-[10.5px] text-stone-400">An “Other…” write-in is added for the client automatically.</p>
+            </div>
+          )}
+        </div>
+      ))}
+      <button onClick={add} className="text-[13px] text-[#576B45]">+ Add question</button>
+    </div>
+  );
+}
+
+// Per-project survey — build the questions here, send it, and read the answers.
 // (The client answers it inside their Messages, one question at a time.)
-function AdminSurveyPanel({ project, templates, onSend }) {
-  const sent = (project.messages || []).filter((m) => m.survey).slice().reverse();
-  const [composing, setComposing] = useState(false);
+function AdminSurveyPanel({ project, templates, onSend, onSaveSurvey }) {
+  const [draft, setDraft] = useState(() => project.survey || { name: `${project.name || "Project"} — survey`, intro: "", questions: [] });
+  const [saved, setSaved] = useState(false);
   const [view, setView] = useState(null); // { survey, answers }
+  const update = (patch) => { setDraft((d) => ({ ...d, ...patch })); setSaved(false); };
+  const sent = (project.messages || []).filter((m) => m.survey).slice().reverse();
+  const clean = () => ({
+    name: (draft.name || "Survey").trim(),
+    intro: (draft.intro || "").trim(),
+    questions: (draft.questions || [])
+      .filter((q) => (q.text || "").trim())
+      .map((q) => ({ id: q.id, type: q.type, text: q.text.trim(), ...((q.type === "single" || q.type === "multi") ? { options: (q.options || []).map((o) => o.trim()).filter(Boolean) } : {}) })),
+  });
+  const save = () => { onSaveSurvey(clean()); setSaved(true); };
+  const send = () => {
+    const s = clean();
+    if (!s.questions.length) return;
+    onSaveSurvey(s);
+    onSend({ id: uid(), ...s });
+  };
+  const tmplList = (templates || []).filter((t) => (t.questions || []).length);
   return (
     <div>
       {sent.length > 0 && (
-        <div className="space-y-2 mb-3">
+        <div className="space-y-2 mb-4">
+          <p className="text-[11px] uppercase tracking-wide" style={{ color: "#a89d95", letterSpacing: "0.06em" }}>Sent to this project</p>
           {sent.map((m) => {
             const total = (m.survey.questions || []).length;
             const done = !!m.surveyResponse;
@@ -6330,23 +6424,43 @@ function AdminSurveyPanel({ project, templates, onSend }) {
                   </p>
                 </div>
                 {done && (
-                  <button onClick={() => setView({ survey: m.survey, answers: m.surveyResponse.answers })} className="shrink-0 text-[12px] rounded-lg px-3 py-1.5" style={{ border: "1px solid #cfdbdf", background: "#eef3f4", color: "#4a6670" }}>
-                    View answers
-                  </button>
+                  <button onClick={() => setView({ survey: m.survey, answers: m.surveyResponse.answers })} className="shrink-0 text-[12px] rounded-lg px-3 py-1.5" style={{ border: "1px solid #cfdbdf", background: "#eef3f4", color: "#4a6670" }}>View answers</button>
                 )}
               </div>
             );
           })}
         </div>
       )}
-      {composing ? (
-        <SurveyComposer templates={templates} onCancel={() => setComposing(false)} onSend={(s) => { onSend(s); setComposing(false); }} />
-      ) : (
-        <button onClick={() => setComposing(true)} className="inline-flex items-center gap-1.5 text-[13px] rounded-lg px-3.5 py-2" style={{ background: "#576b45", color: "#efefec" }}>
-          <FileText className="w-3.5 h-3.5" /> Send a survey
+
+      <p className="text-[12px] text-stone-400 mb-2">Build this project's survey below, then send it. The client answers it in their Messages, one question at a time.</p>
+      <div className="space-y-2.5">
+        <input value={draft.name} onChange={(e) => update({ name: e.target.value })} placeholder="Survey name" className="w-full px-3 py-2 rounded-lg border border-stone-300 text-[14px] focus:outline-none focus:ring-2 focus:ring-[#576B45]" />
+        <input value={draft.intro || ""} onChange={(e) => update({ intro: e.target.value })} placeholder="Short intro (optional)" className="w-full px-3 py-2 rounded-lg border border-stone-300 text-[13px] focus:outline-none focus:ring-2 focus:ring-[#576B45]" />
+        {tmplList.length > 0 && (
+          <select
+            value=""
+            onChange={(e) => {
+              const t = tmplList.find((x) => x.id === e.target.value);
+              if (t) update({ name: t.name, intro: t.intro || "", questions: (t.questions || []).map((q) => ({ ...q, id: uid(), options: q.options ? [...q.options] : undefined })) });
+            }}
+            className="w-full px-3 py-2 rounded-lg border border-stone-300 text-[13px] bg-white focus:outline-none"
+          >
+            <option value="">Start from a saved survey…</option>
+            {tmplList.map((t) => (
+              <option key={t.id} value={t.id}>{t.name} ({(t.questions || []).length} q)</option>
+            ))}
+          </select>
+        )}
+        <SurveyQuestionList questions={draft.questions} onChange={(qs) => update({ questions: qs })} />
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2 mt-3">
+        <button onClick={send} disabled={!(draft.questions || []).some((q) => (q.text || "").trim())} className="inline-flex items-center gap-1.5 text-[13px] rounded-lg px-3.5 py-2 disabled:opacity-50" style={{ background: "#576b45", color: "#efefec" }}>
+          <FileText className="w-3.5 h-3.5" /> Send survey to client
         </button>
-      )}
-      <p className="text-[11px] text-stone-400 mt-2">Clients answer it in their Messages, one question at a time. Build or edit your surveys in Settings → Surveys.</p>
+        <button onClick={save} className="text-[13px] rounded-lg px-3.5 py-2" style={{ border: "1px solid #e6d8cf", background: "#fffdfb", color: "#7a6f66" }}>Save questions</button>
+        {saved && <span className="text-[12px] text-[#576B45]">Saved ✓</span>}
+      </div>
       {view && <SurveyModal survey={view.survey} initialAnswers={view.answers} readOnly onClose={() => setView(null)} />}
     </div>
   );
@@ -7603,7 +7717,7 @@ function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioSt
             </AdminSection>
 
             <AdminSection title="Survey">
-              <AdminSurveyPanel project={project} templates={surveyTemplatesOrDefault(surveyTemplates)} onSend={(s) => sendSurvey(project.code, s)} />
+              <AdminSurveyPanel key={project.code} project={project} templates={surveyTemplatesOrDefault(surveyTemplates)} onSend={(s) => sendSurvey(project.code, s)} onSaveSurvey={(s) => setField(project.code, "survey", s)} />
             </AdminSection>
 
             <AdminSection title="Project image">

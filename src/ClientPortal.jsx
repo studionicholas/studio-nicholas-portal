@@ -3337,14 +3337,17 @@ function AboutTab({ project }) {
 
 // The holding screen a client sees after signing their fee proposal, until the
 // studio presses Publish. Calm, minimal — they can revisit their signed copy.
-function LeadWaiting({ project, onLogout }) {
+function LeadWaiting({ project, onLogout, allProjects, onSwitchProject }) {
   const [preview, setPreview] = useState(false);
   const signed = project.feeProposalSigned;
   return (
     <div className="min-h-screen flex flex-col" style={{ background: "#f7f2ef", fontFamily: "Selva, Georgia, serif", color: "#2a221c" }}>
       <header style={{ borderBottom: "1px solid #e6d8cf" }}>
-        <div className="max-w-[640px] mx-auto px-5 py-1 flex items-center justify-between">
-          <img src="/sn-wordmark-static.png" alt="Studio Nicholas" style={{ width: 96, height: "auto" }} />
+        <div className="max-w-[640px] mx-auto px-5 py-1 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 min-w-0">
+            <img src="/sn-wordmark-static.png" alt="Studio Nicholas" style={{ width: 96, height: "auto" }} className="shrink-0" />
+            <ProjectSwitcher projects={allProjects} currentCode={project.code} onSwitch={onSwitchProject} />
+          </div>
           <button onClick={onLogout} className="w-9 h-9 flex items-center justify-center" style={{ color: "#a89d95" }} aria-label="Log out">
             <LogOut className="w-4 h-4" strokeWidth={1.8} />
           </button>
@@ -3487,7 +3490,69 @@ function EnablePushBanner({ email }) {
   );
 }
 
-function ClientDashboard({ project, viewerEmail, studioStatus, studioStatusColor, autoStatus, onLogout, onSetEmailNotify, onSendMessage, onReactMessage, onPinMessage, onMarkRead, onMarkNotifs, onDismissNotif, onSeenTab, onUploadSigned, onSignProposal, onProposalActivity, onRespondMeeting, onRequestMeeting, onEditRequest, onAcceptRequest, onDismissRequest, installOpen, preview }) {
+// Header switcher for a client (or builder) who belongs to more than one
+// project. Hidden entirely for single-project people. Shows full project names,
+// a badge on any project with unread activity, and a dot on the chip when a
+// non-current project has news. Selecting one deep-links to the tab that has it.
+function ProjectSwitcher({ projects, currentCode, onSwitch }) {
+  const [open, setOpen] = useState(false);
+  const list = projects || [];
+  if (list.length < 2) return null;
+  const current = list.find((p) => p.code === currentCode) || list[0];
+  const unreadOf = (p) => (p.notifications || []).filter((n) => !n.read).length;
+  const othersHaveNews = list.some((p) => p.code !== currentCode && unreadOf(p) > 0);
+  const stageOf = (p) => (p.isLead ? "Awaiting your signature" : p.unpublished ? "Being set up" : "");
+  return (
+    <div className="relative shrink-0">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="relative inline-flex items-center gap-1 text-[11px] rounded-full pl-2.5 pr-2 py-[3px]"
+        style={{ background: open ? "#f2e9e2" : "#fffdfb", border: "1px solid #e6d8cf", color: "#57514a", maxWidth: 150 }}
+        aria-label="Switch project"
+      >
+        <span className="truncate">{current?.name || "Project"}</span>
+        <ChevronDown className="w-3 h-3 shrink-0" strokeWidth={2} />
+        {othersHaveNews && !open && <span className="absolute -top-0.5 -right-0.5 w-[7px] h-[7px] rounded-full" style={{ background: "#811618" }} />}
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
+          <div className="absolute left-0 mt-2 w-64 max-w-[82vw] bg-white rounded-[4px] shadow-lg z-20 overflow-hidden" style={{ border: "1px solid #e6d8cf" }}>
+            <p className="px-3 pt-2.5 pb-1.5 text-[9px] text-center" style={{ color: "#c9b9ae", letterSpacing: "0.6px" }}>YOUR PROJECTS</p>
+            {list.map((p) => {
+              const n = unreadOf(p);
+              const isCur = p.code === currentCode;
+              const stage = stageOf(p);
+              return (
+                <button
+                  key={p.code}
+                  onClick={() => {
+                    setOpen(false);
+                    if (!isCur) onSwitch(p.code);
+                  }}
+                  className="w-full flex items-center gap-2 px-3 py-2.5 text-left"
+                  style={{ background: isCur ? "#f2e9e2" : "transparent", borderTop: "1px solid #efe4dc" }}
+                >
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[13px] leading-snug" style={{ color: "#2a221c" }}>{p.name}</p>
+                    {stage && <p className="text-[9.5px] mt-px" style={{ color: p.isLead ? "#8a6d1d" : "#a89d95" }}>{stage}</p>}
+                  </div>
+                  {isCur ? (
+                    <span className="shrink-0 text-[12px]" style={{ color: "#576b45" }}>✓</span>
+                  ) : n > 0 ? (
+                    <span className="shrink-0 min-w-[15px] h-[15px] px-1 rounded-full text-[9px] flex items-center justify-center" style={{ background: "#811618", color: "#fff" }}>{n}</span>
+                  ) : null}
+                </button>
+              );
+            })}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function ClientDashboard({ project, viewerEmail, allProjects, onSwitchProject, studioStatus, studioStatusColor, autoStatus, onLogout, onSetEmailNotify, onSendMessage, onReactMessage, onPinMessage, onMarkRead, onMarkNotifs, onDismissNotif, onSeenTab, onUploadSigned, onSignProposal, onProposalActivity, onRespondMeeting, onRequestMeeting, onEditRequest, onAcceptRequest, onDismissRequest, installOpen, preview }) {
   // Last-viewed tab is remembered per device (client redesign) and restored on
   // open; notification deep-links overwrite it.
   const [tab, setTab] = useState(() => {
@@ -3689,7 +3754,10 @@ function ClientDashboard({ project, viewerEmail, studioStatus, studioStatusColor
     >
       <header className="sticky top-0 z-10" style={{ background: "rgba(247,242,239,0.95)", backdropFilter: "blur(6px)", borderBottom: "1px solid #e6d8cf" }}>
         <div className="max-w-[1000px] mx-auto px-5 py-1 flex items-center justify-between gap-2">
-          <img src="/sn-wordmark-static.png" alt="Studio Nicholas" style={{ width: 96, height: "auto" }} />
+          <div className="flex items-center gap-2 min-w-0">
+            <img src="/sn-wordmark-static.png" alt="Studio Nicholas" style={{ width: 96, height: "auto" }} className="shrink-0" />
+            {!preview && <ProjectSwitcher projects={allProjects} currentCode={project.code} onSwitch={onSwitchProject} />}
+          </div>
           <div className="flex items-center gap-1 shrink-0">
             <button onClick={() => setGlobalSearch(true)} className="w-9 h-9 flex items-center justify-center" style={{ color: "#7a6f66" }} aria-label="Search your project">
               <Search className="w-[17px] h-[17px]" strokeWidth={1.8} />
@@ -7916,6 +7984,27 @@ export default function App() {
     [activeCode]
   );
 
+  // A client/builder with several projects switches between them. If the target
+  // project has unread activity, deep-link to the tab holding the newest item;
+  // otherwise fall through to its default view. The keyed remount on activeCode
+  // re-reads this and re-applies that project's gating.
+  const handleSwitchProject = useCallback(
+    (code) => {
+      const p = projects[code];
+      const unread = (p?.notifications || []).filter((n) => !n.read);
+      if (unread.length) {
+        const tab = NOTIF_TAB[unread[unread.length - 1].type];
+        if (tab) {
+          try {
+            localStorage.setItem("sn-client-session", JSON.stringify({ code, tab }));
+          } catch (_e) {}
+        }
+      }
+      setActiveCode(code);
+    },
+    [projects]
+  );
+
   const handleUploadSigned = useCallback(
     (file) => setProjects((prev) => ({ ...prev, [activeCode]: { ...prev[activeCode], feeProposalSigned: file } })),
     [activeCode]
@@ -8185,12 +8274,16 @@ export default function App() {
     );
   } else {
     const project = activeCode ? projects[activeCode] : Object.values(projects)[0];
+    const myProjects = Object.values(projects);
     content = project && project.unpublished && project.feeProposalSigned ? (
-      <LeadWaiting project={project} onLogout={handleSignOut} />
+      <LeadWaiting key={project.code} project={project} onLogout={handleSignOut} allProjects={myProjects} onSwitchProject={handleSwitchProject} />
     ) : project ? (
       <ClientDashboard
+        key={project.code}
         project={project}
         viewerEmail={session?.user?.email || ""}
+        allProjects={myProjects}
+        onSwitchProject={handleSwitchProject}
         studioStatus={studioStatus}
         studioStatusColor={studioStatusColor}
         autoStatus={autoReply}

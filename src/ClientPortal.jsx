@@ -1550,7 +1550,295 @@ function NoticeComposer({ onSend, onCancel, hasPrograma, templates }) {
   );
 }
 
-function MessagesPanel({ messages, meRole, onSend, onSendNotice, onSendProgramaPing, onReact, onPin, onLabel, onTagPhoto, onEdit, onDelete, seenSince, showReceipts, showStatus, onToggleStatus, customStatus, onSetCustomStatus, studioStatus, studioStatusColor, autoStatus, prefill, onPrefillUsed, draftKey, clients, myEmail, fallbackClientName, programaUrl, noticeTemplates, fill, slimTools }) {
+/* ---------------- Surveys ---------------- */
+// A survey is sent as a special message card in the thread (like the fee/notice
+// cards). The client answers one question at a time (SurveyModal), can pause and
+// resume (answers auto-save locally), reviews, then submits — the answers save
+// back onto the message so the studio can read them.
+const SURVEY_TYPE_LABEL = { single: "Choose one", multi: "Choose any", short: "Short answer", long: "Long answer", rating: "Rating 1–5" };
+const DEFAULT_SURVEY_TEMPLATES = [
+  {
+    id: "discovery",
+    name: "Project discovery",
+    intro: "A few questions to help shape your design.",
+    questions: [
+      { id: "q1", type: "long", text: "In a sentence or two, how would you describe the feeling you want this space to have?" },
+      { id: "q2", type: "single", text: "Which best describes your style?", options: ["Calm & warm", "Bold & characterful", "Pared-back & minimal", "Classic & timeless"] },
+      { id: "q3", type: "rating", text: "How adventurous are you with colour?" },
+      { id: "q4", type: "multi", text: "Which rooms are in scope?", options: ["Living", "Kitchen", "Bedrooms", "Bathrooms", "Outdoor"] },
+      { id: "q5", type: "short", text: "Is there a budget range we should design to?" },
+      { id: "q6", type: "long", text: "Anything else we should know?" },
+    ],
+  },
+];
+function surveyTemplatesOrDefault(t) {
+  return Array.isArray(t) && t.length ? t : DEFAULT_SURVEY_TEMPLATES;
+}
+function surveyIsAnswered(q, answers) {
+  const v = answers?.[q.id];
+  return Array.isArray(v) ? v.length > 0 : v != null && String(v).trim() !== "";
+}
+function answeredCount(questions, answers) {
+  return (questions || []).filter((q) => surveyIsAnswered(q, answers)).length;
+}
+function surveyValueLabel(q, answers) {
+  const v = answers?.[q.id];
+  if (v == null || (Array.isArray(v) && v.length === 0) || String(v).trim() === "") return "—";
+  if (q.type === "rating") return `${v} / 5`;
+  if (Array.isArray(v)) return v.join(", ");
+  return String(v);
+}
+
+// The one-question-at-a-time take flow (and, in readOnly mode, the answer recap).
+function SurveyModal({ survey, initialAnswers, readOnly, onClose, onSubmit }) {
+  const questions = survey.questions || [];
+  const storeKey = `sn-survey-${survey.id}`;
+  const [answers, setAnswers] = useState(() => {
+    if (initialAnswers) return { ...initialAnswers };
+    if (readOnly) return {};
+    try {
+      const s = JSON.parse(localStorage.getItem(storeKey) || "null");
+      if (s && typeof s === "object") return s;
+    } catch (_e) {}
+    return {};
+  });
+  const firstUnanswered = Math.max(0, questions.findIndex((q) => !surveyIsAnswered(q, answers)));
+  const [step, setStep] = useState(readOnly ? 0 : firstUnanswered === -1 ? 0 : firstUnanswered);
+  const [review, setReview] = useState(!!readOnly);
+  useEffect(() => {
+    if (readOnly) return;
+    try {
+      localStorage.setItem(storeKey, JSON.stringify(answers));
+    } catch (_e) {}
+  }, [answers, readOnly, storeKey]);
+  const setA = (qid, v) => setAnswers((a) => ({ ...a, [qid]: v }));
+  const total = questions.length;
+  const q = questions[step];
+
+  function submit() {
+    onSubmit && onSubmit(answers);
+    try {
+      localStorage.removeItem(storeKey);
+    } catch (_e) {}
+    onClose();
+  }
+
+  function renderInput(q) {
+    const v = answers[q.id];
+    if (q.type === "single") {
+      return (
+        <div className="flex flex-col gap-2">
+          {(q.options || []).map((opt) => (
+            <button key={opt} onClick={() => setA(q.id, opt)} className="text-left text-[14px] rounded-lg px-3.5 py-2.5" style={v === opt ? { border: "1px solid #576b45", background: "#eaf0e3", color: "#576b45" } : { border: "1px solid #d9d0c8", color: "#57514a", background: "#fff" }}>
+              {opt}
+            </button>
+          ))}
+        </div>
+      );
+    }
+    if (q.type === "multi") {
+      const arr = Array.isArray(v) ? v : [];
+      return (
+        <div className="flex flex-wrap gap-2">
+          {(q.options || []).map((opt) => {
+            const on = arr.includes(opt);
+            return (
+              <button key={opt} onClick={() => setA(q.id, on ? arr.filter((x) => x !== opt) : [...arr, opt])} className="text-[13px] rounded-full px-3.5 py-2" style={on ? { border: "1px solid #576b45", background: "#eaf0e3", color: "#576b45" } : { border: "1px solid #d9d0c8", color: "#57514a", background: "#fff" }}>
+                {opt}
+              </button>
+            );
+          })}
+        </div>
+      );
+    }
+    if (q.type === "rating") {
+      return (
+        <div className="flex gap-2">
+          {[1, 2, 3, 4, 5].map((n) => (
+            <button key={n} onClick={() => setA(q.id, n)} className="w-11 h-11 rounded-lg text-[15px]" style={Number(v) === n ? { border: "1px solid #576b45", background: "#576b45", color: "#fff" } : { border: "1px solid #d9d0c8", color: "#57514a", background: "#fff" }}>
+              {n}
+            </button>
+          ))}
+        </div>
+      );
+    }
+    if (q.type === "short") {
+      return <input value={v || ""} onChange={(e) => setA(q.id, e.target.value)} placeholder="Type your answer…" className="w-full px-3.5 py-2.5 rounded-lg border text-[14px] focus:outline-none focus:ring-2 focus:ring-[#576B45]" style={{ borderColor: "#d9d0c8" }} />;
+    }
+    return <textarea value={v || ""} onChange={(e) => setA(q.id, e.target.value)} rows={4} placeholder="Type your answer…" className="w-full px-3.5 py-2.5 rounded-lg border text-[14px] focus:outline-none focus:ring-2 focus:ring-[#576B45] resize-none" style={{ borderColor: "#d9d0c8" }} />;
+  }
+
+  return (
+    <div className="fixed inset-0 z-[80] flex flex-col" style={{ background: "#f7f2ef", fontFamily: "Selva, Georgia, serif", color: "#2a221c" }}>
+      <div className="flex items-center justify-between gap-3 px-4 py-3 shrink-0" style={{ borderBottom: "1px solid #e6d8cf" }}>
+        <p className="text-[15px] truncate" style={{ fontStyle: "italic", fontWeight: 300 }}>{review ? (readOnly ? survey.name : "Review your answers") : survey.name}</p>
+        <button onClick={onClose} className="p-1.5" style={{ color: "#a89d95" }} aria-label="Close">
+          <X className="w-4 h-4" />
+        </button>
+      </div>
+      {!review && total > 0 && (
+        <div className="shrink-0">
+          <div className="flex items-center justify-between px-4 pt-2.5 text-[11px]" style={{ color: "#8a7f76" }}>
+            <span>Question {step + 1} of {total}</span>
+            <span>{answeredCount(questions, answers)} answered</span>
+          </div>
+          <div className="h-[3px] mt-2" style={{ background: "#eee5de" }}>
+            <div className="h-[3px]" style={{ width: `${((step + 1) / total) * 100}%`, background: "#576b45" }} />
+          </div>
+        </div>
+      )}
+      <div className="flex-1 overflow-auto px-5 py-6">
+        <div className="max-w-[560px] mx-auto">
+          {review ? (
+            <div>
+              {questions.map((qq, i) => (
+                <div key={qq.id} className="flex items-start justify-between gap-3 py-2.5" style={{ borderBottom: "1px solid #efe4dc" }}>
+                  <div className="min-w-0">
+                    <p className="text-[11px]" style={{ color: "#a89d95" }}>{i + 1} · {qq.text}</p>
+                    <p className="text-[13.5px] mt-0.5" style={{ color: "#2a221c" }}>{surveyValueLabel(qq, answers)}</p>
+                  </div>
+                  {!readOnly && (
+                    <button onClick={() => { setStep(i); setReview(false); }} className="shrink-0 text-[12px]" style={{ color: "#4a6670" }}>Edit</button>
+                  )}
+                </div>
+              ))}
+              {!readOnly && answeredCount(questions, answers) < total && (
+                <p className="text-[12px] mt-3" style={{ color: "#8a6d1d" }}>{total - answeredCount(questions, answers)} left blank — that's fine, you can still submit.</p>
+              )}
+            </div>
+          ) : (
+            q && (
+              <div>
+                <p className="text-[10px] uppercase tracking-wide mb-2" style={{ color: "#b6aca2", letterSpacing: "0.08em" }}>{SURVEY_TYPE_LABEL[q.type] || ""}</p>
+                <p className="text-[18px] leading-snug mb-4" style={{ fontStyle: "italic", fontWeight: 300 }}>{q.text}</p>
+                {renderInput(q)}
+              </div>
+            )
+          )}
+        </div>
+      </div>
+      <div className="shrink-0 px-4 py-3 flex items-center gap-2" style={{ borderTop: "1px solid #e6d8cf" }}>
+        {readOnly ? (
+          <button onClick={onClose} className="flex-1 h-11 rounded-lg text-[14px]" style={{ background: "#2a221c", color: "#f7f2ef" }}>Close</button>
+        ) : review ? (
+          <>
+            <button onClick={() => { setReview(false); setStep(total - 1); }} className="h-11 px-4 rounded-lg text-[13.5px]" style={{ border: "1px solid #d9d0c8", color: "#57514a" }}>← Back</button>
+            <button onClick={submit} className="flex-1 h-11 rounded-lg text-[14px]" style={{ background: "#576B45", color: "#fff" }}>Submit answers</button>
+          </>
+        ) : (
+          <>
+            <button onClick={() => (step === 0 ? onClose() : setStep(step - 1))} className="h-11 px-4 rounded-lg text-[13.5px]" style={{ border: "1px solid #d9d0c8", color: "#57514a" }}>{step === 0 ? "Close" : "← Back"}</button>
+            {step < total - 1 ? (
+              <button onClick={() => setStep(step + 1)} className="flex-1 h-11 rounded-lg text-[14px]" style={{ background: "#2a221c", color: "#f7f2ef" }}>Next →</button>
+            ) : (
+              <button onClick={() => setReview(true)} className="flex-1 h-11 rounded-lg text-[14px]" style={{ background: "#2a221c", color: "#f7f2ef" }}>Review →</button>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// The survey card that sits in the message thread — client can start/continue/
+// view, studio sees status + can view the answers.
+function SurveyCard({ m, mine, meRole, onSubmit }) {
+  const survey = m.survey || { questions: [] };
+  const resp = m.surveyResponse;
+  const total = (survey.questions || []).length;
+  const done = !!resp;
+  const [take, setTake] = useState(false);
+  const [view, setView] = useState(false);
+  let partial = 0;
+  if (!done && meRole === "client") {
+    try {
+      const s = JSON.parse(localStorage.getItem(`sn-survey-${survey.id}`) || "null");
+      if (s) partial = answeredCount(survey.questions, s);
+    } catch (_e) {}
+  }
+  return (
+    <div className={`flex ${mine ? "justify-end" : "justify-start"}`}>
+      <div className="max-w-[290px] rounded-2xl p-4" style={{ background: "#fff", border: "1px solid #e6e0d9", borderTopLeftRadius: mine ? 16 : 4, borderTopRightRadius: mine ? 4 : 16 }}>
+        <div className="flex items-center gap-1.5 mb-1">
+          <FileText className="w-3.5 h-3.5" style={{ color: done ? "#576b45" : "#4a6670" }} />
+          <span className="text-[10px] uppercase tracking-wide" style={{ color: done ? "#8aa89a" : "#8aa0a7", letterSpacing: "0.06em" }}>Survey · {done ? "Completed" : `${total} questions`}</span>
+        </div>
+        <p className="text-[14px]" style={{ fontFamily: "Selva, Georgia, serif", fontStyle: "italic", color: "#1c1a17" }}>{survey.name}</p>
+        {survey.intro && <p className="text-[12px] mt-1 leading-relaxed" style={{ color: "#79706a" }}>{survey.intro}</p>}
+
+        {meRole === "client" ? (
+          done ? (
+            <>
+              <p className="text-[12px] mt-2" style={{ color: "#79706a" }}>Thank you — answered {answeredCount(survey.questions, resp.answers)} of {total}{resp.submittedAt ? ` on ${formatDate(resp.submittedAt)}` : ""}.</p>
+              <button onClick={() => setView(true)} className="w-full mt-3 rounded-lg py-2 text-[12.5px]" style={{ border: "1px solid #cfdbdf", background: "#eef3f4", color: "#4a6670" }}>View your answers</button>
+            </>
+          ) : (
+            <button onClick={() => setTake(true)} className="w-full mt-3 rounded-lg py-2.5 text-[12.5px]" style={{ background: "#4a6670", color: "#fff" }}>
+              {partial > 0 ? `Continue (${partial} of ${total})` : "Start survey"}
+            </button>
+          )
+        ) : done ? (
+          <>
+            <p className="text-[12px] mt-2" style={{ color: "#576b45" }}>Completed{resp.submittedAt ? ` ${formatDate(resp.submittedAt)}` : ""} · {answeredCount(survey.questions, resp.answers)} of {total} answered</p>
+            <button onClick={() => setView(true)} className="w-full mt-3 rounded-lg py-2 text-[12.5px]" style={{ border: "1px solid #cfdbdf", background: "#eef3f4", color: "#4a6670" }}>View answers</button>
+          </>
+        ) : (
+          <p className="text-[12px] mt-2" style={{ color: "#a89d95" }}>Sent · awaiting their response</p>
+        )}
+      </div>
+      {take && <SurveyModal survey={survey} onClose={() => setTake(false)} onSubmit={(answers) => onSubmit && onSubmit(m.id, answers)} />}
+      {view && <SurveyModal survey={survey} initialAnswers={resp?.answers} readOnly onClose={() => setView(false)} />}
+    </div>
+  );
+}
+
+// Studio: pick one of the saved surveys and send it into the thread.
+function SurveyComposer({ templates, onCancel, onSend }) {
+  const list = templates || [];
+  const [sel, setSel] = useState(list[0]?.id || "");
+  const chosen = list.find((t) => t.id === sel) || list[0];
+  return (
+    <div className="mb-3 rounded-lg p-3.5" style={{ border: "1px solid #cfdbdf", background: "#f5f8f9" }}>
+      <div className="flex items-center gap-2 mb-2.5">
+        <FileText className="w-4 h-4" style={{ color: "#4a6670" }} />
+        <p className="text-[13px]" style={{ color: "#3f5860" }}>Send a survey — pick one, then send</p>
+      </div>
+      <div className="flex flex-col gap-1.5">
+        {list.map((t) => (
+          <button key={t.id} onClick={() => setSel(t.id)} className="flex items-center justify-between gap-2 text-left rounded-lg px-3 py-2" style={t.id === sel ? { border: "1px solid #4a6670", background: "#eaf1f3" } : { border: "1px solid #cfdbdf", background: "#fff" }}>
+            <span className="text-[13px]" style={{ color: "#2a221c" }}>{t.name}</span>
+            <span className="text-[11px]" style={{ color: "#8aa0a7" }}>{(t.questions || []).length} questions</span>
+          </button>
+        ))}
+      </div>
+      {chosen && (
+        <div className="mt-2.5 rounded-lg px-3 py-2.5" style={{ background: "#fff", border: "1px solid #e6e0d9" }}>
+          <p className="text-[11px] mb-1" style={{ color: "#a89d95" }}>Questions</p>
+          <ol className="list-decimal ml-4 space-y-0.5">
+            {(chosen.questions || []).slice(0, 6).map((q) => (
+              <li key={q.id} className="text-[12px]" style={{ color: "#57514a" }}>{q.text}</li>
+            ))}
+          </ol>
+          {(chosen.questions || []).length > 6 && <p className="text-[11px] mt-1" style={{ color: "#b6aca2" }}>…{(chosen.questions || []).length - 6} more</p>}
+        </div>
+      )}
+      <div className="flex items-center gap-2 mt-3">
+        <button
+          type="button"
+          disabled={!chosen}
+          onClick={() => chosen && onSend({ id: uid(), name: chosen.name, intro: chosen.intro || "", questions: chosen.questions || [] })}
+          className="inline-flex items-center gap-1.5 text-[13px] rounded-lg px-4 py-2 disabled:opacity-50"
+          style={{ background: "#4a6670", color: "#fff" }}
+        >
+          <FileText className="w-3.5 h-3.5" /> Send survey
+        </button>
+        <button type="button" onClick={onCancel} className="text-[13px] text-stone-500 px-3 py-2 hover:text-stone-800">Cancel</button>
+      </div>
+    </div>
+  );
+}
+
+function MessagesPanel({ messages, meRole, onSend, onSendNotice, onSendProgramaPing, onSendSurvey, onSubmitSurvey, surveyTemplates, onReact, onPin, onLabel, onTagPhoto, onEdit, onDelete, seenSince, showReceipts, showStatus, onToggleStatus, customStatus, onSetCustomStatus, studioStatus, studioStatusColor, autoStatus, prefill, onPrefillUsed, draftKey, clients, myEmail, fallbackClientName, programaUrl, noticeTemplates, fill, slimTools }) {
   // The automatic out-of-office note shows (to everyone) during its active hours,
   // unless this project has its own custom status note set.
   const autoNote = customStatus ? null : activeAutoNote(autoStatus);
@@ -1622,6 +1910,8 @@ function MessagesPanel({ messages, meRole, onSend, onSendNotice, onSendProgramaP
   const PROGRAMA_DEFAULT = "I've just updated your Programa dashboard — tap below to take a look.";
   const [programaOpen, setProgramaOpen] = useState(false); // studio: edit the wording before sending a Programa update
   const [programaText, setProgramaText] = useState(PROGRAMA_DEFAULT);
+  const [surveyOpen, setSurveyOpen] = useState(false); // studio: pick a survey to send
+  const [surveySent, setSurveySent] = useState(false);
   const [statusOpen, setStatusOpen] = useState(false); // studio: status editor collapsed behind one small button
   const [query, setQuery] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
@@ -1761,6 +2051,19 @@ function MessagesPanel({ messages, meRole, onSend, onSendNotice, onSendProgramaP
                   style={{ border: "1px solid #e6d8cf", background: "#fffdfb", color: "#b26f52" }}
                 >
                   <FileText className="w-3.5 h-3.5" /> Formal notice
+                </button>
+              </>
+            )}
+            {onSendSurvey && !surveyOpen && (
+              <>
+                {surveySent && <span className="shrink-0 text-[11px] text-[#576B45]">Sent ✓</span>}
+                <button
+                  type="button"
+                  onClick={() => { setSurveyOpen(true); setSurveySent(false); }}
+                  className="shrink-0 inline-flex items-center gap-1.5 text-[12px] rounded-[3px] px-3 py-1.5"
+                  style={{ border: "1px solid #cfdbdf", background: "#eef3f4", color: "#4a6670" }}
+                >
+                  <FileText className="w-3.5 h-3.5" /> Send survey
                 </button>
               </>
             )}
@@ -1910,6 +2213,7 @@ function MessagesPanel({ messages, meRole, onSend, onSendNotice, onSendProgramaP
             m.from === "studio"
               ? meRole === "studio"
               : meRole === "client" && (!m.fromEmail || (m.fromEmail || "").toLowerCase() === (myEmail || "").toLowerCase());
+          if (m.survey) return <SurveyCard key={m.id} m={m} mine={mine} meRole={meRole} onSubmit={onSubmitSurvey} />;
           const ref = m.replyTo ? byId[m.replyTo] : null;
           const reacts = aggregateReactions(m.reactions);
           const seen = showReceipts && m.from === "studio" && seenSince && new Date(seenSince) >= new Date(m.date);
@@ -2202,6 +2506,18 @@ function MessagesPanel({ messages, meRole, onSend, onSendNotice, onSendProgramaP
             onSendNotice(n);
             setNoticeOpen(false);
             setNoticeSent(true);
+          }}
+        />
+      )}
+
+      {meRole === "studio" && onSendSurvey && surveyOpen && (
+        <SurveyComposer
+          templates={surveyTemplatesOrDefault(surveyTemplates)}
+          onCancel={() => setSurveyOpen(false)}
+          onSend={(survey) => {
+            onSendSurvey(survey);
+            setSurveyOpen(false);
+            setSurveySent(true);
           }}
         />
       )}
@@ -3552,7 +3868,7 @@ function ProjectSwitcher({ projects, currentCode, onSwitch }) {
   );
 }
 
-function ClientDashboard({ project, viewerEmail, allProjects, onSwitchProject, studioStatus, studioStatusColor, autoStatus, onLogout, onSetEmailNotify, onSendMessage, onReactMessage, onPinMessage, onMarkRead, onMarkNotifs, onDismissNotif, onSeenTab, onUploadSigned, onSignProposal, onProposalActivity, onRespondMeeting, onRequestMeeting, onEditRequest, onAcceptRequest, onDismissRequest, installOpen, preview }) {
+function ClientDashboard({ project, viewerEmail, allProjects, onSwitchProject, studioStatus, studioStatusColor, autoStatus, onLogout, onSetEmailNotify, onSendMessage, onSubmitSurvey, onReactMessage, onPinMessage, onMarkRead, onMarkNotifs, onDismissNotif, onSeenTab, onUploadSigned, onSignProposal, onProposalActivity, onRespondMeeting, onRequestMeeting, onEditRequest, onAcceptRequest, onDismissRequest, installOpen, preview }) {
   // Last-viewed tab is remembered per device (client redesign) and restored on
   // open; notification deep-links overwrite it.
   const [tab, setTab] = useState(() => {
@@ -4029,6 +4345,7 @@ function ClientDashboard({ project, viewerEmail, allProjects, onSwitchProject, s
               programaUrl={programaUrl}
               fallbackClientName={project.clientName}
               onSend={sendWithEngage}
+              onSubmitSurvey={onSubmitSurvey}
               onReact={onReactMessage}
               onPin={onPinMessage}
               showReceipts={false}
@@ -5253,7 +5570,128 @@ function NoticeTemplatesEditor({ templates, onSaveTemplates }) {
   );
 }
 
-function StudioSettingsPanel({ studioStatus, studioStatusColor, onChangeStatus, onChangeStatusColor, onSaveStatus, loginImage, loginMessage, studioInfo, onSaveInfo, autoReply, onSaveAutoReply, noticeTemplates, onSaveNoticeTemplates, viewerEmail, onSave, page, onOpenPage, onBack, onOptimize, optimizing, optimizeMsg, onLogout }) {
+// Studio: build and edit the reusable surveys sent to clients. Each survey is a
+// name + intro + a list of questions (type, text, and options for choice types).
+function SurveyTemplatesEditor({ templates, onSaveTemplates }) {
+  const [list, setList] = useState(() => surveyTemplatesOrDefault(templates).map((t) => ({ ...t, questions: (t.questions || []).map((q) => ({ ...q, options: q.options ? [...q.options] : undefined })) })));
+  const [openId, setOpenId] = useState(list[0]?.id || null);
+  const [saved, setSaved] = useState(false);
+  const persist = (next) => {
+    setList(next);
+    setSaved(false);
+  };
+  const survey = (id) => list.find((s) => s.id === id);
+  const updateSurvey = (id, patch) => persist(list.map((s) => (s.id === id ? { ...s, ...patch } : s)));
+  const addSurvey = () => {
+    const id = uid();
+    persist([...list, { id, name: "New survey", intro: "", questions: [] }]);
+    setOpenId(id);
+  };
+  const removeSurvey = (id) => persist(list.filter((s) => s.id !== id));
+  const setQuestions = (sid, qs) => updateSurvey(sid, { questions: qs });
+  const addQ = (sid) => {
+    const s = survey(sid);
+    setQuestions(sid, [...(s.questions || []), { id: uid(), type: "single", text: "", options: ["", ""] }]);
+  };
+  const updateQ = (sid, qid, patch) => {
+    const s = survey(sid);
+    setQuestions(sid, s.questions.map((q) => (q.id === qid ? { ...q, ...patch } : q)));
+  };
+  const removeQ = (sid, qid) => {
+    const s = survey(sid);
+    setQuestions(sid, s.questions.filter((q) => q.id !== qid));
+  };
+  const moveQ = (sid, idx, dir) => {
+    const s = survey(sid);
+    const qs = [...s.questions];
+    const j = idx + dir;
+    if (j < 0 || j >= qs.length) return;
+    [qs[idx], qs[j]] = [qs[j], qs[idx]];
+    setQuestions(sid, qs);
+  };
+  const save = () => {
+    const clean = list.map((s) => ({
+      id: s.id,
+      name: (s.name || "Survey").trim(),
+      intro: (s.intro || "").trim(),
+      questions: (s.questions || [])
+        .filter((q) => (q.text || "").trim())
+        .map((q) => ({
+          id: q.id,
+          type: q.type,
+          text: q.text.trim(),
+          ...((q.type === "single" || q.type === "multi") ? { options: (q.options || []).map((o) => o.trim()).filter(Boolean) } : {}),
+        })),
+    }));
+    onSaveTemplates(clean);
+    setSaved(true);
+  };
+  return (
+    <div>
+      <p className="text-[12px] text-stone-400 mb-3">Build the surveys you send from a project's Messages. Clients answer one question at a time and can pause and resume.</p>
+      <div className="space-y-3">
+        {list.map((s) => {
+          const open = openId === s.id;
+          return (
+            <div key={s.id} className="border border-stone-200 rounded-lg bg-white">
+              <button onClick={() => setOpenId(open ? null : s.id)} className="w-full flex items-center gap-2 px-3.5 py-3 text-left">
+                <ChevronRight className={`w-4 h-4 text-stone-400 transition-transform ${open ? "rotate-90" : ""}`} />
+                <span className="flex-1 text-[14px] text-stone-800 truncate">{s.name || "Untitled survey"}</span>
+                <span className="text-[11px] text-stone-400">{(s.questions || []).length} q</span>
+              </button>
+              {open && (
+                <div className="px-3.5 pb-3.5 space-y-3 border-t border-stone-100 pt-3">
+                  <input value={s.name} onChange={(e) => updateSurvey(s.id, { name: e.target.value })} placeholder="Survey name" className="w-full px-3 py-2 rounded-lg border border-stone-300 text-[14px] focus:outline-none focus:ring-2 focus:ring-[#576B45]" />
+                  <input value={s.intro || ""} onChange={(e) => updateSurvey(s.id, { intro: e.target.value })} placeholder="Short intro (optional)" className="w-full px-3 py-2 rounded-lg border border-stone-300 text-[13px] focus:outline-none focus:ring-2 focus:ring-[#576B45]" />
+                  {(s.questions || []).map((q, i) => (
+                    <div key={q.id} className="rounded-lg p-3 space-y-2" style={{ background: "#faf6f2", border: "1px solid #eee2d9" }}>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[11px] text-stone-400 w-5">{i + 1}.</span>
+                        <select value={q.type} onChange={(e) => updateQ(s.id, q.id, { type: e.target.value, ...(((e.target.value === "single" || e.target.value === "multi") && !q.options) ? { options: ["", ""] } : {}) })} className="text-[12px] rounded-md border border-stone-300 bg-white px-2 py-1.5 focus:outline-none">
+                          {Object.keys(SURVEY_TYPE_LABEL).map((t) => (
+                            <option key={t} value={t}>{SURVEY_TYPE_LABEL[t]}</option>
+                          ))}
+                        </select>
+                        <div className="flex-1" />
+                        <button onClick={() => moveQ(s.id, i, -1)} className="text-stone-300 hover:text-stone-700 text-[13px] px-1" aria-label="Move up">↑</button>
+                        <button onClick={() => moveQ(s.id, i, 1)} className="text-stone-300 hover:text-stone-700 text-[13px] px-1" aria-label="Move down">↓</button>
+                        <button onClick={() => removeQ(s.id, q.id)} className="text-stone-300 hover:text-red-600" aria-label="Remove question"><Trash2 className="w-3.5 h-3.5" /></button>
+                      </div>
+                      <textarea value={q.text} onChange={(e) => updateQ(s.id, q.id, { text: e.target.value })} rows={2} placeholder="Question text" className="w-full px-3 py-2 rounded-lg border border-stone-300 text-[13.5px] focus:outline-none focus:ring-2 focus:ring-[#576B45] resize-none" />
+                      {(q.type === "single" || q.type === "multi") && (
+                        <div className="space-y-1.5 pl-6">
+                          {(q.options || []).map((opt, oi) => (
+                            <div key={oi} className="flex items-center gap-2">
+                              <input value={opt} onChange={(e) => updateQ(s.id, q.id, { options: q.options.map((o, k) => (k === oi ? e.target.value : o)) })} placeholder={`Option ${oi + 1}`} className="flex-1 px-2.5 py-1.5 rounded-md border border-stone-300 text-[13px] focus:outline-none focus:ring-1 focus:ring-[#576B45]" />
+                              <button onClick={() => updateQ(s.id, q.id, { options: q.options.filter((_, k) => k !== oi) })} className="text-stone-300 hover:text-red-600" aria-label="Remove option"><X className="w-3.5 h-3.5" /></button>
+                            </div>
+                          ))}
+                          <button onClick={() => updateQ(s.id, q.id, { options: [...(q.options || []), ""] })} className="text-[12px] text-[#576B45]">+ Add option</button>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                  <button onClick={() => addQ(s.id)} className="text-[13px] text-[#576B45]">+ Add question</button>
+                  <div className="pt-1">
+                    <button onClick={() => removeSurvey(s.id)} className="text-[12px] text-stone-400 hover:text-red-600">Delete this survey</button>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+      <button onClick={addSurvey} className="w-full h-10 mt-3 rounded-lg text-[13px]" style={{ border: "1px solid #e6d8cf", background: "#fffdfb", color: "#7a6f66" }}>+ New survey</button>
+      <div className="flex items-center gap-3 mt-4">
+        <button onClick={save} className="bg-stone-900 text-white rounded-lg px-4 py-2 text-[13px] hover:bg-stone-800">Save surveys</button>
+        {saved && <span className="text-[12px] text-[#576B45]">Saved ✓</span>}
+      </div>
+      <p className="text-[11px] text-stone-400 mt-2">Note: saving needs a one-time <span className="font-mono">survey_templates</span> column added in Supabase (same as notice templates). Until then, the built-in “Project discovery” survey is available to send.</p>
+    </div>
+  );
+}
+
+function StudioSettingsPanel({ studioStatus, studioStatusColor, onChangeStatus, onChangeStatusColor, onSaveStatus, loginImage, loginMessage, studioInfo, onSaveInfo, autoReply, onSaveAutoReply, noticeTemplates, onSaveNoticeTemplates, surveyTemplates, onSaveSurveyTemplates, viewerEmail, onSave, page, onOpenPage, onBack, onOptimize, optimizing, optimizeMsg, onLogout }) {
   const [pPerm, setPPerm] = useState(() => (api.pushSupported() ? api.pushPermission() : "unsupported"));
   const [pBusy, setPBusy] = useState(false);
   const [pErr, setPErr] = useState("");
@@ -5408,6 +5846,7 @@ function StudioSettingsPanel({ studioStatus, studioStatusColor, onChangeStatus, 
       subColor: pPerm === "granted" ? "#576b45" : "#a89d95",
     },
     { id: "notice", title: "Formal notice templates", sub: `${noticeTemplatesOrDefault(noticeTemplates).length} template${noticeTemplatesOrDefault(noticeTemplates).length === 1 ? "" : "s"}`, subColor: "#a89d95" },
+    { id: "survey", title: "Surveys", sub: `${surveyTemplatesOrDefault(surveyTemplates).length} survey${surveyTemplatesOrDefault(surveyTemplates).length === 1 ? "" : "s"} · send from Messages`, subColor: "#a89d95" },
     {
       id: "audience",
       title: "Marketing email opt-ins",
@@ -5513,6 +5952,8 @@ function StudioSettingsPanel({ studioStatus, studioStatusColor, onChangeStatus, 
           )}
 
           {page === "notice" && <NoticeTemplatesEditor templates={noticeTemplates} onSaveTemplates={onSaveNoticeTemplates} />}
+
+          {page === "survey" && <SurveyTemplatesEditor templates={surveyTemplates} onSaveTemplates={onSaveSurveyTemplates} />}
 
           {page === "audience" && (
             <div>
@@ -5866,7 +6307,52 @@ function AdminBell({ projects, onOpen, boxed }) {
   );
 }
 
-function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioStatusColor, onChangeStatus, onChangeStatusColor, onSaveStatus, loginImage, loginMessage, studioInfo, onSaveInfo, autoReply, onSaveAutoReply, noticeTemplates, onSaveNoticeTemplates, onSaveLogin, onLogout, onPreviewClient }) {
+// Per-project survey hub, shown in the Details tab. Send a survey to this
+// project, see whether it's been completed, and read the answers — all here.
+// (The client answers it inside their Messages, one question at a time.)
+function AdminSurveyPanel({ project, templates, onSend }) {
+  const sent = (project.messages || []).filter((m) => m.survey).slice().reverse();
+  const [composing, setComposing] = useState(false);
+  const [view, setView] = useState(null); // { survey, answers }
+  return (
+    <div>
+      {sent.length > 0 && (
+        <div className="space-y-2 mb-3">
+          {sent.map((m) => {
+            const total = (m.survey.questions || []).length;
+            const done = !!m.surveyResponse;
+            return (
+              <div key={m.id} className="flex items-center justify-between gap-3 border border-stone-200 rounded-lg px-4 py-3 bg-white">
+                <div className="min-w-0">
+                  <p className="text-[14px] text-stone-800 truncate">{m.survey.name}</p>
+                  <p className="text-[12px]" style={{ color: done ? "#576b45" : "#a89d95" }}>
+                    {done ? `Completed ${formatDate(m.surveyResponse.submittedAt)} · ${answeredCount(m.survey.questions, m.surveyResponse.answers)}/${total} answered` : `Sent ${formatDate(m.date)} · awaiting response`}
+                  </p>
+                </div>
+                {done && (
+                  <button onClick={() => setView({ survey: m.survey, answers: m.surveyResponse.answers })} className="shrink-0 text-[12px] rounded-lg px-3 py-1.5" style={{ border: "1px solid #cfdbdf", background: "#eef3f4", color: "#4a6670" }}>
+                    View answers
+                  </button>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+      {composing ? (
+        <SurveyComposer templates={templates} onCancel={() => setComposing(false)} onSend={(s) => { onSend(s); setComposing(false); }} />
+      ) : (
+        <button onClick={() => setComposing(true)} className="inline-flex items-center gap-1.5 text-[13px] rounded-lg px-3.5 py-2" style={{ background: "#576b45", color: "#efefec" }}>
+          <FileText className="w-3.5 h-3.5" /> Send a survey
+        </button>
+      )}
+      <p className="text-[11px] text-stone-400 mt-2">Clients answer it in their Messages, one question at a time. Build or edit your surveys in Settings → Surveys.</p>
+      {view && <SurveyModal survey={view.survey} initialAnswers={view.answers} readOnly onClose={() => setView(null)} />}
+    </div>
+  );
+}
+
+function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioStatusColor, onChangeStatus, onChangeStatusColor, onSaveStatus, loginImage, loginMessage, studioInfo, onSaveInfo, autoReply, onSaveAutoReply, noticeTemplates, onSaveNoticeTemplates, surveyTemplates, onSaveSurveyTemplates, onSaveLogin, onLogout, onPreviewClient }) {
   // "Rooms" navigation (admin redesign): a view machine (home | project |
   // settings) that reopens exactly where you left off — the location is
   // persisted per device and restored on every open.
@@ -6481,6 +6967,33 @@ function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioSt
       });
   }
 
+  // Send a survey into a project's message thread (a branded card the client
+  // answers one question at a time). Notifies + emails like other studio sends.
+  function sendSurvey(code, survey) {
+    updateProject(code, (p) => ({
+      ...p,
+      lastReadStudio: new Date().toISOString(),
+      messages: [...p.messages, { id: uid(), from: "studio", survey, photos: [], date: new Date().toISOString(), replyTo: null, reactions: [], pinned: false }],
+      notifications: withNotif(p, "message", `A short survey: ${survey.name}`),
+    }));
+    const proj = projects[code];
+    const emails = (proj?.clients || []).map((c) => (c.email || "").trim().toLowerCase()).filter(Boolean);
+    if (emails.length) api.notifyPush({ toEmails: emails, title: `${proj?.name || "Your project"} — a short survey`, body: `${survey.name} — a few quick questions.`, url: "/" });
+    const em = proj?.isLead ? emails : optedInEmails(proj);
+    if (em.length)
+      api.notifyEmail({
+        toEmails: em,
+        subject: `A few quick questions — ${proj?.name || "your project"}`,
+        heading: "A short survey for you",
+        body: `We've popped a short survey in your portal — “${survey.name}”. It only takes a minute and helps shape your design. Open your portal and tap “Start survey” in Messages.`,
+        projectName: proj?.name,
+        senderName: STUDIO_INFO.contactName || "Studio Nicholas",
+        time: emailStamp(),
+        kind: "message",
+        setupCta: !!proj?.isLead,
+      });
+  }
+
   // Issue a fee proposal, or add a NEW VERSION. Adding a version archives the
   // current proposal (with its signed copy, if any) into feeProposalHistory,
   // makes the new file the latest, and clears the signed state so the client is
@@ -6704,6 +7217,8 @@ function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioSt
       onSaveAutoReply={onSaveAutoReply}
       noticeTemplates={noticeTemplates}
       onSaveNoticeTemplates={onSaveNoticeTemplates}
+      surveyTemplates={surveyTemplates}
+      onSaveSurveyTemplates={onSaveSurveyTemplates}
       viewerEmail={viewerEmail}
       onSave={onSaveLogin}
       page={settingsPage}
@@ -7085,6 +7600,10 @@ function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioSt
                   <BlurField label="Architects" value={project.architects} onSave={(v) => setField(project.code, "architects", v)} placeholder="Architect name" />
                 </div>
               </div>
+            </AdminSection>
+
+            <AdminSection title="Survey">
+              <AdminSurveyPanel project={project} templates={surveyTemplatesOrDefault(surveyTemplates)} onSend={(s) => sendSurvey(project.code, s)} />
             </AdminSection>
 
             <AdminSection title="Project image">
@@ -7560,6 +8079,7 @@ export default function App() {
   const [studioInfo, setStudioInfo] = useState(null);
   const [autoReply, setAutoReply] = useState(null);
   const [noticeTemplates, setNoticeTemplates] = useState(null);
+  const [surveyTemplates, setSurveyTemplates] = useState(null);
   const [activeCode, setActiveCode] = useState(null);
   const [saveError, setSaveError] = useState("");
   const [passwordDone, setPasswordDone] = useState(false);
@@ -7627,6 +8147,7 @@ export default function App() {
       applyStudioInfo(s.studioInfo);
       setAutoReply(s.autoReply);
       setNoticeTemplates(s.noticeTemplates);
+      setSurveyTemplates(s.surveyTemplates);
     });
   }, []);
 
@@ -7648,6 +8169,7 @@ export default function App() {
       applyStudioInfo(status.studioInfo);
       setAutoReply(status.autoReply);
       setNoticeTemplates(status.noticeTemplates);
+      setSurveyTemplates(status.surveyTemplates);
       setProjects(migrate(raw));
     } catch (e) {
       console.error("refetch failed", e);
@@ -7876,6 +8398,38 @@ export default function App() {
       setSaveError(e?.message || String(e));
     }
   }, []);
+
+  const handleSaveSurveyTemplates = useCallback(async (list) => {
+    setSurveyTemplates(list);
+    try {
+      await api.saveSurveyTemplates(list);
+    } catch (e) {
+      setSaveError(e?.message || String(e));
+    }
+  }, []);
+
+  // Client submits a survey — the answers save onto that survey message so the
+  // studio can read them (and it syncs across devices like any project change).
+  const handleSubmitSurvey = useCallback(
+    (messageId, answers) => {
+      const me = (session?.user?.email || "").trim().toLowerCase();
+      setProjects((prev) => {
+        const p = prev[activeCode];
+        if (!p) return prev;
+        return {
+          ...prev,
+          [activeCode]: {
+            ...p,
+            messages: (p.messages || []).map((m) => (m.id === messageId ? { ...m, surveyResponse: { answers, submittedAt: new Date().toISOString(), byEmail: me } } : m)),
+          },
+        };
+      });
+      const proj = projects[activeCode];
+      api.notifyPush({ toStudio: true, title: "Survey completed", body: `A client answered a survey${proj?.name ? " — " + proj.name : ""}.`, url: "/" });
+      api.notifyStudioEmail({ subject: `Survey completed${proj?.name ? " — " + proj.name : ""}`, heading: "A client completed a survey", body: "Open the project's Messages to read their answers.", projectName: proj?.name, time: emailStamp() });
+    },
+    [activeCode, session, projects]
+  );
 
   const handleSaveAutoReply = useCallback(async (config) => {
     setAutoReply(config);
@@ -8267,6 +8821,8 @@ export default function App() {
         onSaveAutoReply={handleSaveAutoReply}
         noticeTemplates={noticeTemplates}
         onSaveNoticeTemplates={handleSaveNoticeTemplates}
+        surveyTemplates={surveyTemplates}
+        onSaveSurveyTemplates={handleSaveSurveyTemplates}
         onSaveLogin={handleSaveLogin}
         onLogout={handleSignOut}
         onPreviewClient={setPreviewCode}
@@ -8290,6 +8846,7 @@ export default function App() {
         onLogout={handleSignOut}
         onSetEmailNotify={handleSetEmailNotify}
         onSendMessage={handleSendMessage}
+        onSubmitSurvey={handleSubmitSurvey}
         onReactMessage={handleReactMessage}
         onPinMessage={handlePinMessage}
         onMarkRead={handleMarkClientRead}

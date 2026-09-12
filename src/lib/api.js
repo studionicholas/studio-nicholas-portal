@@ -200,12 +200,19 @@ export async function fetchSettings() {
     studioInfo: data?.studio_info || null,
     autoReply: data?.autoreply || null,
     noticeTemplates: data?.notice_templates || null,
+    surveyTemplates: data?.survey_templates || null,
   };
 }
 
 // The studio's own formal-notice templates (label/title/text/programaCta).
 export async function saveNoticeTemplates(list) {
   const { error } = await supabase.from("studio_settings").upsert({ id: 1, notice_templates: list });
+  if (error) throw error;
+}
+
+// The studio's own survey templates ({ id, name, intro, questions:[{id,type,text,options?}] }).
+export async function saveSurveyTemplates(list) {
+  const { error } = await supabase.from("studio_settings").upsert({ id: 1, survey_templates: list });
   if (error) throw error;
 }
 

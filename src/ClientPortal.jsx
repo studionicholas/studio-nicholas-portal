@@ -1793,13 +1793,15 @@ function SurveyModal({ survey, initialAnswers, readOnly, onClose, onSubmit }) {
 
 // The survey card that sits in the message thread — client can start/continue/
 // view, studio sees status + can view the answers.
-function SurveyCard({ m, mine, meRole, onSubmit }) {
+function SurveyCard({ m, mine, meRole, onSubmit, onStart, onDelete }) {
   const survey = m.survey || { questions: [] };
   const resp = m.surveyResponse;
   const total = (survey.questions || []).length;
   const done = !!resp;
   const [take, setTake] = useState(false);
   const [view, setView] = useState(false);
+  const seenAt = m.seenBy && Object.keys(m.seenBy).length ? Object.values(m.seenBy).sort()[0] : null;
+  const started = m.surveyStarted;
   let partial = 0;
   if (!done && meRole === "client") {
     try {
@@ -1807,12 +1809,22 @@ function SurveyCard({ m, mine, meRole, onSubmit }) {
       if (s) partial = answeredCount(survey.questions, s);
     } catch (_e) {}
   }
+  const beginTake = () => {
+    if (onStart) onStart(m.id);
+    setTake(true);
+  };
   return (
     <div className={`flex ${mine ? "justify-end" : "justify-start"}`}>
       <div className="max-w-[290px] rounded-2xl p-4" style={{ background: "#fff", border: "1px solid #e6e0d9", borderTopLeftRadius: mine ? 16 : 4, borderTopRightRadius: mine ? 4 : 16 }}>
         <div className="flex items-center gap-1.5 mb-1">
           <FileText className="w-3.5 h-3.5" style={{ color: done ? "#576b45" : "#4a6670" }} />
           <span className="text-[10px] uppercase tracking-wide" style={{ color: done ? "#8aa89a" : "#8aa0a7", letterSpacing: "0.06em" }}>Survey · {done ? "Completed" : `${total} questions`}</span>
+          <div className="flex-1" />
+          {meRole === "studio" && onDelete && (
+            <button onClick={() => window.confirm("Remove this survey from the conversation? (Any answers already given are removed too.)") && onDelete(m.id)} className="text-stone-300 hover:text-red-600 shrink-0" aria-label="Delete survey">
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
         <p className="text-[14px]" style={{ fontFamily: "Selva, Georgia, serif", fontStyle: "italic", color: "#1c1a17" }}>{survey.name}</p>
         {survey.intro && <p className="text-[12px] mt-1 leading-relaxed" style={{ color: "#79706a" }}>{survey.intro}</p>}
@@ -1824,7 +1836,7 @@ function SurveyCard({ m, mine, meRole, onSubmit }) {
               <button onClick={() => setView(true)} className="w-full mt-3 rounded-lg py-2 text-[12.5px]" style={{ border: "1px solid #cfdbdf", background: "#eef3f4", color: "#4a6670" }}>View your answers</button>
             </>
           ) : (
-            <button onClick={() => setTake(true)} className="w-full mt-3 rounded-lg py-2.5 text-[12.5px]" style={{ background: "#4a6670", color: "#fff" }}>
+            <button onClick={beginTake} className="w-full mt-3 rounded-lg py-2.5 text-[12.5px]" style={{ background: "#4a6670", color: "#fff" }}>
               {partial > 0 ? `Continue (${partial} of ${total})` : "Start survey"}
             </button>
           )
@@ -1834,7 +1846,9 @@ function SurveyCard({ m, mine, meRole, onSubmit }) {
             <button onClick={() => setView(true)} className="w-full mt-3 rounded-lg py-2 text-[12.5px]" style={{ border: "1px solid #cfdbdf", background: "#eef3f4", color: "#4a6670" }}>View answers</button>
           </>
         ) : (
-          <p className="text-[12px] mt-2" style={{ color: "#a89d95" }}>Sent · awaiting their response</p>
+          <p className="text-[12px] mt-2" style={{ color: started ? "#8a6d1d" : seenAt ? "#4a6670" : "#a89d95" }}>
+            {started ? `Started ${formatDate(started.at)} — not submitted yet` : seenAt ? `Seen ${formatDate(seenAt)} — not started yet` : "Sent · not seen yet"}
+          </p>
         )}
       </div>
       {take && <SurveyModal survey={survey} onClose={() => setTake(false)} onSubmit={(answers) => onSubmit && onSubmit(m.id, answers)} />}
@@ -1889,7 +1903,7 @@ function SurveyComposer({ templates, onCancel, onSend }) {
   );
 }
 
-function MessagesPanel({ messages, meRole, onSend, onSendNotice, onSendProgramaPing, onSendSurvey, onSubmitSurvey, surveyTemplates, onReact, onPin, onLabel, onTagPhoto, onEdit, onDelete, seenSince, showReceipts, showStatus, onToggleStatus, customStatus, onSetCustomStatus, studioStatus, studioStatusColor, autoStatus, prefill, onPrefillUsed, draftKey, clients, myEmail, fallbackClientName, programaUrl, noticeTemplates, fill, slimTools }) {
+function MessagesPanel({ messages, meRole, onSend, onSendNotice, onSendProgramaPing, onSendSurvey, onSubmitSurvey, onStartSurvey, surveyTemplates, onReact, onPin, onLabel, onTagPhoto, onEdit, onDelete, seenSince, showReceipts, showStatus, onToggleStatus, customStatus, onSetCustomStatus, studioStatus, studioStatusColor, autoStatus, prefill, onPrefillUsed, draftKey, clients, myEmail, fallbackClientName, programaUrl, noticeTemplates, fill, slimTools }) {
   // The automatic out-of-office note shows (to everyone) during its active hours,
   // unless this project has its own custom status note set.
   const autoNote = customStatus ? null : activeAutoNote(autoStatus);
@@ -2264,7 +2278,7 @@ function MessagesPanel({ messages, meRole, onSend, onSendNotice, onSendProgramaP
             m.from === "studio"
               ? meRole === "studio"
               : meRole === "client" && (!m.fromEmail || (m.fromEmail || "").toLowerCase() === (myEmail || "").toLowerCase());
-          if (m.survey) return <SurveyCard key={m.id} m={m} mine={mine} meRole={meRole} onSubmit={onSubmitSurvey} />;
+          if (m.survey) return <SurveyCard key={m.id} m={m} mine={mine} meRole={meRole} onSubmit={onSubmitSurvey} onStart={onStartSurvey} onDelete={onDelete} />;
           const ref = m.replyTo ? byId[m.replyTo] : null;
           const reacts = aggregateReactions(m.reactions);
           const seen = showReceipts && m.from === "studio" && seenSince && new Date(seenSince) >= new Date(m.date);
@@ -3919,7 +3933,7 @@ function ProjectSwitcher({ projects, currentCode, onSwitch }) {
   );
 }
 
-function ClientDashboard({ project, viewerEmail, allProjects, onSwitchProject, studioStatus, studioStatusColor, autoStatus, onLogout, onSetEmailNotify, onSendMessage, onSubmitSurvey, onReactMessage, onPinMessage, onMarkRead, onMarkNotifs, onDismissNotif, onSeenTab, onUploadSigned, onSignProposal, onProposalActivity, onRespondMeeting, onRequestMeeting, onEditRequest, onAcceptRequest, onDismissRequest, installOpen, preview }) {
+function ClientDashboard({ project, viewerEmail, allProjects, onSwitchProject, studioStatus, studioStatusColor, autoStatus, onLogout, onSetEmailNotify, onSendMessage, onSubmitSurvey, onStartSurvey, onReactMessage, onPinMessage, onMarkRead, onMarkNotifs, onDismissNotif, onSeenTab, onUploadSigned, onSignProposal, onProposalActivity, onRespondMeeting, onRequestMeeting, onEditRequest, onAcceptRequest, onDismissRequest, installOpen, preview }) {
   // Last-viewed tab is remembered per device (client redesign) and restored on
   // open; notification deep-links overwrite it.
   const [tab, setTab] = useState(() => {
@@ -4397,6 +4411,7 @@ function ClientDashboard({ project, viewerEmail, allProjects, onSwitchProject, s
               fallbackClientName={project.clientName}
               onSend={sendWithEngage}
               onSubmitSurvey={onSubmitSurvey}
+              onStartSurvey={onStartSurvey}
               onReact={onReactMessage}
               onPin={onPinMessage}
               showReceipts={false}
@@ -6412,7 +6427,7 @@ function SurveyQuestionList({ questions, onChange }) {
 
 // Per-project survey — build the questions here, send it, and read the answers.
 // (The client answers it inside their Messages, one question at a time.)
-function AdminSurveyPanel({ project, templates, onSend, onSaveSurvey }) {
+function AdminSurveyPanel({ project, templates, onSend, onSaveSurvey, onRemove }) {
   const [draft, setDraft] = useState(() => project.survey || { name: `${project.name || "Project"} — survey`, intro: "", questions: [] });
   const [saved, setSaved] = useState(false);
   const [view, setView] = useState(null); // { survey, answers }
@@ -6512,17 +6527,31 @@ function AdminSurveyPanel({ project, templates, onSend, onSaveSurvey }) {
                 {sent.map((m) => {
                   const total = (m.survey.questions || []).length;
                   const done = !!m.surveyResponse;
+                  const seenAt = m.seenBy && Object.keys(m.seenBy).length ? Object.values(m.seenBy).sort()[0] : null;
+                  const started = m.surveyStarted;
+                  const status = done
+                    ? { text: `Completed ${formatDate(m.surveyResponse.submittedAt)} · ${answeredCount(m.survey.questions, m.surveyResponse.answers)}/${total} answered`, color: "#576b45" }
+                    : started
+                      ? { text: `Started ${formatDate(started.at)} — not submitted`, color: "#8a6d1d" }
+                      : seenAt
+                        ? { text: `Seen ${formatDate(seenAt)} — not started`, color: "#4a6670" }
+                        : { text: `Sent ${formatDate(m.date)} — not seen yet`, color: "#a89d95" };
                   return (
                     <div key={m.id} className="flex items-center justify-between gap-3 border border-stone-200 rounded-lg px-4 py-3" style={{ background: "#fbf7f3" }}>
                       <div className="min-w-0">
                         <p className="text-[14px] text-stone-800 truncate">{m.survey.name}</p>
-                        <p className="text-[12px]" style={{ color: done ? "#576b45" : "#a89d95" }}>
-                          {done ? `Completed ${formatDate(m.surveyResponse.submittedAt)} · ${answeredCount(m.survey.questions, m.surveyResponse.answers)}/${total} answered` : `Sent ${formatDate(m.date)} · awaiting response`}
-                        </p>
+                        <p className="text-[12px]" style={{ color: status.color }}>{status.text}</p>
                       </div>
-                      {done && (
-                        <button onClick={() => setView({ survey: m.survey, answers: m.surveyResponse.answers })} className="shrink-0 text-[12px] rounded-lg px-3 py-1.5" style={{ border: "1px solid #cfdbdf", background: "#eef3f4", color: "#4a6670" }}>View answers</button>
-                      )}
+                      <div className="flex items-center gap-2 shrink-0">
+                        {done && (
+                          <button onClick={() => setView({ survey: m.survey, answers: m.surveyResponse.answers })} className="text-[12px] rounded-lg px-3 py-1.5" style={{ border: "1px solid #cfdbdf", background: "#eef3f4", color: "#4a6670" }}>View answers</button>
+                        )}
+                        {onRemove && (
+                          <button onClick={() => window.confirm("Remove this survey? (Any answers already given are removed too.)") && onRemove(m.id)} className="text-stone-300 hover:text-red-600" aria-label="Remove survey">
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
                     </div>
                   );
                 })}
@@ -7788,7 +7817,7 @@ function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioSt
             </AdminSection>
 
             <AdminSection title="Survey">
-              <AdminSurveyPanel key={project.code} project={project} templates={surveyTemplatesOrDefault(surveyTemplates)} onSend={(s) => sendSurvey(project.code, s)} onSaveSurvey={(s) => setField(project.code, "survey", s)} />
+              <AdminSurveyPanel key={project.code} project={project} templates={surveyTemplatesOrDefault(surveyTemplates)} onSend={(s) => sendSurvey(project.code, s)} onSaveSurvey={(s) => setField(project.code, "survey", s)} onRemove={(id) => deleteMessage(project.code, id)} />
             </AdminSection>
 
             <AdminSection title="Project image">
@@ -8593,6 +8622,26 @@ export default function App() {
     }
   }, []);
 
+  // Client opened/began a survey — stamp it once so the studio can see they've
+  // started (distinct from just seeing the message). Never overwrites once set,
+  // and never on an already-completed survey.
+  const handleStartSurvey = useCallback(
+    (messageId) => {
+      const me = (session?.user?.email || "").trim().toLowerCase();
+      setProjects((prev) => {
+        const p = prev[activeCode];
+        if (!p) return prev;
+        const target = (p.messages || []).find((m) => m.id === messageId);
+        if (!target || target.surveyStarted || target.surveyResponse) return prev;
+        return {
+          ...prev,
+          [activeCode]: { ...p, messages: p.messages.map((m) => (m.id === messageId ? { ...m, surveyStarted: { at: new Date().toISOString(), byEmail: me } } : m)) },
+        };
+      });
+    },
+    [activeCode, session]
+  );
+
   // Client submits a survey — the answers save onto that survey message so the
   // studio can read them (and it syncs across devices like any project change).
   const handleSubmitSurvey = useCallback(
@@ -9032,6 +9081,7 @@ export default function App() {
         onSetEmailNotify={handleSetEmailNotify}
         onSendMessage={handleSendMessage}
         onSubmitSurvey={handleSubmitSurvey}
+        onStartSurvey={handleStartSurvey}
         onReactMessage={handleReactMessage}
         onPinMessage={handlePinMessage}
         onMarkRead={handleMarkClientRead}

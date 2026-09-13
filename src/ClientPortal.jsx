@@ -1611,6 +1611,10 @@ function SurveyModal({ survey, initialAnswers, readOnly, onClose, onSubmit }) {
   const firstUnanswered = Math.max(0, questions.findIndex((q) => !surveyIsAnswered(q, answers)));
   const [step, setStep] = useState(readOnly ? 0 : firstUnanswered === -1 ? 0 : firstUnanswered);
   const [review, setReview] = useState(!!readOnly);
+  const hasStart = !readOnly && !!(survey.startNote && String(survey.startNote).trim());
+  const hasEnd = !!(survey.endNote && String(survey.endNote).trim());
+  const [showIntro, setShowIntro] = useState(hasStart);
+  const [done, setDone] = useState(false);
   useEffect(() => {
     if (readOnly) return;
     try {
@@ -1626,7 +1630,8 @@ function SurveyModal({ survey, initialAnswers, readOnly, onClose, onSubmit }) {
     try {
       localStorage.removeItem(storeKey);
     } catch (_e) {}
-    onClose();
+    if (hasEnd) setDone(true);
+    else onClose();
   }
 
   const otherStyle = (on) => (on ? { border: "1px solid #576b45", background: "#eaf0e3", color: "#576b45" } : { border: "1px solid #d9d0c8", color: "#57514a", background: "#fff" });
@@ -1693,12 +1698,12 @@ function SurveyModal({ survey, initialAnswers, readOnly, onClose, onSubmit }) {
   return (
     <div className="fixed inset-0 z-[80] flex flex-col" style={{ background: "#f7f2ef", fontFamily: "Selva, Georgia, serif", color: "#2a221c" }}>
       <div className="flex items-center justify-between gap-3 px-4 py-3 shrink-0" style={{ borderBottom: "1px solid #e6d8cf" }}>
-        <p className="text-[15px] truncate" style={{ fontStyle: "italic", fontWeight: 300 }}>{review ? (readOnly ? survey.name : "Review your answers") : survey.name}</p>
+        <p className="text-[15px] truncate" style={{ fontStyle: "italic", fontWeight: 300 }}>{review && !readOnly ? "Review your answers" : survey.name}</p>
         <button onClick={onClose} className="p-1.5" style={{ color: "#a89d95" }} aria-label="Close">
           <X className="w-4 h-4" />
         </button>
       </div>
-      {!review && total > 0 && (
+      {!showIntro && !done && !review && total > 0 && (
         <div className="shrink-0">
           <div className="flex items-center justify-between px-4 pt-2.5 text-[11px]" style={{ color: "#8a7f76" }}>
             <span>Question {step + 1} of {total}</span>
@@ -1711,7 +1716,18 @@ function SurveyModal({ survey, initialAnswers, readOnly, onClose, onSubmit }) {
       )}
       <div className="flex-1 overflow-auto px-5 py-6">
         <div className="max-w-[560px] mx-auto">
-          {review ? (
+          {showIntro ? (
+            <div>
+              <p className="text-[22px] leading-tight mb-3" style={{ fontStyle: "italic", fontWeight: 300 }}>{survey.name}</p>
+              <p className="text-[15px] leading-relaxed whitespace-pre-wrap" style={{ color: "#55483e" }}>{survey.startNote}</p>
+            </div>
+          ) : done ? (
+            <div className="text-center pt-6">
+              <span className="inline-flex w-11 h-11 rounded-full items-center justify-center" style={{ background: "#576b45", color: "#efefec", fontSize: 18 }}>✓</span>
+              <p className="mt-4 mb-2 text-[20px]" style={{ fontStyle: "italic", fontWeight: 300 }}>All done — thank you</p>
+              <p className="text-[15px] leading-relaxed whitespace-pre-wrap max-w-[420px] mx-auto" style={{ color: "#55483e" }}>{survey.endNote}</p>
+            </div>
+          ) : review ? (
             <div>
               {questions.map((qq, i) => (
                 <div key={qq.id} className="flex items-start justify-between gap-3 py-2.5" style={{ borderBottom: "1px solid #efe4dc" }}>
@@ -1732,7 +1748,12 @@ function SurveyModal({ survey, initialAnswers, readOnly, onClose, onSubmit }) {
             q && (
               <div>
                 <p className="text-[10px] uppercase tracking-wide mb-2" style={{ color: "#b6aca2", letterSpacing: "0.08em" }}>{SURVEY_TYPE_LABEL[q.type] || ""}</p>
-                <p className="text-[18px] leading-snug mb-4" style={{ fontStyle: "italic", fontWeight: 300 }}>{q.text}</p>
+                <p className="text-[18px] leading-snug mb-1.5" style={{ fontStyle: "italic", fontWeight: 300 }}>{q.text}</p>
+                {q.note && String(q.note).trim() ? (
+                  <p className="text-[13px] leading-relaxed mb-4 whitespace-pre-wrap" style={{ color: "#8a7f76" }}>{q.note}</p>
+                ) : (
+                  <div className="mb-4" />
+                )}
                 {renderInput(q)}
                 <div className="mt-4 pt-3" style={{ borderTop: "1px dashed #e6d8cf" }}>
                   <p className="text-[11px] mb-1" style={{ color: "#a89d95" }}>Anything to add? (optional)</p>
@@ -1744,7 +1765,11 @@ function SurveyModal({ survey, initialAnswers, readOnly, onClose, onSubmit }) {
         </div>
       </div>
       <div className="shrink-0 px-4 py-3 flex items-center gap-2" style={{ borderTop: "1px solid #e6d8cf" }}>
-        {readOnly ? (
+        {showIntro ? (
+          <button onClick={() => setShowIntro(false)} className="flex-1 h-11 rounded-lg text-[14px]" style={{ background: "#2a221c", color: "#f7f2ef" }}>Begin →</button>
+        ) : done ? (
+          <button onClick={onClose} className="flex-1 h-11 rounded-lg text-[14px]" style={{ background: "#2a221c", color: "#f7f2ef" }}>Close</button>
+        ) : readOnly ? (
           <button onClick={onClose} className="flex-1 h-11 rounded-lg text-[14px]" style={{ background: "#2a221c", color: "#f7f2ef" }}>Close</button>
         ) : review ? (
           <>
@@ -1753,7 +1778,7 @@ function SurveyModal({ survey, initialAnswers, readOnly, onClose, onSubmit }) {
           </>
         ) : (
           <>
-            <button onClick={() => (step === 0 ? onClose() : setStep(step - 1))} className="h-11 px-4 rounded-lg text-[13.5px]" style={{ border: "1px solid #d9d0c8", color: "#57514a" }}>{step === 0 ? "Close" : "← Back"}</button>
+            <button onClick={() => (step === 0 ? (hasStart ? setShowIntro(true) : onClose()) : setStep(step - 1))} className="h-11 px-4 rounded-lg text-[13.5px]" style={{ border: "1px solid #d9d0c8", color: "#57514a" }}>← Back</button>
             {step < total - 1 ? (
               <button onClick={() => setStep(step + 1)} className="flex-1 h-11 rounded-lg text-[14px]" style={{ background: "#2a221c", color: "#f7f2ef" }}>Next →</button>
             ) : (
@@ -6365,6 +6390,7 @@ function SurveyQuestionList({ questions, onChange }) {
             <button onClick={() => remove(i)} className="text-stone-300 hover:text-red-600" aria-label="Remove question"><Trash2 className="w-3.5 h-3.5" /></button>
           </div>
           <textarea value={q.text} onChange={(e) => update(i, { text: e.target.value })} rows={2} placeholder="Question text" className="w-full px-3 py-2 rounded-lg border border-stone-300 text-[13.5px] focus:outline-none focus:ring-2 focus:ring-[#576B45] resize-none" />
+          <input value={q.note || ""} onChange={(e) => update(i, { note: e.target.value })} placeholder="Note under the question (optional)" className="w-full px-3 py-1.5 rounded-lg border border-stone-300 text-[12.5px] focus:outline-none focus:ring-1 focus:ring-[#576B45]" />
           {(q.type === "single" || q.type === "multi") && (
             <div className="space-y-1.5 pl-6">
               {(q.options || []).map((opt, oi) => (
@@ -6398,9 +6424,17 @@ function AdminSurveyPanel({ project, templates, onSend, onSaveSurvey }) {
   const clean = () => ({
     name: (draft.name || "Survey").trim(),
     intro: (draft.intro || "").trim(),
+    startNote: (draft.startNote || "").trim(),
+    endNote: (draft.endNote || "").trim(),
     questions: (draft.questions || [])
       .filter((q) => (q.text || "").trim())
-      .map((q) => ({ id: q.id, type: q.type, text: q.text.trim(), ...((q.type === "single" || q.type === "multi") ? { options: (q.options || []).map((o) => o.trim()).filter(Boolean) } : {}) })),
+      .map((q) => ({
+        id: q.id,
+        type: q.type,
+        text: q.text.trim(),
+        ...((q.note || "").trim() ? { note: q.note.trim() } : {}),
+        ...((q.type === "single" || q.type === "multi") ? { options: (q.options || []).map((o) => o.trim()).filter(Boolean) } : {}),
+      })),
   });
   const save = () => { onSaveSurvey(clean()); setSaved(true); };
   const send = () => {
@@ -6425,7 +6459,15 @@ function AdminSurveyPanel({ project, templates, onSend, onSaveSurvey }) {
             <p className="text-[12px] text-stone-400 mb-2">Build this project's survey, then send it. The client answers it in their Messages, one question at a time.</p>
             <div className="space-y-2.5">
               <input value={draft.name} onChange={(e) => update({ name: e.target.value })} placeholder="Survey name" className="w-full px-3 py-2 rounded-lg border border-stone-300 text-[14px] focus:outline-none focus:ring-2 focus:ring-[#576B45]" />
-              <input value={draft.intro || ""} onChange={(e) => update({ intro: e.target.value })} placeholder="Short intro (optional)" className="w-full px-3 py-2 rounded-lg border border-stone-300 text-[13px] focus:outline-none focus:ring-2 focus:ring-[#576B45]" />
+              <input value={draft.intro || ""} onChange={(e) => update({ intro: e.target.value })} placeholder="Short intro (on the message card, optional)" className="w-full px-3 py-2 rounded-lg border border-stone-300 text-[13px] focus:outline-none focus:ring-2 focus:ring-[#576B45]" />
+              <div>
+                <p className="text-[11px] text-stone-400 mb-1">Opening message — shown as a welcome screen before they start (optional)</p>
+                <textarea value={draft.startNote || ""} onChange={(e) => update({ startNote: e.target.value })} rows={2} placeholder="e.g. Thanks for taking the time — this helps us design a space that's truly yours." className="w-full px-3 py-2 rounded-lg border border-stone-300 text-[13px] focus:outline-none focus:ring-2 focus:ring-[#576B45] resize-none" />
+              </div>
+              <div>
+                <p className="text-[11px] text-stone-400 mb-1">Closing message — shown after they submit (optional)</p>
+                <textarea value={draft.endNote || ""} onChange={(e) => update({ endNote: e.target.value })} rows={2} placeholder="e.g. Thank you! We'll take these into your concept and be in touch soon." className="w-full px-3 py-2 rounded-lg border border-stone-300 text-[13px] focus:outline-none focus:ring-2 focus:ring-[#576B45] resize-none" />
+              </div>
               {tmplList.length > 0 && (
                 <select
                   value=""

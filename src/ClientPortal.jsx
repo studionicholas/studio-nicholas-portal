@@ -9153,7 +9153,7 @@ export default function App() {
             </div>
             <div className="flex-1 overflow-auto min-h-0">
               {isWaiting ? (
-                <LeadWaiting project={pj} onLogout={() => setPreviewCode(null)} />
+                <LeadWaiting key={pj.code} project={pj} onLogout={() => setPreviewCode(null)} allProjects={clientProjects} onSwitchProject={(code) => setPreviewCode(code)} />
               ) : (
                 <ClientDashboard
                   key={pj.code}

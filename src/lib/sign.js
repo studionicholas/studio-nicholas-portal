@@ -253,9 +253,16 @@ async function findAcceptance(bytes) {
   // for "hereby accept" never matches. Instead we normalise away whitespace and
   // key off the field LABELS (NAME / DATE / SIGNATURE), which are the reliable
   // markers of the acceptance form regardless of how the heading is spaced.
-  const norm = (s) => String(s).toLowerCase().replace(/\s+/g, "");
+  // Letters only, lowercased — so "Name:", "N A M E", "Signature_" all normalise
+  // to the same token regardless of spacing, case or trailing punctuation.
+  const letters = (s) => String(s).toLowerCase().replace(/[^a-z]/g, "");
+  // Tolerant label matchers, to cover template variations across proposals.
+  const isName = (x) => x === "name" || ["fullname", "clientname", "printname", "printedname", "yourname", "signername", "clientsname", "namesignature"].includes(x) || x.endsWith("sname");
+  const isDate = (x) => x === "date" || x === "dated" || x === "datesigned";
+  const isSig = (x) => x === "signature" || x === "signed" || x === "sign" || x === "clientsignature" || x.endsWith("signature");
   try {
     const doc = await getPdfDocumentSafe(bytes);
+    let fallback = null; // a page that has the fields but no explicit "accept" word
     for (let n = 1; n <= doc.numPages; n++) {
       const page = await doc.getPage(n);
       const tc = await page.getTextContent();
@@ -263,31 +270,33 @@ async function findAcceptance(bytes) {
         .filter((it) => it && it.str != null)
         .map((it) => ({
           s: String(it.str).trim().toLowerCase(),
-          n: norm(it.str), // whitespace removed — matches letter-spaced text too
+          n: letters(it.str),
           x: it.transform[4],
           y: it.transform[5],
           w: it.width || 0,
           h: it.height || Math.abs(it.transform[3]) || 9,
         }));
-      const find = (label) => items.find((i) => i.n === label);
-      const name = find("name");
-      const date = find("date");
-      const sig = find("signature");
-      // The acceptance page is the one carrying the signature field alongside a
-      // name or date field. Confirm it also mentions acceptance to avoid a false
-      // hit on some other page that happens to label a "signature".
+      const name = items.find((i) => isName(i.n));
+      const date = items.find((i) => isDate(i.n));
+      const sig = items.find((i) => isSig(i.n));
+      // Need a signature field plus a name or date field to call it the signing page.
+      if (!(sig && (name || date))) continue;
+      // Prefer a page that also says it's an acceptance/agreement; if none of the
+      // proposal's pages do, fall back to the first page carrying the fields.
       const pageNorm = items.map((i) => i.n).join("");
-      const looksLikeAcceptance = pageNorm.includes("herebyaccept") || pageNorm.includes("acceptance");
-      if (sig && (name || date) && looksLikeAcceptance) {
+      const strong = /herebyaccept|acceptance|iaccept|iagree|agreetothe|termsasstated/.test(pageNorm);
+      if (strong) {
         try {
           await doc.destroy();
         } catch (_e) {}
         return { pageIndex: n - 1, name, date, sig };
       }
+      if (!fallback) fallback = { pageIndex: n - 1, name, date, sig };
     }
     try {
       await doc.destroy();
     } catch (_e) {}
+    if (fallback) return fallback;
   } catch (e) {
     console.error("acceptance detect failed", e);
   }

@@ -4137,7 +4137,8 @@ function ClientDashboard({ project, viewerEmail, allProjects, onSwitchProject, s
         <div className="max-w-[1000px] mx-auto px-5 py-1 flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 min-w-0">
             <img src="/sn-wordmark-static.png" alt="Studio Nicholas" style={{ width: 96, height: "auto" }} className="shrink-0" />
-            {!preview && <ProjectSwitcher projects={allProjects} currentCode={project.code} onSwitch={onSwitchProject} />}
+            <ProjectSwitcher projects={allProjects} currentCode={project.code} onSwitch={onSwitchProject} />
+
           </div>
           <div className="flex items-center gap-1 shrink-0">
             <button onClick={() => setGlobalSearch(true)} className="w-9 h-9 flex items-center justify-center" style={{ color: "#7a6f66" }} aria-label="Search your project">
@@ -9131,6 +9132,11 @@ export default function App() {
       {role === "admin" && previewCode && projects && projects[previewCode] && (() => {
         const pj = projects[previewCode];
         const firstEmail = ((pj.clients || [])[0]?.email || "").trim();
+        // Every project this previewed client belongs to — so the preview shows
+        // the real project switcher when they're on more than one.
+        const clientProjects = firstEmail
+          ? Object.values(projects).filter((p) => (p.clients || []).some((c) => (c.email || "").trim().toLowerCase() === firstEmail.toLowerCase()))
+          : [pj];
         const noop = () => {};
         const rejectSign = () => Promise.reject(new Error("This is a preview of your client's view — your client signs here."));
         const isWaiting = !pj.isLead && pj.unpublished && pj.feeProposalSigned;
@@ -9150,8 +9156,11 @@ export default function App() {
                 <LeadWaiting project={pj} onLogout={() => setPreviewCode(null)} />
               ) : (
                 <ClientDashboard
+                  key={pj.code}
                   project={pj}
                   viewerEmail={firstEmail}
+                  allProjects={clientProjects}
+                  onSwitchProject={(code) => setPreviewCode(code)}
                   studioStatus={studioStatus}
                   studioStatusColor={studioStatusColor}
                   autoStatus={autoReply}

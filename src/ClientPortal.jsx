@@ -4673,24 +4673,31 @@ function NewUpdateForm({ onSubmit, initial, submitLabel = "Post update", onCance
   const [photos, setPhotos] = useState(initial?.photos || []);
   const [photoUrl, setPhotoUrl] = useState("");
   const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
 
   async function handlePhotoFiles(e) {
     const list = Array.from(e.target.files || []);
     e.target.value = "";
     setError("");
+    setBusy(true);
     const added = [];
     for (const file of list) {
-      if (file.size > MAX_FILE_BYTES) {
+      const isImg = file.type.startsWith("image/");
+      // Images are resized down before upload, so their original size doesn't
+      // matter — only cap non-image files. (Phone photos are often > 3 MB, and
+      // the old check skipped them, which looked like a photo limit.)
+      if (!isImg && file.size > MAX_FILE_BYTES) {
         setError(`"${file.name}" is over ${formatBytes(MAX_FILE_BYTES)} and was skipped.`);
         continue;
       }
       try {
-        added.push(file.type.startsWith("image/") ? await uploadImageOrData(file) : await readFileAsDataURL(file));
+        added.push(isImg ? await uploadImageOrData(file) : await readFileAsDataURL(file));
       } catch (err) {
-        setError(`Couldn't read "${file.name}".`);
+        setError(`Couldn't add "${file.name}".`);
       }
     }
     if (added.length) setPhotos((prev) => [...prev, ...added]);
+    setBusy(false);
   }
 
   function addUrl() {
@@ -4752,9 +4759,10 @@ function NewUpdateForm({ onSubmit, initial, submitLabel = "Post update", onCance
 
       <div className="flex flex-wrap items-center gap-2">
         <label className="inline-flex items-center gap-1.5 text-[13px] text-stone-600 border border-stone-300 rounded-lg px-3 py-2 cursor-pointer hover:bg-stone-100">
-          <ImageIcon className="w-3.5 h-3.5" /> Upload photos
-          <input type="file" accept="image/*" multiple onChange={handlePhotoFiles} className="hidden" />
+          <ImageIcon className="w-3.5 h-3.5" /> {busy ? "Uploading…" : "Upload photos"}
+          <input type="file" accept="image/*" multiple onChange={handlePhotoFiles} className="hidden" disabled={busy} />
         </label>
+        {photos.length > 0 && <span className="text-[12px] text-stone-400">{photos.length} added</span>}
         <input
           value={photoUrl}
           onChange={(e) => setPhotoUrl(e.target.value)}

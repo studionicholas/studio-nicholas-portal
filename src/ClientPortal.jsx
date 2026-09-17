@@ -3933,7 +3933,7 @@ function ProjectSwitcher({ projects, currentCode, onSwitch }) {
   );
 }
 
-function ClientDashboard({ project, viewerEmail, allProjects, onSwitchProject, studioStatus, studioStatusColor, autoStatus, onLogout, onSetEmailNotify, onSendMessage, onSubmitSurvey, onStartSurvey, onReactMessage, onPinMessage, onMarkRead, onMarkNotifs, onDismissNotif, onSeenTab, onUploadSigned, onSignProposal, onProposalActivity, onRespondMeeting, onRequestMeeting, onEditRequest, onAcceptRequest, onDismissRequest, installOpen, preview }) {
+function ClientDashboard({ project, viewerEmail, allProjects, onSwitchProject, studioStatus, studioStatusColor, autoStatus, onLogout, onSetEmailNotify, onSendMessage, onSubmitSurvey, onStartSurvey, onReactMessage, onPinMessage, onMarkRead, onMarkNotifs, onDismissNotif, onSeenTab, onSeenUpdates, onUploadSigned, onSignProposal, onProposalActivity, onRespondMeeting, onRequestMeeting, onEditRequest, onAcceptRequest, onDismissRequest, installOpen, preview }) {
   // Last-viewed tab is remembered per device (client redesign) and restored on
   // open; notification deep-links overwrite it.
   const [tab, setTab] = useState(() => {
@@ -4117,10 +4117,13 @@ function ClientDashboard({ project, viewerEmail, allProjects, onSwitchProject, s
       // Reading the thread also clears any "new message" alerts from the bell —
       // so a message notification disappears once they've actually seen it.
       onSeenTab("messages");
-    } else if (unreadHere > 0) {
-      onSeenTab(activeTab);
+    } else {
+      if (unreadHere > 0) onSeenTab(activeTab);
+      // Opening the Updates tab records that this client has viewed the updates,
+      // so the studio can see who's seen them.
+      if (activeTab === "updates" && onSeenUpdates) onSeenUpdates();
     }
-  }, [activeTab, unreadHere, needsSeenStamp, onMarkRead, onSeenTab]);
+  }, [activeTab, unreadHere, needsSeenStamp, onMarkRead, onSeenTab, onSeenUpdates]);
 
   // Hero banner (client redesign): a flat brand colour with the project name in
   // italic Selva by default; the studio can switch a project to its photo
@@ -7882,6 +7885,15 @@ function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioSt
                           <div className="min-w-0">
                             <p className="text-[12px] text-stone-400">{formatDate(u.date)}</p>
                             <p className="text-[14px] text-stone-800">{u.title}</p>
+                            {(() => {
+                              const seenEmails = Object.keys(u.seenBy || {});
+                              if (seenEmails.length === 0) return <p className="text-[11px] mt-0.5" style={{ color: "#a89d95" }}>Not viewed yet</p>;
+                              const names = seenEmails.map((e) => {
+                                const c = (project.clients || []).find((c) => (c.email || "").trim().toLowerCase() === e);
+                                return (c?.name || e).split(" ")[0];
+                              });
+                              return <p className="text-[11px] mt-0.5" style={{ color: "#576b45" }}>Viewed by {names.join(", ")}</p>;
+                            })()}
                           </div>
                           <div className="flex items-center gap-3 shrink-0">
                             <button onClick={() => setEditingUpdate(u.id)} className="text-stone-300 hover:text-stone-700" aria-label="Edit update">
@@ -8770,6 +8782,20 @@ export default function App() {
     [activeCode]
   );
 
+  // Stamp each update this client has now seen (they opened the Updates tab), so
+  // the studio can see who has viewed an update. Mirrors message read receipts.
+  const handleSeenUpdates = useCallback(() => {
+    const me = (session?.user?.email || "").trim().toLowerCase();
+    if (!me) return;
+    setProjects((prev) => {
+      const p = prev[activeCode];
+      if (!p || !(p.updates || []).some((u) => !(u.seenBy && u.seenBy[me]))) return prev;
+      const now = new Date().toISOString();
+      const updates = p.updates.map((u) => (u.seenBy && u.seenBy[me] ? u : { ...u, seenBy: { ...(u.seenBy || {}), [me]: now } }));
+      return { ...prev, [activeCode]: { ...p, updates } };
+    });
+  }, [activeCode, session]);
+
   const handleDismissNotif = useCallback(
     (id) => {
       setProjects((prev) => {
@@ -9097,6 +9123,7 @@ export default function App() {
         onMarkNotifs={handleMarkNotifs}
         onDismissNotif={handleDismissNotif}
         onSeenTab={handleSeenTab}
+        onSeenUpdates={handleSeenUpdates}
         onUploadSigned={handleUploadSigned}
         onSignProposal={handleSignProposal}
         onProposalActivity={handleProposalActivity}
@@ -9181,6 +9208,7 @@ export default function App() {
                   onMarkNotifs={noop}
                   onDismissNotif={noop}
                   onSeenTab={noop}
+                  onSeenUpdates={noop}
                   onUploadSigned={noop}
                   onSignProposal={rejectSign}
                   onProposalActivity={noop}

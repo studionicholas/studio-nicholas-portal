@@ -6848,6 +6848,13 @@ function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioSt
     updateProject(code, (p) => ({ ...p, leadLost: !!lost }));
     if (lost) goHome();
   }
+  // Mark a live project complete (or reopen it). Complete projects drop to a
+  // small "Complete" list at the bottom of the project list — nothing changes
+  // for the client.
+  function setProjectComplete(code, done) {
+    updateProject(code, (p) => ({ ...p, complete: !!done }));
+    if (done) goHome();
+  }
 
   function deleteProject(code) {
     if (!window.confirm("Delete this project and everything in it? This can't be undone.")) return;
@@ -7412,7 +7419,8 @@ function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioSt
   const projectList = Object.values(projects);
   const leadList = projectList.filter((p) => p.isLead && !p.leadLost);
   const lostLeads = projectList.filter((p) => p.isLead && p.leadLost);
-  const liveList = projectList.filter((p) => !p.isLead);
+  const liveList = projectList.filter((p) => !p.isLead && !p.complete);
+  const completeList = projectList.filter((p) => !p.isLead && p.complete);
   const leadStageOf = (p) => (p.feeProposal ? "Awaiting signature" : "New enquiry");
   // Cross-project "Waiting on you" list (mobile home) — derived, never stored.
   const attention = [];
@@ -7518,6 +7526,22 @@ function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioSt
                 );
               })}
             </div>
+            {completeList.length > 0 && (
+              <div className="mt-4">
+                <p className="text-[10px] uppercase mb-1 ml-2.5" style={{ letterSpacing: "0.1em", color: "#c9b9ae" }}>Complete</p>
+                <div className="flex flex-col gap-0.5">
+                  {completeList.map((p) => {
+                    const active = effView === "project" && selectedCode === p.code;
+                    return (
+                      <button key={p.code} onClick={() => openProject(p.code)} className="flex items-center gap-2 pl-2.5 pr-2.5 py-1.5 rounded-[3px] text-left" style={{ background: active ? "#f2e9e2" : "transparent" }}>
+                        <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: "#9BACB6" }} />
+                        <span className="flex-1 min-w-0 truncate text-[12px]" style={{ color: "#a89d95" }}>{p.name}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
           <div className="p-3.5 flex flex-col gap-2" style={{ borderTop: "1px solid #efe4dc" }}>
             <button onClick={() => setShowNewProject(true)} className="h-[42px] rounded-[3px] text-[13.5px]" style={{ background: "#576b45", color: "#efefec" }}>
@@ -7606,6 +7630,19 @@ function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioSt
                   );
                 })}
               </div>
+              {completeList.length > 0 && (
+                <div className="mt-5 max-w-[640px]">
+                  <p className="text-[10px] uppercase mb-1.5" style={{ letterSpacing: "0.1em", color: "#c9b9ae" }}>Complete</p>
+                  <div className="flex flex-col gap-0.5">
+                    {completeList.map((p) => (
+                      <button key={p.code} onClick={() => openProject(p.code)} className="flex items-center gap-2 px-1 py-1.5 text-left">
+                        <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: "#9BACB6" }} />
+                        <span className="flex-1 min-w-0 truncate text-[13px]" style={{ color: "#a89d95" }}>{p.name}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
               {lostLeads.length > 0 && (
                 <p className="text-[11px] mt-4 max-w-[640px]" style={{ color: "#c9b9ae" }}>
                   {lostLeads.length} archived lead{lostLeads.length === 1 ? "" : "s"}:{" "}
@@ -7840,6 +7877,23 @@ function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioSt
               <AdminFeatures project={project} onToggle={(key, on) => setField(project.code, "features", { ...(project.features || {}), [key]: on })} />
             </AdminSection>
 
+            {!project.isLead && (
+              <div className="pt-1">
+                {project.complete ? (
+                  <button onClick={() => setProjectComplete(project.code, false)} className="inline-flex items-center gap-1.5 text-[12.5px] hover:opacity-80" style={{ color: "#576b45" }}>
+                    <RefreshCw className="w-3.5 h-3.5" /> Reopen project
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => window.confirm("Mark this project complete? It drops to the small Complete list at the bottom — the client sees no change.") && setProjectComplete(project.code, true)}
+                    className="inline-flex items-center gap-1.5 text-[12.5px] hover:opacity-80"
+                    style={{ color: "#576b45" }}
+                  >
+                    <CheckCircle2 className="w-3.5 h-3.5" /> Mark project complete
+                  </button>
+                )}
+              </div>
+            )}
             <div className="pt-1 pb-2">
               <button onClick={() => deleteProject(project.code)} className="inline-flex items-center gap-1.5 text-[12.5px] hover:opacity-80" style={{ color: "#811618" }}>
                 <Trash2 className="w-3.5 h-3.5" /> Delete this project

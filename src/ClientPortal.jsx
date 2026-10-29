@@ -1911,12 +1911,15 @@ function ShippingCard({ m, mine, meRole, onDelete }) {
   const s = m.shipping || {};
   const url = (s.tracking || "").trim();
   const validUrl = /^https?:\/\//i.test(url);
+  const tag = s.tag || m.label || "";
+  const seenAt = m.seenBy && Object.keys(m.seenBy).length ? Object.values(m.seenBy).sort()[0] : null;
   return (
     <div className={`flex ${mine ? "justify-end" : "justify-start"}`}>
       <div className="max-w-[300px] rounded-2xl p-4" style={{ background: "#fff", border: "1px solid #e6e0d9", borderTopLeftRadius: mine ? 16 : 4, borderTopRightRadius: mine ? 4 : 16 }}>
         <div className="flex items-center gap-1.5 mb-1">
           <Truck className="w-3.5 h-3.5" style={{ color: "#b26f52" }} />
           <span className="text-[10px] uppercase tracking-wide" style={{ color: "#b6938a", letterSpacing: "0.06em" }}>Shipping update</span>
+          {tag && <span className="text-[9.5px] rounded-full px-2 py-0.5" style={{ background: "#f3e7df", color: "#8a5a42" }}>{tag}</span>}
           <div className="flex-1" />
           {meRole === "studio" && onDelete && (
             <button onClick={() => window.confirm("Remove this shipping update?") && onDelete(m.id)} className="text-stone-300 hover:text-red-600 shrink-0" aria-label="Delete shipping update">
@@ -1933,6 +1936,9 @@ function ShippingCard({ m, mine, meRole, onDelete }) {
             <Truck className="w-3.5 h-3.5" /> Track your shipment
           </a>
         )}
+        {meRole === "studio" && (
+          <p className="text-[11px] mt-2" style={{ color: seenAt ? "#576b45" : "#a89d95" }}>{seenAt ? `Seen ${formatDate(seenAt)}` : "Not seen yet"}</p>
+        )}
       </div>
     </div>
   );
@@ -1944,6 +1950,7 @@ function ShippingComposer({ onCancel, onSend }) {
   const [tracking, setTracking] = useState("");
   const [eta, setEta] = useState("");
   const [location, setLocation] = useState("");
+  const [tag, setTag] = useState("");
   const [note, setNote] = useState("");
   const [err, setErr] = useState("");
   const inputCls = "w-full px-3 py-2 rounded-lg border border-stone-300 text-[14px] focus:outline-none focus:ring-2 focus:ring-[#b26f52]";
@@ -1954,7 +1961,7 @@ function ShippingComposer({ onCancel, onSend }) {
     }
     let t = tracking.trim();
     if (t && !/^https?:\/\//i.test(t)) t = "https://" + t;
-    onSend({ item: item.trim(), tracking: t, eta: eta, location: location.trim(), note: note.trim() });
+    onSend({ item: item.trim(), tracking: t, eta: eta, location: location.trim(), tag: tag.trim(), note: note.trim() });
   }
   return (
     <div className="mb-3 rounded-lg p-3.5" style={{ border: "1px solid #ecd9cf", background: "#fbf3ee" }}>
@@ -1970,6 +1977,7 @@ function ShippingComposer({ onCancel, onSend }) {
           <input type="date" value={eta} onChange={(e) => setEta(e.target.value)} className={`${inputCls} mt-0.5`} />
         </label>
         <input value={location} onChange={(e) => setLocation(e.target.value)} placeholder="Where it's going (e.g. 12 Hastings St, Noosa)" className={inputCls} />
+        <input value={tag} onChange={(e) => setTag(e.target.value)} placeholder="Tag (optional) — e.g. Lighting, Furniture — lets you filter" className={inputCls} />
         <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} placeholder="Small note (optional)" className={`${inputCls} resize-none`} />
       </div>
       {err && <p className="text-[12px] text-red-600 mt-1.5">{err}</p>}
@@ -7475,7 +7483,7 @@ function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioSt
     updateProject(code, (p) => ({
       ...p,
       lastReadStudio: new Date().toISOString(),
-      messages: [...p.messages, { id: uid(), from: "studio", shipping: data, photos: [], date: new Date().toISOString(), replyTo: null, reactions: [], pinned: false }],
+      messages: [...p.messages, { id: uid(), from: "studio", shipping: data, label: data.tag || "", photos: [], date: new Date().toISOString(), replyTo: null, reactions: [], pinned: false }],
       notifications: withNotif(p, "message", `Shipping update: ${data.item || "your order is on its way"}`),
     }));
     const proj = projects[code];

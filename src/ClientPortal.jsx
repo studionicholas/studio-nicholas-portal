@@ -26,6 +26,7 @@ import {
   Calendar,
   Clock,
   RefreshCw,
+  Truck,
   MapPin,
   Video,
   Bell,
@@ -1903,7 +1904,80 @@ function SurveyComposer({ templates, onCancel, onSend }) {
   );
 }
 
-function MessagesPanel({ messages, meRole, onSend, onSendNotice, onSendProgramaPing, onSendSurvey, onSubmitSurvey, onStartSurvey, surveyTemplates, onReact, onPin, onLabel, onTagPhoto, onEdit, onDelete, seenSince, showReceipts, showStatus, onToggleStatus, customStatus, onSetCustomStatus, studioStatus, studioStatusColor, autoStatus, prefill, onPrefillUsed, draftKey, clients, myEmail, fallbackClientName, programaUrl, noticeTemplates, fill, slimTools }) {
+/* ---------------- Shipping updates ---------------- */
+// A shipping update is a branded card in the thread: what shipped, the expected
+// arrival, an optional note, and a "Track your shipment" button (tracking link).
+function ShippingCard({ m, mine, meRole, onDelete }) {
+  const s = m.shipping || {};
+  const url = (s.tracking || "").trim();
+  const validUrl = /^https?:\/\//i.test(url);
+  return (
+    <div className={`flex ${mine ? "justify-end" : "justify-start"}`}>
+      <div className="max-w-[300px] rounded-2xl p-4" style={{ background: "#fff", border: "1px solid #e6e0d9", borderTopLeftRadius: mine ? 16 : 4, borderTopRightRadius: mine ? 4 : 16 }}>
+        <div className="flex items-center gap-1.5 mb-1">
+          <Truck className="w-3.5 h-3.5" style={{ color: "#b26f52" }} />
+          <span className="text-[10px] uppercase tracking-wide" style={{ color: "#b6938a", letterSpacing: "0.06em" }}>Shipping update</span>
+          <div className="flex-1" />
+          {meRole === "studio" && onDelete && (
+            <button onClick={() => window.confirm("Remove this shipping update?") && onDelete(m.id)} className="text-stone-300 hover:text-red-600 shrink-0" aria-label="Delete shipping update">
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
+        <p className="text-[14px]" style={{ fontFamily: "Selva, Georgia, serif", fontStyle: "italic", color: "#1c1a17" }}>{s.item ? `${s.item} has shipped` : "Your order has shipped"}</p>
+        {s.eta && <p className="text-[12.5px] mt-1.5" style={{ color: "#55483e" }}>Expected arrival: <span style={{ color: "#2a221c" }}>{s.eta}</span></p>}
+        {s.note && <p className="text-[12.5px] mt-1.5 leading-relaxed whitespace-pre-wrap" style={{ color: "#79706a" }}>{linkify(s.note)}</p>}
+        {validUrl && (
+          <a href={url} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="inline-flex items-center justify-center gap-1.5 w-full mt-3 rounded-lg py-2.5 text-[12.5px] hover:opacity-90 transition-opacity" style={{ background: "#b26f52", color: "#fff" }}>
+            <Truck className="w-3.5 h-3.5" /> Track your shipment
+          </a>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// Studio composer for a shipping update.
+function ShippingComposer({ onCancel, onSend }) {
+  const [item, setItem] = useState("");
+  const [tracking, setTracking] = useState("");
+  const [eta, setEta] = useState("");
+  const [note, setNote] = useState("");
+  const [err, setErr] = useState("");
+  const inputCls = "w-full px-3 py-2 rounded-lg border border-stone-300 text-[14px] focus:outline-none focus:ring-2 focus:ring-[#b26f52]";
+  function send() {
+    if (!item.trim() && !tracking.trim()) {
+      setErr("Add at least an item or a tracking link.");
+      return;
+    }
+    let t = tracking.trim();
+    if (t && !/^https?:\/\//i.test(t)) t = "https://" + t;
+    onSend({ item: item.trim(), tracking: t, eta: eta.trim(), note: note.trim() });
+  }
+  return (
+    <div className="mb-3 rounded-lg p-3.5" style={{ border: "1px solid #ecd9cf", background: "#fbf3ee" }}>
+      <div className="flex items-center gap-2 mb-2.5">
+        <Truck className="w-4 h-4" style={{ color: "#b26f52" }} />
+        <p className="text-[13px]" style={{ color: "#8a5a42" }}>Shipping update — let the client know their order is on its way</p>
+      </div>
+      <div className="space-y-2">
+        <input value={item} onChange={(e) => setItem(e.target.value)} placeholder="What's shipped (e.g. Dining table, Pendant light)" className={inputCls} />
+        <input value={tracking} onChange={(e) => setTracking(e.target.value)} placeholder="Tracking link (paste the URL)" className={inputCls} />
+        <input value={eta} onChange={(e) => setEta(e.target.value)} placeholder="Expected arrival (e.g. Fri 7 Nov, or next week)" className={inputCls} />
+        <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} placeholder="Small note (optional)" className={`${inputCls} resize-none`} />
+      </div>
+      {err && <p className="text-[12px] text-red-600 mt-1.5">{err}</p>}
+      <div className="flex items-center gap-2 mt-3">
+        <button type="button" onClick={send} className="inline-flex items-center gap-1.5 text-[13px] rounded-lg px-4 py-2" style={{ background: "#b26f52", color: "#fff" }}>
+          <Truck className="w-3.5 h-3.5" /> Send shipping update
+        </button>
+        <button type="button" onClick={onCancel} className="text-[13px] text-stone-500 px-3 py-2 hover:text-stone-800">Cancel</button>
+      </div>
+    </div>
+  );
+}
+
+function MessagesPanel({ messages, meRole, onSend, onSendNotice, onSendProgramaPing, onSendSurvey, onSubmitSurvey, onStartSurvey, onSendShipping, surveyTemplates, onReact, onPin, onLabel, onTagPhoto, onEdit, onDelete, seenSince, showReceipts, showStatus, onToggleStatus, customStatus, onSetCustomStatus, studioStatus, studioStatusColor, autoStatus, prefill, onPrefillUsed, draftKey, clients, myEmail, fallbackClientName, programaUrl, noticeTemplates, fill, slimTools }) {
   // The automatic out-of-office note shows (to everyone) during its active hours,
   // unless this project has its own custom status note set.
   const autoNote = customStatus ? null : activeAutoNote(autoStatus);
@@ -1977,6 +2051,8 @@ function MessagesPanel({ messages, meRole, onSend, onSendNotice, onSendProgramaP
   const [programaText, setProgramaText] = useState(PROGRAMA_DEFAULT);
   const [surveyOpen, setSurveyOpen] = useState(false); // studio: pick a survey to send
   const [surveySent, setSurveySent] = useState(false);
+  const [shippingOpen, setShippingOpen] = useState(false); // studio: compose a shipping update
+  const [shippingSent, setShippingSent] = useState(false);
   const [statusOpen, setStatusOpen] = useState(false); // studio: status editor collapsed behind one small button
   const [query, setQuery] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
@@ -2132,6 +2208,19 @@ function MessagesPanel({ messages, meRole, onSend, onSendNotice, onSendProgramaP
                 </button>
               </>
             )}
+            {onSendShipping && !shippingOpen && (
+              <>
+                {shippingSent && <span className="shrink-0 text-[11px] text-[#576B45]">Sent ✓</span>}
+                <button
+                  type="button"
+                  onClick={() => { setShippingOpen(true); setShippingSent(false); }}
+                  className="shrink-0 inline-flex items-center gap-1.5 text-[12px] rounded-[3px] px-3 py-1.5"
+                  style={{ border: "1px solid #ecd9cf", background: "#fbf3ee", color: "#b26f52" }}
+                >
+                  <Truck className="w-3.5 h-3.5" /> Shipping update
+                </button>
+              </>
+            )}
           </div>
           {statusOpen && (
             <div className="mb-3 rounded-[3px] p-3 space-y-3" style={{ background: "#fffdfb", border: "1px solid #e6d8cf" }}>
@@ -2279,6 +2368,7 @@ function MessagesPanel({ messages, meRole, onSend, onSendNotice, onSendProgramaP
               ? meRole === "studio"
               : meRole === "client" && (!m.fromEmail || (m.fromEmail || "").toLowerCase() === (myEmail || "").toLowerCase());
           if (m.survey) return <SurveyCard key={m.id} m={m} mine={mine} meRole={meRole} onSubmit={onSubmitSurvey} onStart={onStartSurvey} onDelete={onDelete} />;
+          if (m.shipping) return <ShippingCard key={m.id} m={m} mine={mine} meRole={meRole} onDelete={onDelete} />;
           const ref = m.replyTo ? byId[m.replyTo] : null;
           const reacts = aggregateReactions(m.reactions);
           const seen = showReceipts && m.from === "studio" && seenSince && new Date(seenSince) >= new Date(m.date);
@@ -2571,6 +2661,17 @@ function MessagesPanel({ messages, meRole, onSend, onSendNotice, onSendProgramaP
             onSendNotice(n);
             setNoticeOpen(false);
             setNoticeSent(true);
+          }}
+        />
+      )}
+
+      {meRole === "studio" && onSendShipping && shippingOpen && (
+        <ShippingComposer
+          onCancel={() => setShippingOpen(false)}
+          onSend={(data) => {
+            onSendShipping(data);
+            setShippingOpen(false);
+            setShippingSent(true);
           }}
         />
       )}
@@ -7362,6 +7463,39 @@ function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioSt
     }
   }
 
+  // Shipping update: a branded card in the thread + push + email (transactional,
+  // so every client on the project is emailed) with the tracking link.
+  function sendShipping(code, data) {
+    updateProject(code, (p) => ({
+      ...p,
+      lastReadStudio: new Date().toISOString(),
+      messages: [...p.messages, { id: uid(), from: "studio", shipping: data, photos: [], date: new Date().toISOString(), replyTo: null, reactions: [], pinned: false }],
+      notifications: withNotif(p, "message", `Shipping update: ${data.item || "your order is on its way"}`),
+    }));
+    const proj = projects[code];
+    const emails = (proj?.clients || []).map((c) => (c.email || "").trim().toLowerCase()).filter(Boolean);
+    if (!emails.length) return;
+    const title = data.item ? `${data.item} has shipped` : "Your order has shipped";
+    api.notifyPush({ toEmails: emails, title: `${proj?.name || "Your project"} — shipping update`, body: `${title}${data.eta ? ` · arriving ${data.eta}` : ""}`, url: "/" });
+    const bodyLines = [`${title}.`];
+    if (data.eta) bodyLines.push(`Expected arrival: ${data.eta}.`);
+    if (data.note) bodyLines.push(data.note);
+    if (data.tracking) bodyLines.push(`Track it here: ${data.tracking}`);
+    api.notifyEmail({
+      toEmails: emails,
+      subject: `${title} — ${proj?.name || "your project"}`,
+      heading: "Your order has shipped",
+      body: bodyLines.join("\n\n"),
+      projectName: proj?.name,
+      senderName: STUDIO_INFO.contactName || "Studio Nicholas",
+      time: emailStamp(),
+      kind: "update",
+      ctaUrl: data.tracking || "",
+      ctaLabel: "Track your shipment",
+      setupCta: !!proj?.isLead,
+    });
+  }
+
   function replyMessage(code, text, replyTo, photos) {
     updateProject(code, (p) => ({
       ...p,
@@ -8119,6 +8253,7 @@ function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioSt
                 onSend={(text, replyTo, photos) => replyMessage(project.code, text, replyTo, photos)}
                 onSendNotice={(n) => sendNotice(project.code, n)}
                 onSendProgramaPing={(text) => sendProgramaPing(project.code, text)}
+                onSendShipping={(data) => sendShipping(project.code, data)}
                 noticeTemplates={noticeTemplates}
                 onReact={(id, emoji) => reactMessage(project.code, id, emoji)}
                 onPin={(id) => pinMessage(project.code, id)}

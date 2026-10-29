@@ -26,7 +26,7 @@ function escBody(s: string) {
   return esc(s).replace(/\n/g, "<br>");
 }
 
-function emailHtml(o: { projectName?: string; heading?: string; body?: string; senderName?: string; time?: string; kind?: string; audience?: string; setupCta?: boolean; imageUrl?: string; programaUrl?: string }) {
+function emailHtml(o: { projectName?: string; heading?: string; body?: string; senderName?: string; time?: string; kind?: string; audience?: string; setupCta?: boolean; imageUrl?: string; programaUrl?: string; ctaUrl?: string; ctaLabel?: string }) {
   const accent = "#9BACB6"; // brand aqua
   const isStudio = o.audience === "studio";
   const isUpdate = o.kind === "update";
@@ -77,6 +77,7 @@ function emailHtml(o: { projectName?: string; heading?: string; body?: string; s
       ${bodyBlock}
       <tr><td style="padding:24px 44px 6px;text-align:center;">
         ${isNotice && o.programaUrl && /^https?:/.test(o.programaUrl) ? `<a href="${o.programaUrl}" style="display:inline-block;background:#9BACB6;color:#1C1A17;text-decoration:none;font-family:Arial,Helvetica,sans-serif;font-size:14px;padding:13px 24px;border-radius:9px;margin:0 4px 8px;">Open Programa &nbsp;→</a>` : ""}
+        ${o.ctaUrl && /^https?:/.test(o.ctaUrl) ? `<a href="${o.ctaUrl}" style="display:inline-block;background:#B9925B;color:#ffffff;text-decoration:none;font-family:Arial,Helvetica,sans-serif;font-size:14px;padding:13px 24px;border-radius:9px;margin:0 4px 8px;">${esc(o.ctaLabel || "Open link")} &nbsp;→</a>` : ""}
         <a href="${LOGIN_URL}" style="display:inline-block;background:#1C1A17;color:#ffffff;text-decoration:none;font-family:Arial,Helvetica,sans-serif;font-size:14px;padding:13px 24px;border-radius:9px;margin:0 4px 8px;">${isNotice ? "Reply in your portal" : "Open your portal"} &nbsp;→</a>
       </td></tr>
       ${o.setupCta ? `<tr><td style="padding:6px 44px 6px;text-align:center;">
@@ -94,7 +95,7 @@ function emailHtml(o: { projectName?: string; heading?: string; body?: string; s
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   try {
-    const { toEmails = [], audience, subject, heading, body, projectName, senderName, time, kind, setupCta, imageUrl, recipients } = await req.json();
+    const { toEmails = [], audience, subject, heading, body, projectName, senderName, time, kind, setupCta, imageUrl, recipients, ctaUrl, ctaLabel } = await req.json();
     // Studio alerts go to the studio mailbox (kept server-side); client alerts go
     // to the recipients passed in. `recipients` may carry per-person extras
     // (e.g. each client's own Programa link) — falls back to plain toEmails.
@@ -115,7 +116,7 @@ Deno.serve(async (req) => {
     await Promise.all(
       unique.map(async (r) => {
         try {
-          const html = emailHtml({ projectName, heading, body, senderName, time, kind, audience, setupCta, imageUrl, programaUrl: r.programaUrl });
+          const html = emailHtml({ projectName, heading, body, senderName, time, kind, audience, setupCta, imageUrl, programaUrl: r.programaUrl, ctaUrl, ctaLabel });
           const res = await fetch("https://api.resend.com/emails", {
             method: "POST",
             headers: { Authorization: `Bearer ${RESEND}`, "Content-Type": "application/json" },

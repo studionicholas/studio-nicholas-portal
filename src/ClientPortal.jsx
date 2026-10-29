@@ -1905,46 +1905,9 @@ function SurveyComposer({ templates, onCancel, onSend }) {
 }
 
 /* ---------------- Shipping updates ---------------- */
-// A shipping update is a branded card in the thread: what shipped, the expected
-// arrival, an optional note, and a "Track your shipment" button (tracking link).
-function ShippingCard({ m, mine, meRole, onDelete }) {
-  const s = m.shipping || {};
-  const url = (s.tracking || "").trim();
-  const validUrl = /^https?:\/\//i.test(url);
-  const tag = s.tag || m.label || "";
-  const seenAt = m.seenBy && Object.keys(m.seenBy).length ? Object.values(m.seenBy).sort()[0] : null;
-  return (
-    <div className={`flex ${mine ? "justify-end" : "justify-start"}`}>
-      <div className="max-w-[300px] rounded-2xl p-4" style={{ background: "#fff", border: "1px solid #e6e0d9", borderTopLeftRadius: mine ? 16 : 4, borderTopRightRadius: mine ? 4 : 16 }}>
-        <div className="flex items-center gap-1.5 mb-1">
-          <Truck className="w-3.5 h-3.5" style={{ color: "#b26f52" }} />
-          <span className="text-[10px] uppercase tracking-wide" style={{ color: "#b6938a", letterSpacing: "0.06em" }}>Shipping update</span>
-          {tag && <span className="text-[9.5px] rounded-full px-2 py-0.5" style={{ background: "#f3e7df", color: "#8a5a42" }}>{tag}</span>}
-          <div className="flex-1" />
-          {meRole === "studio" && onDelete && (
-            <button onClick={() => window.confirm("Remove this shipping update?") && onDelete(m.id)} className="text-stone-300 hover:text-red-600 shrink-0" aria-label="Delete shipping update">
-              <Trash2 className="w-3.5 h-3.5" />
-            </button>
-          )}
-        </div>
-        <p className="text-[14px]" style={{ fontFamily: "Selva, Georgia, serif", fontStyle: "italic", color: "#1c1a17" }}>{s.item ? `${s.item} has shipped` : "Your order has shipped"}</p>
-        {s.eta && <p className="text-[12.5px] mt-1.5" style={{ color: "#55483e" }}>Estimated day: <span style={{ color: "#2a221c" }}>{formatDate(s.eta)}</span></p>}
-        {s.location && <p className="text-[12.5px] mt-1" style={{ color: "#55483e" }}>Going to: <span style={{ color: "#2a221c" }}>{s.location}</span></p>}
-        {s.note && <p className="text-[12.5px] mt-1.5 leading-relaxed whitespace-pre-wrap" style={{ color: "#79706a" }}>{linkify(s.note)}</p>}
-        {validUrl && (
-          <a href={url} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="inline-flex items-center justify-center gap-1.5 w-full mt-3 rounded-lg py-2.5 text-[12.5px] hover:opacity-90 transition-opacity" style={{ background: "#b26f52", color: "#fff" }}>
-            <Truck className="w-3.5 h-3.5" /> Track your shipment
-          </a>
-        )}
-        {meRole === "studio" && (
-          <p className="text-[11px] mt-2" style={{ color: seenAt ? "#576b45" : "#a89d95" }}>{seenAt ? `Seen ${formatDate(seenAt)}` : "Not seen yet"}</p>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// Studio composer for a shipping update.
+// Shipping updates render inside the normal message bubble (see the message map),
+// so they get the same read receipts, label/tag, reactions and actions as any
+// message. Below is just the studio composer.
 function ShippingComposer({ onCancel, onSend }) {
   const [item, setItem] = useState("");
   const [tracking, setTracking] = useState("");
@@ -2382,7 +2345,6 @@ function MessagesPanel({ messages, meRole, onSend, onSendNotice, onSendProgramaP
               ? meRole === "studio"
               : meRole === "client" && (!m.fromEmail || (m.fromEmail || "").toLowerCase() === (myEmail || "").toLowerCase());
           if (m.survey) return <SurveyCard key={m.id} m={m} mine={mine} meRole={meRole} onSubmit={onSubmitSurvey} onStart={onStartSurvey} onDelete={onDelete} />;
-          if (m.shipping) return <ShippingCard key={m.id} m={m} mine={mine} meRole={meRole} onDelete={onDelete} />;
           const ref = m.replyTo ? byId[m.replyTo] : null;
           const reacts = aggregateReactions(m.reactions);
           const seen = showReceipts && m.from === "studio" && seenSince && new Date(seenSince) >= new Date(m.date);
@@ -2470,6 +2432,27 @@ function MessagesPanel({ messages, meRole, onSend, onSendNotice, onSendProgramaP
                     )}
                   </>
                 )}
+                {m.shipping && (() => {
+                  const s = m.shipping;
+                  const url = (s.tracking || "").trim();
+                  return (
+                    <div className={m.text ? "mt-2" : ""}>
+                      <div className="flex items-center gap-1.5 mb-1" style={{ opacity: 0.8 }}>
+                        <Truck className="w-3.5 h-3.5" />
+                        <span className="text-[10px] uppercase" style={{ letterSpacing: "0.06em" }}>Shipping update</span>
+                      </div>
+                      <p className="text-[15px] leading-snug" style={{ fontFamily: "Selva, Georgia, serif", fontStyle: "italic" }}>{s.item ? `${s.item} has shipped` : "Your order has shipped"}</p>
+                      {s.eta && <p className="text-[12.5px] mt-1" style={{ opacity: 0.9 }}>Estimated day: {formatDate(s.eta)}</p>}
+                      {s.location && <p className="text-[12.5px] mt-0.5" style={{ opacity: 0.9 }}>Going to: {s.location}</p>}
+                      {s.note && <p className="text-[12.5px] mt-1.5 whitespace-pre-wrap">{linkify(s.note)}</p>}
+                      {/^https?:\/\//i.test(url) && (
+                        <a href={url} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-[12px] mt-2.5 transition-opacity hover:opacity-90" style={{ background: "#b26f52", color: "#fff" }}>
+                          <Truck className="w-3 h-3" /> Track your shipment
+                        </a>
+                      )}
+                    </div>
+                  );
+                })()}
                 {!isNotice && m.programaCta && programaUrl && (
                   <a
                     href={programaUrl}

@@ -1925,7 +1925,8 @@ function ShippingCard({ m, mine, meRole, onDelete }) {
           )}
         </div>
         <p className="text-[14px]" style={{ fontFamily: "Selva, Georgia, serif", fontStyle: "italic", color: "#1c1a17" }}>{s.item ? `${s.item} has shipped` : "Your order has shipped"}</p>
-        {s.eta && <p className="text-[12.5px] mt-1.5" style={{ color: "#55483e" }}>Expected arrival: <span style={{ color: "#2a221c" }}>{s.eta}</span></p>}
+        {s.eta && <p className="text-[12.5px] mt-1.5" style={{ color: "#55483e" }}>Estimated day: <span style={{ color: "#2a221c" }}>{formatDate(s.eta)}</span></p>}
+        {s.location && <p className="text-[12.5px] mt-1" style={{ color: "#55483e" }}>Going to: <span style={{ color: "#2a221c" }}>{s.location}</span></p>}
         {s.note && <p className="text-[12.5px] mt-1.5 leading-relaxed whitespace-pre-wrap" style={{ color: "#79706a" }}>{linkify(s.note)}</p>}
         {validUrl && (
           <a href={url} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="inline-flex items-center justify-center gap-1.5 w-full mt-3 rounded-lg py-2.5 text-[12.5px] hover:opacity-90 transition-opacity" style={{ background: "#b26f52", color: "#fff" }}>
@@ -1942,6 +1943,7 @@ function ShippingComposer({ onCancel, onSend }) {
   const [item, setItem] = useState("");
   const [tracking, setTracking] = useState("");
   const [eta, setEta] = useState("");
+  const [location, setLocation] = useState("");
   const [note, setNote] = useState("");
   const [err, setErr] = useState("");
   const inputCls = "w-full px-3 py-2 rounded-lg border border-stone-300 text-[14px] focus:outline-none focus:ring-2 focus:ring-[#b26f52]";
@@ -1952,7 +1954,7 @@ function ShippingComposer({ onCancel, onSend }) {
     }
     let t = tracking.trim();
     if (t && !/^https?:\/\//i.test(t)) t = "https://" + t;
-    onSend({ item: item.trim(), tracking: t, eta: eta.trim(), note: note.trim() });
+    onSend({ item: item.trim(), tracking: t, eta: eta, location: location.trim(), note: note.trim() });
   }
   return (
     <div className="mb-3 rounded-lg p-3.5" style={{ border: "1px solid #ecd9cf", background: "#fbf3ee" }}>
@@ -1963,7 +1965,11 @@ function ShippingComposer({ onCancel, onSend }) {
       <div className="space-y-2">
         <input value={item} onChange={(e) => setItem(e.target.value)} placeholder="What's shipped (e.g. Dining table, Pendant light)" className={inputCls} />
         <input value={tracking} onChange={(e) => setTracking(e.target.value)} placeholder="Tracking link (paste the URL)" className={inputCls} />
-        <input value={eta} onChange={(e) => setEta(e.target.value)} placeholder="Expected arrival (e.g. Fri 7 Nov, or next week)" className={inputCls} />
+        <label className="block">
+          <span className="text-[11px] text-stone-400">Estimated day</span>
+          <input type="date" value={eta} onChange={(e) => setEta(e.target.value)} className={`${inputCls} mt-0.5`} />
+        </label>
+        <input value={location} onChange={(e) => setLocation(e.target.value)} placeholder="Where it's going (e.g. 12 Hastings St, Noosa)" className={inputCls} />
         <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} placeholder="Small note (optional)" className={`${inputCls} resize-none`} />
       </div>
       {err && <p className="text-[12px] text-red-600 mt-1.5">{err}</p>}
@@ -7476,9 +7482,11 @@ function AdminPanel({ projects, setProjects, viewerEmail, studioStatus, studioSt
     const emails = (proj?.clients || []).map((c) => (c.email || "").trim().toLowerCase()).filter(Boolean);
     if (!emails.length) return;
     const title = data.item ? `${data.item} has shipped` : "Your order has shipped";
-    api.notifyPush({ toEmails: emails, title: `${proj?.name || "Your project"} — shipping update`, body: `${title}${data.eta ? ` · arriving ${data.eta}` : ""}`, url: "/" });
+    const etaLabel = data.eta ? formatDate(data.eta) : "";
+    api.notifyPush({ toEmails: emails, title: `${proj?.name || "Your project"} — shipping update`, body: `${title}${etaLabel ? ` · est. ${etaLabel}` : ""}`, url: "/" });
     const bodyLines = [`${title}.`];
-    if (data.eta) bodyLines.push(`Expected arrival: ${data.eta}.`);
+    if (etaLabel) bodyLines.push(`Estimated day: ${etaLabel}.`);
+    if (data.location) bodyLines.push(`Going to: ${data.location}.`);
     if (data.note) bodyLines.push(data.note);
     if (data.tracking) bodyLines.push(`Track it here: ${data.tracking}`);
     api.notifyEmail({
